@@ -43,7 +43,7 @@ export default function Dashboard() {
   return (
     <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Operaciones</h2>
+        <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias De María</h2>
         <Link to="/nuevo" style={{ padding: '12px 20px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '14px', fontWeight: 800 }}>+ Nueva</Link>
       </div>
 
