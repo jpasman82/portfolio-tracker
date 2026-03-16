@@ -34,8 +34,8 @@ export default function Dashboard() {
   const getBadgeStyle = (val) => ({
     textAlign: 'center', padding: '10px 4px', borderRadius: '14px', border: '1px solid #eee', 
     display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '45px',
-    backgroundColor: val > 0.01 ? '#00c805' : val < -0.01 ? '#ff3b30' : '#f8f9fa', 
-    color: Math.abs(val) > 0.01 ? 'white' : '#1a1d21'
+    backgroundColor: val > 0.1 ? '#00c805' : val < -0.1 ? '#ff3b30' : '#f8f9fa', 
+    color: Math.abs(val) > 0.1 ? 'white' : '#1a1d21'
   });
 
   if (loading) return <div style={{ padding: '100px 0', textAlign: 'center', fontWeight: 800 }}>Cargando Latinbonos...</div>;
@@ -44,7 +44,7 @@ export default function Dashboard() {
     <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Operaciones</h2>
-        <Link to="/nuevo" style={{ padding: '12px 20px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '14px', fontWeight: 800, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>+ Nueva</Link>
+        <Link to="/nuevo" style={{ padding: '12px 20px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '14px', fontWeight: 800 }}>+ Nueva</Link>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -77,31 +77,38 @@ export default function Dashboard() {
                 
                 <div style={{ marginBottom: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>{event.eventName}</h3>
+                    <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>{event.eventName}</h3>
                     <span style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 800 }}>{event.tradeDate}</span>
                   </div>
-                  <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  
+                  {/* VALORES ACTUALES E INVERTIDOS - DOBLE MONEDA */}
+                  <div style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div>
-                      <div style={{ fontSize: '10px', fontWeight: 900, color: '#198754' }}>VALOR ACTUAL</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900 }}>US$ {totalUSD_Now.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                      <div style={{ fontSize: '9px', fontWeight: 900, color: '#198754', textTransform: 'uppercase' }}>VALOR ACTUAL</div>
+                      <div style={{ fontSize: '17px', fontWeight: 900 }}>US$ {totalUSD_Now.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                      <div style={{ fontSize: '11px', color: '#198754', fontWeight: 700 }}>$ {totalARS_Now.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
                     </div>
-                    <div style={{ textAlign: 'right', fontSize: '11px', color: '#adb5bd', fontWeight: 600 }}>Inv: $ {totalARS_Init.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '9px', fontWeight: 900, color: '#adb5bd', textTransform: 'uppercase' }}>INVERTIDO</div>
+                      <div style={{ fontSize: '17px', fontWeight: 900, color: '#adb5bd' }}>US$ {totalUSD_Init.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                      <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 700 }}>$ {totalARS_Init.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
-                   <div style={{ fontSize: '12px', fontWeight: 800, color: profitUSD >= 0 ? '#198754' : '#dc3545', backgroundColor: profitUSD >= 0 ? '#eaffeb' : '#fff0f0', padding: '5px 12px', borderRadius: '10px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                   <div style={{ fontSize: '11px', fontWeight: 800, color: profitUSD >= 0 ? '#198754' : '#dc3545', backgroundColor: profitUSD >= 0 ? '#eaffeb' : '#fff0f0', padding: '4px 10px', borderRadius: '10px' }}>
                      {profitUSD >= 0 ? '▲' : '▼'} US$ {Math.abs(profitUSD).toLocaleString(undefined, {maximumFractionDigits: 0})}
                    </div>
-                   <div style={{ fontSize: '12px', fontWeight: 800, color: profitARS >= 0 ? '#198754' : '#dc3545', backgroundColor: profitARS >= 0 ? '#eaffeb' : '#fff0f0', padding: '5px 12px', borderRadius: '10px' }}>
+                   <div style={{ fontSize: '11px', fontWeight: 800, color: profitARS >= 0 ? '#198754' : '#dc3545', backgroundColor: profitARS >= 0 ? '#eaffeb' : '#fff0f0', padding: '4px 10px', borderRadius: '10px' }}>
                      {profitARS >= 0 ? '▲' : '▼'} $ {Math.abs(profitARS).toLocaleString('es-AR', {maximumFractionDigits: 0})}
                    </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                  <div style={getBadgeStyle(pUSD)}><span style={{ fontSize: '8px', fontWeight: 900 }}>REND. USD</span><div style={{ fontSize: '15px', fontWeight: 900 }}>{pUSD >= 0 ? '+' : ''}{pUSD.toFixed(1)}%</div></div>
-                  <div style={getBadgeStyle(pARS)}><span style={{ fontSize: '8px', fontWeight: 900 }}>REND. ARS</span><div style={{ fontSize: '15px', fontWeight: 900 }}>{pARS >= 0 ? '+' : ''}{pARS.toFixed(1)}%</div></div>
-                  <div style={getBadgeStyle(pALFA)}><span style={{ fontSize: '8px', fontWeight: 900 }}>ALFA</span><div style={{ fontSize: '15px', fontWeight: 900 }}>{pALFA >= 0 ? '+' : ''}{pALFA.toFixed(1)}%</div></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                  <div style={getBadgeStyle(pUSD)}><span style={{ fontSize: '7px', fontWeight: 900 }}>REND. USD</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pUSD >= 0 ? '+' : ''}{pUSD.toFixed(1)}%</div></div>
+                  <div style={getBadgeStyle(pARS)}><span style={{ fontSize: '7px', fontWeight: 900 }}>REND. ARS</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pARS >= 0 ? '+' : ''}{pARS.toFixed(1)}%</div></div>
+                  <div style={getBadgeStyle(pALFA)}><span style={{ fontSize: '7px', fontWeight: 900 }}>ALFA</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pALFA >= 0 ? '+' : ''}{pALFA.toFixed(1)}%</div></div>
                 </div>
               </div>
             </Link>
