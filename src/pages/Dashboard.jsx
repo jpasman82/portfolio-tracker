@@ -1,0 +1,153 @@
+import { useState, useEffect } from 'react';
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { Link } from 'react-router-dom';
+
+export default function Dashboard() {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchEvents = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "rotations"));
+      let data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Orden: Abiertas primero, luego por fecha descendente
+      data.sort((a, b) => {
+        if (a.isClosed === b.isClosed) return new Date(b.tradeDate) - new Date(a.tradeDate);
+        return a.isClosed ? 1 : -1;
+      });
+      setEvents(data);
+    } catch (e) {
+      console.error("Error:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchEvents(); }, []);
+
+  const handleDelete = async (e, id) => {
+    e.preventDefault(); e.stopPropagation();
+    if (window.confirm("¿Eliminar operación?")) {
+      try {
+        await deleteDoc(doc(db, "rotations", id));
+        setEvents(events.filter(ev => ev.id !== id));
+      } catch (err) { alert("Error al borrar."); }
+    }
+  };
+
+  // Lógica de colores para los badges
+  const getBadgeStyle = (val) => {
+    const base = { 
+      textAlign: 'center', padding: '10px 4px', borderRadius: '14px', border: '1px solid #eee', 
+      display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '45px',
+      transition: 'all 0.3s ease'
+    };
+    if (val > 0.01) return { ...base, backgroundColor: '#00c805', color: 'white', border: 'none' };
+    if (val < -0.01) return { ...base, backgroundColor: '#ff3b30', color: 'white', border: 'none' };
+    return { ...base, backgroundColor: '#f8f9fa', color: '#1a1d21' };
+  };
+
+  if (loading) return <div style={{ padding: '100px 0', textAlign: 'center', fontWeight: 700, color: '#6c757d' }}>Cargando Latinbonos...</div>;
+
+  return (
+    <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0, color: '#1a1d21' }}>Operaciones</h2>
+        <Link to="/nuevo" style={{ padding: '12px 20px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '14px', fontWeight: 800, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+          + Nueva
+        </Link>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {events.map(event => {
+          // --- CÁLCULOS (Base ARS -> USD) ---
+          const soldAssets = event.soldAssets || [];
+          const boughtAssets = event.boughtAssetsFromDb || event.boughtAssets || [];
+          const currentPrices = event.currentPricesFromDb || {};
+          const soldCurrentPrices = event.soldCurrentPricesFromDb || {};
+          const initialUsdRate = event.initialUsdRate || 1;
+          const currentUsdRate = event.currentUsdRateFromDb || initialUsdRate;
+
+          // 1. Inversión Inicial (Lo que vendimos para entrar)
+          const totalARS_Init = soldAssets.reduce((sum, a) => sum + (a.quantity * a.priceAtTrade), 0);
+          const totalUSD_Init = totalARS_Init / initialUsdRate;
+
+          // 2. Valor Actual (Lo que tenemos hoy en la nueva posición)
+          const totalARS_Now = boughtAssets.reduce((sum, a) => sum + (a.quantity * (currentPrices[a.ticker] || a.priceAtTrade || 0)), 0);
+          const totalUSD_Now = totalARS_Now / currentUsdRate;
+          
+          // 3. Posición Anterior a precios de hoy (Para el ALFA)
+          const totalARS_Now_Prev = soldAssets.reduce((sum, a) => sum + (a.quantity * (soldCurrentPrices[a.ticker] || a.priceAtTrade || 0)), 0);
+          const totalUSD_Now_Prev = totalARS_Now_Prev / currentUsdRate;
+
+          // 4. Métricas Finales
+          const pUSD = totalUSD_Init > 0 ? ((totalUSD_Now / totalUSD_Init) - 1) * 100 : 0;
+          const pARS = totalARS_Init > 0 ? ((totalARS_Now / totalARS_Init) - 1) * 100 : 0;
+          const pALFA = totalUSD_Now_Prev > 0 ? ((totalUSD_Now / totalUSD_Now_Prev) - 1) * 100 : 0;
+          
+          const profitUSD = totalUSD_Now - totalUSD_Init;
+          const profitARS = totalARS_Now - totalARS_Init;
+
+          return (
+            <Link key={event.id} to={`/evento/${event.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div style={{ 
+                padding: '22px', backgroundColor: 'white', borderRadius: '28px', border: '1px solid #eaecef', 
+                position: 'relative', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', opacity: event.isClosed ? 0.7 : 1,
+                transition: 'transform 0.2s ease'
+              }}>
+                
+                <button onClick={(e) => handleDelete(e, event.id)} style={{ position: 'absolute', top: '18px', right: event.isClosed ? '90px' : '18px', border: 'none', background: '#fff0f0', color: '#ff3b30', fontSize: '10px', fontWeight: 800, padding: '6px 12px', borderRadius: '10px', cursor: 'pointer', zIndex: 10 }}>BORRAR</button>
+                {event.isClosed && <div style={{ position: 'absolute', top: '0', right: '0', backgroundColor: '#1a1d21', color: 'white', fontSize: '9px', fontWeight: 900, padding: '6px 14px', borderBottomLeftRadius: '14px' }}>CERRADA</div>}
+                
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: '#1a1d21', maxWidth: '70%' }}>{event.eventName}</h3>
+                    <span style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 800 }}>{event.tradeDate}</span>
+                  </div>
+
+                  <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <div>
+                      <div style={{ fontSize: '10px', fontWeight: 900, color: '#198754', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Valor Actual</div>
+                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#1a1d21' }}>
+                        US$ {totalUSD_Now.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: '11px', fontWeight: 600, color: '#adb5bd' }}>
+                      Inv: $ {totalARS_Init.toLocaleString('es-AR', {maximumFractionDigits: 0})}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
+                   <div style={{ fontSize: '12px', fontWeight: 800, color: profitUSD >= 0 ? '#198754' : '#dc3545', backgroundColor: profitUSD >= 0 ? '#eaffeb' : '#fff0f0', padding: '5px 12px', borderRadius: '10px' }}>
+                     {profitUSD >= 0 ? '▲' : '▼'} US$ {Math.abs(profitUSD).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                   </div>
+                   <div style={{ fontSize: '12px', fontWeight: 800, color: profitARS >= 0 ? '#198754' : '#dc3545', backgroundColor: profitARS >= 0 ? '#eaffeb' : '#fff0f0', padding: '5px 12px', borderRadius: '10px' }}>
+                     {profitARS >= 0 ? '▲' : '▼'} $ {Math.abs(profitARS).toLocaleString('es-AR', {maximumFractionDigits: 0})}
+                   </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                  <div style={getBadgeStyle(pUSD)}>
+                    <span style={{ fontSize: '8px', fontWeight: 900, opacity: 0.8 }}>REND. USD</span>
+                    <div style={{ fontSize: '15px', fontWeight: 900 }}>{pUSD >= 0 ? '+' : ''}{pUSD.toFixed(1)}%</div>
+                  </div>
+                  <div style={getBadgeStyle(pARS)}>
+                    <span style={{ fontSize: '8px', fontWeight: 900, opacity: 0.8 }}>REND. ARS</span>
+                    <div style={{ fontSize: '15px', fontWeight: 900 }}>{pARS >= 0 ? '+' : ''}{pARS.toFixed(1)}%</div>
+                  </div>
+                  <div style={getBadgeStyle(pALFA)}>
+                    <span style={{ fontSize: '8px', fontWeight: 900, opacity: 0.8 }}>ALFA</span>
+                    <div style={{ fontSize: '15px', fontWeight: 900 }}>{pALFA >= 0 ? '+' : ''}{pALFA.toFixed(1)}%</div>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
