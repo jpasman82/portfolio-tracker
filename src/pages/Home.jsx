@@ -5,7 +5,7 @@ export default function Home() {
     { 
       name: 'JP Morgan', 
       balance: 15500, // <--- Ajustá el saldo aquí
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/J_P_Morgan_Chase_Logo_2008-1.svg/512px-J_P_Morgan_Chase_Logo_2008-1.svg.png',
+      logo: 'https://www.pngwing.com/es/free-png-khtma',
       color: '#004a99'
     },
     { 
