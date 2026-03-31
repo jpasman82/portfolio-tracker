@@ -1,47 +1,40 @@
 import { Link } from 'react-router-dom';
 
 export default function Home() {
-  // Datos de ejemplo (puedes editarlos aquí manualmente por ahora)
   const brokers = [
     { 
       name: 'JP Morgan', 
-      balance: 15500, // <--- CAMBIA ESTE NÚMERO
-      color: '#004a99', // Azul JPM
-      shortName: 'JPM',
-      logoBg: '#e6f0f9'
+      balance: 0, 
+      logo: 'https://logo.clearbit.com/jpmorgan.com',
+      color: '#004a99'
     },
     { 
       name: 'One618', 
-      balance: 83200, // <--- CAMBIA ESTE NÚMERO
-      color: '#1a1d21', // Negro/Gris One
-      shortName: '1',
-      logoBg: '#e9ecef'
+      balance: 0, 
+      logo: 'https://play-lh.googleusercontent.com/rmyAkju1LNJl3AEF4cN2ef4jGxzmiSfxga17vLkwPDc-nyDkkxP78TEoKj1cxF_xGtLHBs6BWb0ccR5WvhCj',
+      color: '#1a1d21'
     },
     { 
       name: 'Latin Securities', 
-      balance: 42150, // <--- CAMBIA ESTE NÚMERO
-      color: '#ce9c2b', // Dorado Latin
-      shortName: 'LS',
-      logoBg: '#fdf8e9'
+      balance: 0, 
+      logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png',
+      color: '#ce9c2b'
     }
   ];
 
-  // Calculamos el total automáticamente
   const totalConsolidado = brokers.reduce((sum, b) => sum + b.balance, 0);
 
   return (
     <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
       
-      {/* HEADER CON TÍTULO */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 900, margin: 0, color: '#1a1d21' }}>Hola, Marcos</h2>
-        <span style={{ fontSize: '12px', color: '#6c757d', fontWeight: 600 }}>USD Actualizado</span>
+        <h2 style={{ fontSize: '24px', fontWeight: 900, margin: 0, color: '#1a1d21' }}>Hola, María</h2>
       </div>
 
       {/* TARJETA TOTAL CONSOLIDADO */}
       <div style={{ 
         padding: '30px 20px', 
-        backgroundColor: '#1a1d21', // Fondo oscuro para destacar
+        backgroundColor: '#1a1d21', 
         borderRadius: '28px', 
         marginBottom: '25px', 
         boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
@@ -51,7 +44,7 @@ export default function Home() {
           Total Consolidado
         </div>
         <div style={{ fontSize: '36px', fontWeight: 900, letterSpacing: '-1px' }}>
-          US$ {totalConsolidado.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          US$ {totalConsolidado.toLocaleString('en-US')}
         </div>
         <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '5px' }}>
           Suma de posiciones en 3 brokers
@@ -74,20 +67,24 @@ export default function Home() {
             boxShadow: '0 2px 6px rgba(0,0,0,0.02)' 
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              {/* LOGO REFERENCIA (Estilo minimalista con iniciales) */}
+              {/* LOGO DEL BROKER */}
               <div style={{ 
                 width: '45px', 
                 height: '45px', 
                 borderRadius: '12px', 
-                backgroundColor: b.logoBg, 
+                backgroundColor: 'white', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center',
-                border: `1px solid ${b.color}20` // Borde muy suave del color del broker
+                border: '1px solid #eee',
+                overflow: 'hidden'
               }}>
-                <span style={{ fontSize: '18px', fontWeight: 900, color: b.color }}>
-                  {b.shortName}
-                </span>
+                <img 
+                  src={b.logo} 
+                  alt={b.name} 
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} 
+                  onError={(e) => { e.target.src = 'https://via.placeholder.com/45?text=' + b.name[0] }}
+                />
               </div>
               
               <div>
@@ -98,17 +95,15 @@ export default function Home() {
 
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>
-                US$ {b.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                US$ {b.balance.toLocaleString('en-US')}
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* SECCIÓN INFERIOR - ACCESO A MÓDULOS */}
+      {/* ACCESO A ROTACIONES */}
       <div style={{ borderTop: '1px solid #eaecef', paddingTop: '25px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#6c757d', marginBottom: '15px', paddingLeft: '5px' }}>Herramientas</h3>
-        
         <Link to="/rotaciones" style={{ 
           display: 'flex',
           alignItems: 'center',
@@ -122,10 +117,9 @@ export default function Home() {
           textAlign: 'center', 
           fontWeight: 800,
           border: '1px solid #1a1d21',
-          transition: 'all 0.2s ease',
           boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
         }}>
-          <span style={{fontSize: '18px'}}>🔄</span> Tracker de Estrategias (De María)
+          🔄 Tracker de Estrategias (María)
         </Link>
       </div>
 
