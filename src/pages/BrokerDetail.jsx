@@ -39,7 +39,10 @@ export default function BrokerDetail() {
         quantity: Number(a.quantity),
         price: Number(a.price)
       }));
-      await setDoc(doc(db, "brokerPositions", id), { assets: cleanAssets });
+      await setDoc(doc(db, "brokerPositions", id), { 
+        assets: cleanAssets,
+        lastUpdated: new Date().toISOString()
+      });
       navigate('/');
     } catch (e) { alert("Error al guardar"); }
     finally { setSaving(false); }
