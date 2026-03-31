@@ -34,7 +34,7 @@ export default function Home() {
       
       {/* HEADER CON TÍTULO */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 900, margin: 0, color: '#1a1d21' }}>Hola, María</h2>
+        <h2 style={{ fontSize: '24px', fontWeight: 900, margin: 0, color: '#1a1d21' }}>Hola, Marcos</h2>
         <span style={{ fontSize: '12px', color: '#6c757d', fontWeight: 600 }}>USD Actualizado</span>
       </div>
 
@@ -125,7 +125,7 @@ export default function Home() {
           transition: 'all 0.2s ease',
           boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
         }}>
-          <span style={{fontSize: '18px'}}>🔄</span> Tracker de Estrategias (María)
+          <span style={{fontSize: '18px'}}>🔄</span> Tracker de Estrategias (De María)
         </Link>
       </div>
 
