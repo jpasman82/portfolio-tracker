@@ -1,9 +1,9 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Home from './Home';
-import Dashboard from './Dashboard';
-import EventDetail from './EventDetail';
-import NewRotation from './NewRotation';
-import BrokerDetail from './BrokerDetail';
+import Home from './pages/Home';
+import Dashboard from './pages/Dashboard';
+import EventDetail from './pages/EventDetail';
+import NewRotation from './pages/NewRotation';
+import BrokerDetail from './pages/BrokerDetail';
 
 function App() {
   return (
