@@ -4,19 +4,19 @@ export default function Home() {
   const brokers = [
     { 
       name: 'JP Morgan', 
-      balance: 0, 
-      logo: 'https://logo.clearbit.com/jpmorgan.com',
+      balance: 15500, // <--- Ajustá el saldo aquí
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/J_P_Morgan_Chase_Logo_2008-1.svg/512px-J_P_Morgan_Chase_Logo_2008-1.svg.png',
       color: '#004a99'
     },
     { 
       name: 'One618', 
-      balance: 0, 
+      balance: 83200, // <--- Ajustá el saldo aquí
       logo: 'https://play-lh.googleusercontent.com/rmyAkju1LNJl3AEF4cN2ef4jGxzmiSfxga17vLkwPDc-nyDkkxP78TEoKj1cxF_xGtLHBs6BWb0ccR5WvhCj',
       color: '#1a1d21'
     },
     { 
       name: 'Latin Securities', 
-      balance: 0, 
+      balance: 42150, // <--- Ajustá el saldo aquí
       logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png',
       color: '#ce9c2b'
     }
@@ -31,7 +31,6 @@ export default function Home() {
         <h2 style={{ fontSize: '24px', fontWeight: 900, margin: 0, color: '#1a1d21' }}>Hola, María</h2>
       </div>
 
-      {/* TARJETA TOTAL CONSOLIDADO */}
       <div style={{ 
         padding: '30px 20px', 
         backgroundColor: '#1a1d21', 
@@ -51,7 +50,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* LISTA DE BROKERS */}
       <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#6c757d', marginBottom: '15px', paddingLeft: '5px' }}>Detalle por Broker</h3>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '35px' }}>
@@ -67,7 +65,6 @@ export default function Home() {
             boxShadow: '0 2px 6px rgba(0,0,0,0.02)' 
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              {/* LOGO DEL BROKER */}
               <div style={{ 
                 width: '45px', 
                 height: '45px', 
@@ -83,7 +80,10 @@ export default function Home() {
                   src={b.logo} 
                   alt={b.name} 
                   style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} 
-                  onError={(e) => { e.target.src = 'https://via.placeholder.com/45?text=' + b.name[0] }}
+                  onError={(e) => { 
+                    e.target.onerror = null; 
+                    e.target.src = 'https://via.placeholder.com/45?text=' + b.name[0];
+                  }}
                 />
               </div>
               
@@ -102,7 +102,6 @@ export default function Home() {
         ))}
       </div>
 
-      {/* ACCESO A ROTACIONES */}
       <div style={{ borderTop: '1px solid #eaecef', paddingTop: '25px' }}>
         <Link to="/rotaciones" style={{ 
           display: 'flex',
