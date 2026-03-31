@@ -25,7 +25,7 @@ export default function Home() {
         display: 'block', padding: '20px', backgroundColor: '#1a1d21', color: 'white', 
         textDecoration: 'none', borderRadius: '20px', textAlign: 'center', fontWeight: 800 
       }}>
-        🔄 Ver Tracker de Rotaciones
+        🔄 Ver Estrategias de María
       </Link>
     </div>
   );
