@@ -25,15 +25,11 @@ export default function EventDetail() {
           setEvent(data);
           setEventName(data.eventName);
           setCurrentUsdRate(data.currentUsdRateFromDb || data.initialUsdRate);
-          
-          // Posición Actual
           const assets = data.boughtAssetsFromDb || data.boughtAssets || [];
           setCurrentAssets(assets);
           const pB = {};
           assets.forEach(a => pB[a.ticker] = data.currentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0);
           setCurrentPrices(pB);
-
-          // Posición Vendida (Para el ALFA)
           const pS = {};
           (data.soldAssets || []).forEach(a => pS[a.ticker] = data.soldCurrentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0);
           setSoldCurrentPrices(pS);
@@ -44,26 +40,10 @@ export default function EventDetail() {
     fetchData();
   }, [id]);
 
-  const handleAddAsset = () => {
-    const ticker = prompt("Ticker del nuevo activo:");
-    if (ticker) {
-      const newT = ticker.toUpperCase();
-      setCurrentAssets([...currentAssets, { ticker: newT, quantity: 0, priceAtTrade: 0 }]);
-      setCurrentPrices({ ...currentPrices, [newT]: 0 });
-    }
-  };
-
-  const handleRemoveAsset = (ticker) => {
-    if (window.confirm(`¿Quitar ${ticker}?`)) {
-      setCurrentAssets(currentAssets.filter(a => a.ticker !== ticker));
-    }
-  };
-
   const save = async (closeValue) => {
     setSaving(true);
     const now = new Date();
     const timestamp = `${now.getDate()}/${now.getMonth() + 1} ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
     try {
       await updateDoc(doc(db, "rotations", id), { 
         eventName, 
@@ -86,8 +66,6 @@ export default function EventDetail() {
   const totalUSD_Init = totalARS_Init / (event.initialUsdRate || 1);
   const totalARS_Now = currentAssets.reduce((sum, a) => sum + (a.quantity * (currentPrices[a.ticker] || 0)), 0);
   const totalUSD_Now = totalARS_Now / (Number(currentUsdRate) || event.initialUsdRate || 1);
-  
-  // Cálculo del ALFA: Posición anterior a precios de HOY
   const totalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (a.quantity * (soldCurrentPrices[a.ticker] || 0)), 0);
   const totalUSD_Now_Prev = totalARS_Now_Prev / (Number(currentUsdRate) || event.initialUsdRate || 1);
 
@@ -103,46 +81,26 @@ export default function EventDetail() {
 
   return (
     <div style={{ padding: '24px 15px', maxWidth: '500px', margin: 'auto', paddingBottom: '120px' }}>
-      <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#0d6efd', fontWeight: 600, marginBottom: 10 }}>← Volver</button>
-      
-      <div style={{ marginBottom: 20 }}>
-        <input value={eventName} onChange={(e) => setEventName(e.target.value)} disabled={!isEditingStructure || event.isClosed} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '24px', fontWeight: 800, outline: 'none' }} />
-        {event.lastUpdated && <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 700 }}>Última actualización: {event.lastUpdated} hs</div>}
-      </div>
-      
-      {/* TARJETA DE RESUMEN FINANCIERO */}
-      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '24px', border: '1px solid #eee', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          <div style={{ borderRight: '1px solid #f0f0f0', paddingRight: '10px' }}>
-            <div style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase' }}>Inversión Inicial</div>
-            <div style={{ fontSize: '18px', fontWeight: 800 }}>$ {totalARS_Init.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
-            <div style={{ fontSize: '11px', color: '#b2bec3' }}>US$ {totalUSD_Init.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '9px', fontWeight: 800, color: '#198754', textTransform: 'uppercase' }}>Valor Actual</div>
-            <div style={{ fontSize: '18px', fontWeight: 800, color: '#198754' }}>$ {totalARS_Now.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
-            <div style={{ fontSize: '11px', color: '#198754', fontWeight: 700 }}>US$ {totalUSD_Now.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-          </div>
+      <button onClick={() => navigate('/rotaciones')} style={{ background: 'none', border: 'none', color: '#0d6efd', fontWeight: 600, marginBottom: 15 }}>← Volver</button>
+      <div style={{ marginBottom: 25 }}>
+        <input value={eventName} onChange={(e) => setEventName(e.target.value)} disabled={!isEditingStructure || event.isClosed} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '24px', fontWeight: 800, outline: 'none', marginBottom: 5 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+           <span style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 700 }}>{event.tradeDate}</span>
+           {event.lastUpdated && <span style={{ fontSize: '10px', color: '#1a1d21', fontWeight: 800, backgroundColor: '#e9ecef', padding: '2px 8px', borderRadius: '4px' }}>Act: {event.lastUpdated}hs</span>}
         </div>
       </div>
 
-      {/* BADGES DE RENDIMIENTO */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '20px' }}>
         <div style={badgeStyle(pUSD)}><div style={{ fontSize: '8px', fontWeight: 700 }}>REND. USD</div><div style={{ fontSize: '16px', fontWeight: 800 }}>{pUSD.toFixed(1)}%</div></div>
         <div style={badgeStyle(pARS)}><div style={{ fontSize: '8px', fontWeight: 700 }}>REND. ARS</div><div style={{ fontSize: '16px', fontWeight: 800 }}>{pARS.toFixed(1)}%</div></div>
         <div style={badgeStyle(pALFA)}><div style={{ fontSize: '8px', fontWeight: 700 }}>ALFA</div><div style={{ fontSize: '16px', fontWeight: 800 }}>{pALFA.toFixed(1)}%</div></div>
       </div>
 
-      {/* SECCIÓN 1: POSICIÓN ACTUAL (LO QUE TENGO) */}
       <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '15px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'center' }}>
-          <h4 style={{ margin: 0, fontSize: '13px', color: '#198754' }}>⬆️ POSICIÓN ACTUAL</h4>
-          {!event.isClosed && !isEditingStructure && <button onClick={() => setIsEditingStructure(true)} style={{ border: 'none', background: '#f8f9fa', color: '#0d6efd', fontWeight: 700, fontSize: '11px', padding: '5px 10px', borderRadius: 8 }}>✏️ Editar</button>}
-          {isEditingStructure && <button onClick={handleAddAsset} style={{ border: 'none', background: '#eaffeb', color: '#198754', fontWeight: 700, fontSize: '11px', padding: '5px 10px', borderRadius: 8 }}>+ Agregar</button>}
-        </div>
+        <h4 style={{ margin: '0 0 15px 0', fontSize: '13px', color: '#198754' }}>⬆️ POSICIÓN ACTUAL</h4>
         {currentAssets.map((asset) => (
           <div key={asset.ticker} style={{ marginBottom: '15px', borderBottom: '1px solid #f8f9fa', paddingBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{asset.ticker}</b> {isEditingStructure && <button onClick={() => handleRemoveAsset(asset.ticker)} style={{ color: 'red', border: 'none', background: 'none', fontSize: '10px' }}>Quitar</button>}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{asset.ticker}</b></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: 5 }}>
               <div><label style={{ fontSize: '9px' }}>CANTIDAD</label><input type="number" value={asset.quantity} disabled={!isEditingStructure} onChange={(e) => setCurrentAssets(currentAssets.map(a => a.ticker === asset.ticker ? {...a, quantity: Number(e.target.value)} : a))} style={{ width: '100%', padding: '10px', border: '1px solid #eee', borderRadius: 10 }} /></div>
               <div><label style={{ fontSize: '9px' }}>PRECIO ARS</label><input type="number" value={currentPrices[asset.ticker]} disabled={event.isClosed} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '10px', border: '1px solid #eee', textAlign: 'right', borderRadius: 10 }} /></div>
@@ -151,21 +109,14 @@ export default function EventDetail() {
         ))}
       </div>
 
-      {/* SECCIÓN 2: POSICIÓN ANTERIOR (LO QUE VENDÍ - PARA EL ALFA) */}
       <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '24px', border: '1px solid #eee', marginBottom: '15px' }}>
-        <h4 style={{ margin: '0 0 15px 0', fontSize: '13px', color: '#6c757d' }}>📉 POSICIÓN ANTERIOR (PARA ALFA)</h4>
+        <h4 style={{ margin: '0 0 15px 0', fontSize: '13px', color: '#6c757d' }}>📉 POSICIÓN ANTERIOR (ALFA)</h4>
         {(event.soldAssets || []).map((asset) => (
           <div key={asset.ticker} style={{ marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{asset.ticker}</b> <span style={{fontSize: '12px', color: '#adb5bd'}}>Cant: {asset.quantity}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{asset.ticker}</b></div>
             <div style={{ marginTop: 5 }}>
               <label style={{ fontSize: '9px' }}>PRECIO ARS ACTUAL</label>
-              <input 
-                type="number" 
-                value={soldCurrentPrices[asset.ticker]} 
-                disabled={event.isClosed} 
-                onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: Number(e.target.value)})} 
-                style={{ width: '100%', padding: '10px', border: '1px solid #eee', textAlign: 'right', borderRadius: 10, background: 'white' }} 
-              />
+              <input type="number" value={soldCurrentPrices[asset.ticker]} disabled={event.isClosed} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '10px', border: '1px solid #eee', textAlign: 'right', borderRadius: 10, background: 'white' }} />
             </div>
           </div>
         ))}
@@ -177,11 +128,10 @@ export default function EventDetail() {
       </div>
 
       {event.isClosed ? (
-        <button onClick={() => save(false)} style={{ width: '100%', padding: '18px', backgroundColor: 'transparent', color: '#0d6efd', border: '2px solid #0d6efd', borderRadius: '16px', fontWeight: 700, cursor: 'pointer' }}>🔓 Reabrir Operación</button>
+        <button onClick={() => save(false)} style={{ width: '100%', padding: '18px', backgroundColor: 'transparent', color: '#0d6efd', border: '2px solid #0d6efd', borderRadius: '16px', fontWeight: 700 }}>🔓 Reabrir Operación</button>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <button onClick={() => save(false)} disabled={saving} style={{ width: '100%', padding: '18px', backgroundColor: '#1a1d21', color: 'white', border: 'none', borderRadius: '16px', fontWeight: 700 }}>{saving ? 'Guardando...' : 'Guardar Cambios'}</button>
-          <button onClick={() => { if(window.confirm("¿Cerrar?")) save(true) }} style={{ color: '#dc3545', border: 'none', background: 'none', fontSize: '13px', marginTop: 10 }}>Finalizar y cerrar operación</button>
+          <button onClick={() => save(false)} disabled={saving} style={{ width: '100%', padding: '18px', backgroundColor: '#1a1d21', color: 'white', border: 'none', borderRadius: '16px', fontWeight: 700 }}>Guardar Cambios</button>
         </div>
       )}
     </div>
