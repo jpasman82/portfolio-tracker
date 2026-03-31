@@ -42,6 +42,11 @@ export default function Dashboard() {
 
   return (
     <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto' }}>
+      
+      <Link to="/" style={{ textDecoration: 'none', color: '#0d6efd', fontWeight: 700, fontSize: '13px', display: 'block', marginBottom: '15px' }}>
+        ← Volver al Resumen de Brokers
+      </Link>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias De María</h2>
         <Link to="/nuevo" style={{ padding: '12px 20px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '14px', fontWeight: 800 }}>+ Nueva</Link>
@@ -73,14 +78,11 @@ export default function Dashboard() {
             <Link key={event.id} to={`/evento/${event.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
               <div style={{ padding: '22px', backgroundColor: 'white', borderRadius: '28px', border: '1px solid #eaecef', position: 'relative', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', opacity: event.isClosed ? 0.7 : 1 }}>
                 
-                {/* BOTÓN BORRAR - Con espacio reservado */}
                 <button onClick={(e) => handleDelete(e, event.id)} style={{ position: 'absolute', top: '20px', right: '20px', border: 'none', background: '#fff0f0', color: '#ff3b30', fontSize: '10px', fontWeight: 800, padding: '6px 12px', borderRadius: '10px', zIndex: 10 }}>BORRAR</button>
                 
                 <div style={{ marginBottom: '16px' }}>
-                  {/* Título con padding-right para no chocar con el botón Borrar */}
                   <h3 style={{ fontSize: '19px', fontWeight: 800, margin: '0 0 8px 0', paddingRight: '80px', lineHeight: '1.2' }}>{event.eventName}</h3>
                   
-                  {/* Fila de Meta-info (Fecha y Estado) */}
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '15px' }}>
                     <span style={{ fontSize: '11px', color: '#6c757d', fontWeight: 800, backgroundColor: '#f0f2f5', padding: '4px 8px', borderRadius: '6px' }}>
                       {event.tradeDate}
@@ -88,22 +90,20 @@ export default function Dashboard() {
                     {event.isClosed && <span style={{ fontSize: '9px', fontWeight: 900, backgroundColor: '#1a1d21', color: 'white', padding: '4px 8px', borderRadius: '6px' }}>CERRADA</span>}
                   </div>
                   
-                  {/* VALORES ACTUALES E INVERTIDOS */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', backgroundColor: '#fcfcfc', padding: '12px', borderRadius: '16px', border: '1px solid #f8f8f8' }}>
                     <div>
-                      <div style={{ fontSize: '9px', fontWeight: 900, color: '#198754' }}>VALOR ACTUAL</div>
+                      <div style={{ fontSize: '9px', fontWeight: 900, color: '#198754', textTransform: 'uppercase' }}>VALOR ACTUAL</div>
                       <div style={{ fontSize: '17px', fontWeight: 900 }}>US$ {totalUSD_Now.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                       <div style={{ fontSize: '11px', color: '#198754', fontWeight: 700 }}>$ {totalARS_Now.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '9px', fontWeight: 900, color: '#adb5bd' }}>INVERTIDO</div>
+                      <div style={{ fontSize: '9px', fontWeight: 900, color: '#adb5bd', textTransform: 'uppercase' }}>INVERTIDO</div>
                       <div style={{ fontSize: '17px', fontWeight: 900, color: '#adb5bd' }}>US$ {totalUSD_Init.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                       <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 700 }}>$ {totalARS_Init.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
                     </div>
                   </div>
                 </div>
 
-                {/* PROFITS NOMINALES */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                    <div style={{ fontSize: '11px', fontWeight: 800, color: profitUSD >= 0 ? '#198754' : '#dc3545', backgroundColor: profitUSD >= 0 ? '#eaffeb' : '#fff0f0', padding: '4px 10px', borderRadius: '10px' }}>
                      {profitUSD >= 0 ? '▲' : '▼'} US$ {Math.abs(profitUSD).toLocaleString(undefined, {maximumFractionDigits: 0})}
@@ -113,7 +113,6 @@ export default function Dashboard() {
                    </div>
                 </div>
 
-                {/* BADGES RENDIMIENTO */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                   <div style={getBadgeStyle(pUSD)}><span style={{ fontSize: '7px', fontWeight: 900 }}>REND. USD</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pUSD >= 0 ? '+' : ''}{pUSD.toFixed(1)}%</div></div>
                   <div style={getBadgeStyle(pARS)}><span style={{ fontSize: '7px', fontWeight: 900 }}>REND. ARS</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pARS >= 0 ? '+' : ''}{pARS.toFixed(1)}%</div></div>
