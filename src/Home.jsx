@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db } from './firebase/config';
 
 export default function Home() {
   const [balances, setBalances] = useState({ jpm: 0, one: 0, latin: 0 });
@@ -14,11 +14,11 @@ export default function Home() {
         const newBalances = { jpm: 0, one: 0, latin: 0 };
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          const total = (data.assets || []).reduce((sum, a) => sum + (a.quantity * a.price), 0);
+          const total = (data.assets || []).reduce((sum, a) => sum + (Number(a.quantity) * Number(a.price)), 0);
           newBalances[doc.id] = total;
         });
         setBalances(newBalances);
-      } catch (e) { console.error(e); }
+      } catch (e) { console.error("Error fetching balances:", e); }
       finally { setLoading(false); }
     };
     fetchBalances();
@@ -38,7 +38,7 @@ export default function Home() {
 
       <div style={{ padding: '30px 20px', backgroundColor: '#1a1d21', borderRadius: '28px', marginBottom: '25px', boxShadow: '0 10px 20px rgba(0,0,0,0.1)', color: 'white' }}>
         <div style={{ fontSize: '13px', fontWeight: 700, opacity: 0.8, textTransform: 'uppercase', marginBottom: '8px' }}>Total Consolidado</div>
-        <div style={{ fontSize: '36px', fontWeight: 900 }}>US$ {totalConsolidado.toLocaleString()}</div>
+        <div style={{ fontSize: '36px', fontWeight: 900 }}>US$ {totalConsolidado.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '35px' }}>
@@ -46,22 +46,22 @@ export default function Home() {
           <Link key={b.id} to={`/broker/${b.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div style={{ padding: '18px', backgroundColor: 'white', borderRadius: '20px', border: '1px solid #eaecef', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <div style={{ width: '45px', height: '45px', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
-                  <img src={b.logo} alt={b.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} onError={(e) => { e.target.src='https://via.placeholder.com/45?text='+b.name[0] }}/>
+                <div style={{ width: '45px', height: '45px', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white' }}>
+                  <img src={b.logo} alt={b.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} />
                 </div>
                 <div>
                   <div style={{ fontSize: '16px', fontWeight: 800 }}>{b.name}</div>
-                  <div style={{ fontSize: '12px', color: '#adb5bd' }}>Ver detalle</div>
+                  <div style={{ fontSize: '11px', color: '#0d6efd', fontWeight: 700 }}>Editar posición →</div>
                 </div>
               </div>
-              <div style={{ fontSize: '18px', fontWeight: 900 }}>US$ {b.balance.toLocaleString()}</div>
+              <div style={{ fontSize: '18px', fontWeight: 900 }}>US$ {b.balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
             </div>
           </Link>
         ))}
       </div>
 
       <Link to="/rotaciones" style={{ display: 'block', padding: '20px', backgroundColor: 'white', color: '#1a1d21', textDecoration: 'none', borderRadius: '20px', textAlign: 'center', fontWeight: 800, border: '1px solid #1a1d21' }}>
-        🔄 Tracker de Estrategias (María)
+        🔄 Ver Estrategias de María
       </Link>
     </div>
   );
