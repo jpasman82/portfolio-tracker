@@ -28,19 +28,23 @@ export default function Unified() {
         querySnapshot.forEach((doc) => {
           const data = doc.data();
           const rate = (doc.id === 'jpm') ? 1 : (parseNum(data.usdRate) || 1);
-          const debt = parseNum(data.debt) || 0;
           
-          total -= debt;
+          const debt = parseNum(data.debt);
+          if (debt > 0) {
+            const tDebt = "DEUDA CAUCIÓN";
+            if (!unified[tDebt]) unified[tDebt] = { ticker: tDebt, quantity: 1, valueUsd: 0 };
+            unified[tDebt].valueUsd -= debt;
+            total -= debt;
+          }
 
           (data.assets || []).forEach(a => {
             if (!a || !a.ticker) return;
-
-            const t = a.ticker.toUpperCase();
+            const t = a.ticker.toUpperCase().trim();
             const qty = parseNum(a.quantity);
             const priceUsd = parseNum(a.price) / rate;
             const valueUsd = qty * priceUsd;
 
-            if (valueUsd > 0) {
+            if (valueUsd !== 0) {
               if (!unified[t]) unified[t] = { ticker: t, quantity: 0, valueUsd: 0 };
               unified[t].quantity += qty;
               unified[t].valueUsd += valueUsd;
@@ -61,12 +65,6 @@ export default function Unified() {
           grouped[info.cat].total += item.valueUsd;
         });
 
-        Object.keys(grouped).forEach(cat => {
-          Object.keys(grouped[cat].subs).forEach(sub => {
-            grouped[cat].subs[sub].assets.sort((a, b) => b.valueUsd - a.valueUsd);
-          });
-        });
-
         setGroupedData(grouped);
         setTotalUsd(total);
       } catch (e) {}
@@ -76,6 +74,40 @@ export default function Unified() {
   }, []);
 
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Analizando Cartera...</div>;
+
+  const pieData = [];
+  let totalForPie = 0;
+  const colors = ['#0d6efd', '#ffc107', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c'];
+
+  Object.keys(groupedData).forEach((cat) => {
+    if (groupedData[cat].total > 0) {
+      totalForPie += groupedData[cat].total;
+    }
+  });
+
+  let colorIndex = 0;
+  Object.keys(groupedData).forEach((cat) => {
+    if (groupedData[cat].total > 0) {
+      pieData.push({
+        name: cat,
+        value: groupedData[cat].total,
+        percentage: (groupedData[cat].total / totalForPie) * 100,
+        color: colors[colorIndex % colors.length]
+      });
+      colorIndex++;
+    }
+  });
+
+  pieData.sort((a, b) => b.value - a.value);
+
+  let cumulative = 0;
+  const gradientStops = pieData.map(slice => {
+    const start = cumulative;
+    const end = cumulative + slice.percentage;
+    cumulative = end;
+    return `${slice.color} ${start}% ${end}%`;
+  });
+  const conicGradient = pieData.length > 0 ? `conic-gradient(${gradientStops.join(', ')})` : '';
 
   return (
     <div style={{ padding: '30px 20px', maxWidth: '600px', margin: 'auto', backgroundColor: '#fcfcfc', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px' }}>
@@ -90,11 +122,38 @@ export default function Unified() {
         <div style={{ fontSize: '36px', fontWeight: 900 }}>{fmtUSD(totalUsd)}</div>
       </div>
 
+      {pieData.length > 0 && (
+        <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '35px', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#1a1d21', margin: '0 0 24px 0', textAlign: 'center' }}>Composición de Activos</h3>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '30px' }}>
+            <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: conicGradient, boxShadow: '0 8px 16px rgba(0,0,0,0.08)' }}></div>
+            
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {pieData.map(item => (
+                <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: item.color }}></div>
+                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#495057' }}>{item.name}</span>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '15px', fontWeight: 900, color: '#1a1d21', marginRight: '10px' }}>{item.percentage.toFixed(1)}%</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#adb5bd' }}>{fmtUSD(item.value)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {Object.keys(groupedData).sort().map(cat => (
         <div key={cat} style={{ marginBottom: '35px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px', borderBottom: '2px solid #eaecef', paddingBottom: '8px' }}>
             <h3 style={{ fontSize: '22px', fontWeight: 900, color: '#1a1d21', margin: 0 }}>{cat}</h3>
-            <span style={{ fontSize: '16px', fontWeight: 900, color: '#adb5bd' }}>{fmtUSD(groupedData[cat].total)}</span>
+            <span style={{ fontSize: '16px', fontWeight: 900, color: groupedData[cat].total < 0 ? '#ff3b30' : '#adb5bd' }}>
+              {fmtUSD(groupedData[cat].total)}
+            </span>
           </div>
 
           {Object.keys(groupedData[cat].subs).sort().map(sub => (
@@ -114,10 +173,10 @@ export default function Unified() {
                 {groupedData[cat].subs[sub].assets.map(asset => (
                   <div key={asset.ticker} style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f8f9fa', paddingTop: '10px' }}>
                     <div>
-                      <div style={{ fontSize: '15px', fontWeight: 900, color: '#495057' }}>{asset.ticker}</div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#adb5bd' }}>{fmtQty(asset.quantity)} nominales</div>
+                      <div style={{ fontSize: '15px', fontWeight: 900, color: asset.valueUsd < 0 ? '#ff3b30' : '#495057' }}>{asset.ticker}</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#adb5bd' }}>{asset.ticker === "DEUDA CAUCIÓN" ? "Pasivo financiero" : `${fmtQty(asset.quantity)} nominales`}</div>
                     </div>
-                    <div style={{ fontSize: '15px', fontWeight: 800, color: '#198754', alignSelf: 'center' }}>
+                    <div style={{ fontSize: '15px', fontWeight: 800, color: asset.valueUsd < 0 ? '#ff3b30' : '#198754', alignSelf: 'center' }}>
                       {fmtUSD(asset.valueUsd)}
                     </div>
                   </div>
