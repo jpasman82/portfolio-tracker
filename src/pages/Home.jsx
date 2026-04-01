@@ -73,18 +73,24 @@ export default function Home() {
 
       for (const ep of endpoints) {
         const targetUrl = `https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/${ep}`;
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
         
-        const res = await fetch(proxyUrl, {
+        let res = await fetch('https://corsproxy.io/?' + encodeURIComponent(targetUrl), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            "excludeZeroPxAndQty": true,
-            "T2": true,
-            "T1": false,
-            "T0": false
-          })
-        });
+          body: JSON.stringify({ "excludeZeroPxAndQty": true, "T2": true, "T1": false, "T0": false })
+        }).catch(() => null);
+
+        if (!res || !res.ok) {
+          res = await fetch('https://thingproxy.freeboard.io/fetch/' + targetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ "excludeZeroPxAndQty": true, "T2": true, "T1": false, "T0": false })
+          });
+        }
+
+        if (!res || !res.ok) {
+          throw new Error(`Fallo la conexión para la categoría: ${ep}`);
+        }
         
         const json = await res.json();
         if (json && json.data) {
@@ -125,7 +131,7 @@ export default function Home() {
 
       window.location.reload();
     } catch (error) {
-      alert('Hubo un error al actualizar los precios.');
+      alert(`Error al actualizar: ${error.message}`);
       setUpdatingPrices(false);
     }
   };
