@@ -15,6 +15,7 @@ export default function EventDetail() {
   const [currentUsdRate, setCurrentUsdRate] = useState('');
   const [eventName, setEventName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [viewCurrency, setViewCurrency] = useState('ARS');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,7 +35,7 @@ export default function EventDetail() {
           (data.soldAssets || []).forEach(a => pS[a.ticker] = data.soldCurrentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0);
           setSoldCurrentPrices(pS);
         }
-      } catch (e) { console.error(e); }
+      } catch (e) {}
       finally { setLoading(false); }
     };
     fetchData();
@@ -77,7 +78,7 @@ export default function EventDetail() {
       });
       setIsEditingStructure(false); 
       window.location.reload();
-    } catch (e) { alert("Error al guardar"); }
+    } catch (e) {}
     finally { setSaving(false); }
   };
 
@@ -101,6 +102,15 @@ export default function EventDetail() {
   });
 
   const historyReversed = [...(event.priceHistory || [])].reverse();
+
+  const fmtQty = (v) => Number(v || 0).toLocaleString('es-AR');
+  const fmtARS = (v) => '$ ' + Number(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtUSD = (v) => 'USD ' + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  const boxRead = { width: '100%', padding: '0 12px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 12, fontWeight: 700, boxSizing: 'border-box', fontSize: '14px', color: '#1a1d21', display: 'flex', alignItems: 'center', height: '42px', overflow: 'hidden' };
+  const boxReadBlue = { ...boxRead, backgroundColor: 'rgba(13,110,253,0.03)', border: '1px solid rgba(13,110,253,0.2)', color: '#0d6efd', justifyContent: 'flex-end' };
+  const inpWrite = { width: '100%', padding: '10px 12px', border: '1px solid #dee2e6', backgroundColor: '#fff', borderRadius: 12, fontWeight: 700, outline: 'none', boxSizing: 'border-box', fontSize: '14px', color: '#1a1d21', height: '42px' };
+  const inpWriteBlue = { ...inpWrite, border: '1px solid #0d6efd', color: '#0d6efd', textAlign: 'right', backgroundColor: 'rgba(13,110,253,0.02)' };
 
   return (
     <div style={{ padding: '24px 15px', maxWidth: '500px', margin: 'auto', paddingBottom: '120px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -142,17 +152,31 @@ export default function EventDetail() {
 
       <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' }}>
-          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#1a1d21' }}>Posición Comprada</h4>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#1a1d21' }}>Posición Comprada</h4>
+            <div style={{ display: 'flex', background: '#eaecef', borderRadius: '8px', padding: '3px' }}>
+              <button onClick={() => setViewCurrency('ARS')} style={{ border: 'none', background: viewCurrency === 'ARS' ? '#1a1d21' : 'transparent', color: viewCurrency === 'ARS' ? 'white' : '#6c757d', padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 800 }}>ARS</button>
+              <button onClick={() => setViewCurrency('USD')} style={{ border: 'none', background: viewCurrency === 'USD' ? '#1a1d21' : 'transparent', color: viewCurrency === 'USD' ? 'white' : '#6c757d', padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 800 }}>USD</button>
+            </div>
+          </div>
           {!event.isClosed && (
             <button onClick={() => setIsEditingStructure(!isEditingStructure)} style={{ border: 'none', background: isEditingStructure ? '#1a1d21' : '#f8f9fa', color: isEditingStructure ? 'white' : '#1a1d21', fontWeight: 800, fontSize: '11px', padding: '6px 12px', borderRadius: 10 }}>
-              {isEditingStructure ? 'Dejar de editar' : 'Editar Estructura'}
+              {isEditingStructure ? 'Dejar de editar' : 'Editar'}
             </button>
           )}
         </div>
         {currentAssets.map((asset, index) => {
-          const pCompra = Number(asset.priceAtTrade) || 0;
-          const pActual = Number(currentPrices[asset.ticker]) || 0;
-          const varPct = pCompra > 0 ? ((pActual / pCompra) - 1) * 100 : 0;
+          const pCompraARS = Number(asset.priceAtTrade) || 0;
+          const pActualARS = Number(currentPrices[asset.ticker]) || 0;
+          const initUsd = event.initialUsdRate || 1;
+          const currUsd = Number(currentUsdRate) || 1;
+          
+          const pCompraUSD = pCompraARS / initUsd;
+          const pActualUSD = pActualARS / currUsd;
+
+          const varPct = viewCurrency === 'USD' 
+            ? (pCompraUSD > 0 ? ((pActualUSD / pCompraUSD) - 1) * 100 : 0)
+            : (pCompraARS > 0 ? ((pActualARS / pCompraARS) - 1) * 100 : 0);
 
           return (
             <div key={index} style={{ marginBottom: '16px', borderBottom: '1px solid #f8f9fa', paddingBottom: 16 }}>
@@ -164,7 +188,7 @@ export default function EventDetail() {
                     <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>{asset.ticker}</div>
                   )}
                   
-                  {!isEditingStructure && pCompra > 0 && (
+                  {!isEditingStructure && pCompraARS > 0 && (
                     <div style={{ fontSize: '11px', fontWeight: 800, color: varPct >= 0 ? '#198754' : '#dc3545', backgroundColor: varPct >= 0 ? '#eaffeb' : '#fff0f0', padding: '4px 8px', borderRadius: 8 }}>
                       {varPct >= 0 ? '▲' : '▼'} {Math.abs(varPct).toFixed(1)}%
                     </div>
@@ -178,16 +202,43 @@ export default function EventDetail() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                 <div>
                   <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>CANTIDAD</label>
-                  <input type="number" value={asset.quantity} disabled={!isEditingStructure} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, quantity: Number(e.target.value)} : a))} style={{ width: '100%', padding: '10px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 8, fontWeight: 700, outline: 'none', boxSizing: 'border-box', fontSize: '14px' }} />
+                  {isEditingStructure ? (
+                    <input type="number" value={asset.quantity} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, quantity: e.target.value} : a))} style={inpWrite} />
+                  ) : (
+                    <div style={boxRead}>{fmtQty(asset.quantity)}</div>
+                  )}
                 </div>
                 <div>
-                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>COMPRA ($)</label>
-                  <input type="number" value={asset.priceAtTrade} disabled={!isEditingStructure} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: Number(e.target.value)} : a))} style={{ width: '100%', padding: '10px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 8, fontWeight: 700, outline: 'none', boxSizing: 'border-box', fontSize: '14px' }} />
+                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>COMPRA</label>
+                  {viewCurrency === 'USD' ? (
+                    <div style={boxRead}>{fmtUSD(pCompraUSD)}</div>
+                  ) : (
+                    isEditingStructure ? (
+                      <input type="number" value={asset.priceAtTrade} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: e.target.value} : a))} style={inpWrite} />
+                    ) : (
+                      <div style={boxRead}>{fmtARS(pCompraARS)}</div>
+                    )
+                  )}
                 </div>
                 <div>
-                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>ACTUAL ($)</label>
-                  <input type="number" value={currentPrices[asset.ticker] || ''} disabled={event.isClosed} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '10px', border: '1px solid #0d6efd', backgroundColor: 'rgba(13,110,253,0.03)', color: '#0d6efd', borderRadius: 8, fontWeight: 800, textAlign: 'right', outline: 'none', boxSizing: 'border-box', fontSize: '14px' }} />
+                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>ACTUAL</label>
+                  {viewCurrency === 'USD' ? (
+                    <div style={boxReadBlue}>{fmtUSD(pActualUSD)}</div>
+                  ) : (
+                    event.isClosed ? (
+                      <div style={boxReadBlue}>{fmtARS(pActualARS)}</div>
+                    ) : (
+                      <input type="number" value={currentPrices[asset.ticker] || ''} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: e.target.value})} style={inpWriteBlue} />
+                    )
+                  )}
                 </div>
+              </div>
+              
+              <div style={{ borderTop: '1px solid #eaecef', paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd' }}>SUBTOTAL</span>
+                <span style={{ fontSize: '16px', fontWeight: 900, color: '#198754' }}>
+                  {viewCurrency === 'USD' ? fmtUSD(pActualUSD * Number(asset.quantity || 0)) : fmtARS(pActualARS * Number(asset.quantity || 0))}
+                </span>
               </div>
             </div>
           );
@@ -201,18 +252,31 @@ export default function EventDetail() {
 
       <div style={{ backgroundColor: '#f8f9fa', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '16px' }}>
         <h4 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: 800, color: '#6c757d' }}>Activos Vendidos (Para ALFA)</h4>
-        {(event.soldAssets || []).map((asset) => (
-          <div key={asset.ticker} style={{ marginBottom: '16px', borderBottom: '1px solid #eaecef', paddingBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <span style={{ fontSize: '16px', fontWeight: 900, color: '#495057' }}>{asset.ticker}</span>
-              <span style={{fontSize: '12px', fontWeight: 700, color: '#adb5bd', backgroundColor: 'white', padding: '4px 8px', borderRadius: 8, border: '1px solid #eaecef'}}>Cant: {asset.quantity}</span>
+        {(event.soldAssets || []).map((asset) => {
+          const pActualARS = Number(soldCurrentPrices[asset.ticker]) || 0;
+          const pActualUSD = pActualARS / (Number(currentUsdRate) || 1);
+
+          return (
+            <div key={asset.ticker} style={{ marginBottom: '16px', borderBottom: '1px solid #eaecef', paddingBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontSize: '16px', fontWeight: 900, color: '#495057' }}>{asset.ticker}</span>
+                <span style={{fontSize: '12px', fontWeight: 700, color: '#adb5bd', backgroundColor: 'white', padding: '4px 8px', borderRadius: 8, border: '1px solid #eaecef'}}>Cant: {fmtQty(asset.quantity)}</span>
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>PRECIO ACTUAL</label>
+                {viewCurrency === 'USD' ? (
+                  <div style={boxReadBlue}>{fmtUSD(pActualUSD)}</div>
+                ) : (
+                  event.isClosed ? (
+                    <div style={boxReadBlue}>{fmtARS(pActualARS)}</div>
+                  ) : (
+                    <input type="number" value={soldCurrentPrices[asset.ticker] || ''} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: e.target.value})} style={inpWriteBlue} />
+                  )
+                )}
+              </div>
             </div>
-            <div>
-              <label style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>PRECIO ACTUAL ($)</label>
-              <input type="number" value={soldCurrentPrices[asset.ticker] || ''} disabled={event.isClosed} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '12px', border: '1px solid #0d6efd', backgroundColor: 'rgba(13,110,253,0.03)', color: '#0d6efd', borderRadius: 12, fontWeight: 800, textAlign: 'right', outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div style={{ backgroundColor: 'white', padding: '20px 24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -259,16 +323,16 @@ export default function EventDetail() {
                     <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', marginBottom: '6px' }}>POSICIÓN COMPRADA</div>
                     {historicAssets.map(a => (
                       <div key={a.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 800, color: '#1a1d21' }}>{a.ticker} <span style={{ fontWeight: 600, color: '#adb5bd' }}>(x{a.quantity})</span></span>
-                        <span style={{ fontWeight: 800, color: '#0d6efd' }}>${entry.prices[a.ticker] || 0}</span>
+                        <span style={{ fontWeight: 800, color: '#1a1d21' }}>{a.ticker} <span style={{ fontWeight: 600, color: '#adb5bd' }}>(x{fmtQty(a.quantity)})</span></span>
+                        <span style={{ fontWeight: 800, color: '#0d6efd' }}>{viewCurrency === 'USD' ? fmtUSD((entry.prices[a.ticker] || 0)/(entry.usdRate || 1)) : fmtARS(entry.prices[a.ticker] || 0)}</span>
                       </div>
                     ))}
                     
                     <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', marginTop: '12px', marginBottom: '6px' }}>POSICIÓN VENDIDA (REF)</div>
                     {(event.soldAssets || []).map(a => (
                       <div key={a.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 800, color: '#6c757d' }}>{a.ticker}</span>
-                        <span style={{ fontWeight: 800, color: '#6c757d' }}>${entry.soldPrices[a.ticker] || 0}</span>
+                        <span style={{ fontWeight: 800, color: '#6c757d' }}>{a.ticker} <span style={{ fontWeight: 600, color: '#adb5bd' }}>(x{fmtQty(a.quantity)})</span></span>
+                        <span style={{ fontWeight: 800, color: '#6c757d' }}>{viewCurrency === 'USD' ? fmtUSD((entry.soldPrices[a.ticker] || 0)/(entry.usdRate || 1)) : fmtARS(entry.soldPrices[a.ticker] || 0)}</span>
                       </div>
                     ))}
                   </div>
