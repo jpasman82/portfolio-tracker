@@ -73,23 +73,33 @@ export default function Home() {
 
       for (const ep of endpoints) {
         const targetUrl = `https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/${ep}`;
+        const reqBody = JSON.stringify({ "excludeZeroPxAndQty": true, "T2": true, "T1": false, "T0": false });
         
-        let res = await fetch('https://corsproxy.io/?' + encodeURIComponent(targetUrl), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ "excludeZeroPxAndQty": true, "T2": true, "T1": false, "T0": false })
-        }).catch(() => null);
-
-        if (!res || !res.ok) {
-          res = await fetch('https://thingproxy.freeboard.io/fetch/' + targetUrl, {
+        let res;
+        try {
+          res = await fetch('https://corsproxy.org/?' + encodeURIComponent(targetUrl), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ "excludeZeroPxAndQty": true, "T2": true, "T1": false, "T0": false })
+            body: reqBody
           });
+        } catch (e1) {
+          try {
+            res = await fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: reqBody
+            });
+          } catch (e2) {
+            res = await fetch('https://corsproxy.io/?' + encodeURIComponent(targetUrl), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: reqBody
+            });
+          }
         }
 
         if (!res || !res.ok) {
-          throw new Error(`Fallo la conexión para la categoría: ${ep}`);
+          throw new Error(`Los proxies están bloqueados por tu navegador o red.`);
         }
         
         const json = await res.json();
@@ -131,7 +141,7 @@ export default function Home() {
 
       window.location.reload();
     } catch (error) {
-      alert(`Error al actualizar: ${error.message}`);
+      alert(`Error al actualizar: ${error.message}\n\nPor favor desactivá tu bloqueador de anuncios (AdBlock, uBlock) o los escudos de Brave en esta página.`);
       setUpdatingPrices(false);
     }
   };
