@@ -82,7 +82,16 @@ export default function Home() {
         if (columns.length >= 2) {
           const tickerRaw = columns[0].replace(/"/g, '').replace('BCBA:', '').replace('NASDAQ:', '').trim().toUpperCase();
           let priceStr = columns[1].replace(/"/g, '').trim();
-          priceStr = priceStr.replace(/\./g, '').replace(',', '.');
+          
+          if (priceStr.includes(',') && priceStr.includes('.')) {
+            if (priceStr.lastIndexOf(',') > priceStr.lastIndexOf('.')) {
+              priceStr = priceStr.replace(/\./g, '').replace(',', '.');
+            } else {
+              priceStr = priceStr.replace(/,/g, '');
+            }
+          } else if (priceStr.includes(',')) {
+            priceStr = priceStr.replace(',', '.');
+          }
           
           const price = Number(priceStr);
           if (tickerRaw && !isNaN(price) && price > 0) {
@@ -99,6 +108,7 @@ export default function Home() {
 
         const data = document.data();
         let changed = false;
+        let updateFields = {};
 
         const updatedAssets = (data.assets || []).map(a => {
           if (!a.ticker) return a;
@@ -111,10 +121,9 @@ export default function Home() {
         });
 
         if (changed) {
-          await updateDoc(doc(db, "brokerPositions", document.id), {
-            assets: updatedAssets,
-            lastUpdated: nowIso
-          });
+          updateFields.assets = updatedAssets;
+          updateFields.lastUpdated = nowIso;
+          await updateDoc(doc(db, "brokerPositions", document.id), updateFields);
         }
       }
 
@@ -205,7 +214,7 @@ export default function Home() {
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                   <div style={{ width: '44px', height: '44px', borderRadius: '14px', border: '1px solid #f8f9fa', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px', boxSizing: 'border-box', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                    <img src={b.logo} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.innerHTML = `<span style="font-weight:900;color:#1a1d21;font-size:14px;">${b.name.substring(0,3).toUpperCase()}</span>` }} />
+                    <img src={b.logo} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
                   <div>
                     <div style={{ fontSize: '16px', fontWeight: 800, color: '#1a1d21' }}>{b.name}</div>
