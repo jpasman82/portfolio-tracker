@@ -17,6 +17,21 @@ export default function EventDetail() {
   const [saving, setSaving] = useState(false);
   const [viewCurrency, setViewCurrency] = useState('ARS');
 
+  const formatInput = (val) => {
+    if (val === undefined || val === null || val === '') return '';
+    let str = val.toString().replace(/\./g, ',');
+    let clean = str.replace(/[^0-9,]/g, '');
+    let parts = clean.split(',');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    if (parts.length > 2) parts = [parts[0], parts.slice(1).join('')];
+    return parts.join(',');
+  };
+
+  const parseNum = (val) => {
+    if (!val) return 0;
+    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -42,7 +57,7 @@ export default function EventDetail() {
   }, [id]);
 
   const handleAddAsset = () => {
-    setCurrentAssets([...currentAssets, { ticker: '', quantity: '', priceAtTrade: '', usdRateAtTrade: Number(currentUsdRate) }]);
+    setCurrentAssets([...currentAssets, { ticker: '', quantity: '', priceAtTrade: '', usdRateAtTrade: currentUsdRate }]);
   };
 
   const handleRemoveAsset = (index) => {
@@ -54,13 +69,28 @@ export default function EventDetail() {
     const now = new Date();
     const timestamp = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     
+    const cleanAssets = currentAssets.map(a => ({
+      ...a,
+      quantity: parseNum(a.quantity),
+      priceAtTrade: parseNum(a.priceAtTrade),
+      usdRateAtTrade: parseNum(a.usdRateAtTrade) || parseNum(currentUsdRate)
+    }));
+    
+    const cleanCurrentPrices = {};
+    Object.keys(currentPrices).forEach(k => cleanCurrentPrices[k] = parseNum(currentPrices[k]));
+
+    const cleanSoldCurrentPrices = {};
+    Object.keys(soldCurrentPrices).forEach(k => cleanSoldCurrentPrices[k] = parseNum(soldCurrentPrices[k]));
+    
+    const finalUsdRate = parseNum(currentUsdRate);
+
     const historyEntry = {
       date: timestamp,
       timestampIso: now.toISOString(),
-      prices: currentPrices,
-      soldPrices: soldCurrentPrices,
-      usdRate: Number(currentUsdRate),
-      assetsSnapshot: currentAssets.map(a => ({ ...a }))
+      prices: cleanCurrentPrices,
+      soldPrices: cleanSoldCurrentPrices,
+      usdRate: finalUsdRate,
+      assetsSnapshot: cleanAssets
     };
 
     const updatedHistory = [...(event.priceHistory || []), historyEntry];
@@ -68,10 +98,10 @@ export default function EventDetail() {
     try {
       await updateDoc(doc(db, "rotations", id), { 
         eventName, 
-        boughtAssetsFromDb: currentAssets, 
-        currentPricesFromDb: currentPrices, 
-        soldCurrentPricesFromDb: soldCurrentPrices, 
-        currentUsdRateFromDb: Number(currentUsdRate), 
+        boughtAssetsFromDb: cleanAssets, 
+        currentPricesFromDb: cleanCurrentPrices, 
+        soldCurrentPricesFromDb: cleanSoldCurrentPrices, 
+        currentUsdRateFromDb: finalUsdRate, 
         isClosed: closeValue,
         lastUpdated: timestamp,
         priceHistory: updatedHistory
@@ -84,12 +114,12 @@ export default function EventDetail() {
 
   if (loading || !event) return <div style={{ padding: '100px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Cargando...</div>;
 
-  const totalARS_Init = (event.soldAssets || []).reduce((sum, a) => sum + (a.quantity * a.priceAtTrade), 0);
-  const totalUSD_Init = totalARS_Init / (event.initialUsdRate || 1);
-  const totalARS_Now = currentAssets.reduce((sum, a) => sum + (a.quantity * (currentPrices[a.ticker] || 0)), 0);
-  const totalUSD_Now = totalARS_Now / (Number(currentUsdRate) || event.initialUsdRate || 1);
-  const totalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (a.quantity * (soldCurrentPrices[a.ticker] || 0)), 0);
-  const totalUSD_Now_Prev = totalARS_Now_Prev / (Number(currentUsdRate) || event.initialUsdRate || 1);
+  const totalARS_Init = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(a.priceAtTrade)), 0);
+  const totalUSD_Init = totalARS_Init / parseNum(event.initialUsdRate || 1);
+  const totalARS_Now = currentAssets.reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(currentPrices[a.ticker])), 0);
+  const totalUSD_Now = totalARS_Now / (parseNum(currentUsdRate) || parseNum(event.initialUsdRate) || 1);
+  const totalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(soldCurrentPrices[a.ticker])), 0);
+  const totalUSD_Now_Prev = totalARS_Now_Prev / (parseNum(currentUsdRate) || parseNum(event.initialUsdRate) || 1);
 
   const pUSD = totalUSD_Init > 0 ? ((totalUSD_Now / totalUSD_Init) - 1) * 100 : 0;
   const pARS = totalARS_Init > 0 ? ((totalARS_Now / totalARS_Init) - 1) * 100 : 0;
@@ -103,14 +133,14 @@ export default function EventDetail() {
 
   const historyReversed = [...(event.priceHistory || [])].reverse();
 
-  const fmtQty = (v) => Number(v || 0).toLocaleString('es-AR');
-  const fmtARS = (v) => '$ ' + Number(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  const fmtUSD = (v) => 'USD ' + Number(v || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtQty = (v) => formatInput(v);
+  const fmtARS = (v) => '$ ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
+  const fmtUSD = (v) => 'USD ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
 
-  const boxRead = { width: '100%', padding: '0 12px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 12, fontWeight: 700, boxSizing: 'border-box', fontSize: '14px', color: '#1a1d21', display: 'flex', alignItems: 'center', height: '42px', overflow: 'hidden' };
-  const boxReadBlue = { ...boxRead, backgroundColor: 'rgba(13,110,253,0.03)', border: '1px solid rgba(13,110,253,0.2)', color: '#0d6efd', justifyContent: 'flex-end' };
-  const inpWrite = { width: '100%', padding: '10px 12px', border: '1px solid #dee2e6', backgroundColor: '#fff', borderRadius: 12, fontWeight: 700, outline: 'none', boxSizing: 'border-box', fontSize: '14px', color: '#1a1d21', height: '42px' };
-  const inpWriteBlue = { ...inpWrite, border: '1px solid #0d6efd', color: '#0d6efd', textAlign: 'right', backgroundColor: 'rgba(13,110,253,0.02)' };
+  const boxRead = { width: '100%', padding: '0 12px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 12, fontWeight: 700, boxSizing: 'border-box', fontSize: '14px', color: '#1a1d21', display: 'flex', alignItems: 'center', height: '42px', overflow: 'hidden', justifyContent: 'flex-end' };
+  const boxReadBlue = { ...boxRead, backgroundColor: 'rgba(13,110,253,0.03)', border: '1px solid rgba(13,110,253,0.2)', color: '#0d6efd' };
+  const inpWrite = { width: '100%', padding: '10px 12px', border: '1px solid #dee2e6', backgroundColor: '#fff', borderRadius: 12, fontWeight: 700, outline: 'none', boxSizing: 'border-box', fontSize: '14px', color: '#1a1d21', height: '42px', textAlign: 'right' };
+  const inpWriteBlue = { ...inpWrite, border: '1px solid #0d6efd', color: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.02)' };
 
   return (
     <div style={{ padding: '24px 15px', maxWidth: '500px', margin: 'auto', paddingBottom: '120px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -166,10 +196,10 @@ export default function EventDetail() {
           )}
         </div>
         {currentAssets.map((asset, index) => {
-          const pCompraARS = Number(asset.priceAtTrade) || 0;
-          const pActualARS = Number(currentPrices[asset.ticker]) || 0;
-          const initUsd = asset.usdRateAtTrade || event.initialUsdRate || 1;
-          const currUsd = Number(currentUsdRate) || 1;
+          const pCompraARS = parseNum(asset.priceAtTrade);
+          const pActualARS = parseNum(currentPrices[asset.ticker]);
+          const initUsd = parseNum(asset.usdRateAtTrade) || parseNum(event.initialUsdRate) || 1;
+          const currUsd = parseNum(currentUsdRate) || 1;
           
           const pCompraUSD = pCompraARS / initUsd;
           const pActualUSD = pActualARS / currUsd;
@@ -203,7 +233,7 @@ export default function EventDetail() {
                 <div>
                   <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>CANTIDAD</label>
                   {isEditingStructure ? (
-                    <input type="number" value={asset.quantity} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, quantity: e.target.value} : a))} style={inpWrite} />
+                    <input type="text" value={formatInput(asset.quantity)} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, quantity: e.target.value} : a))} style={inpWrite} />
                   ) : (
                     <div style={boxRead}>{fmtQty(asset.quantity)}</div>
                   )}
@@ -214,7 +244,10 @@ export default function EventDetail() {
                     <div style={boxRead}>{fmtUSD(pCompraUSD)}</div>
                   ) : (
                     isEditingStructure ? (
-                      <input type="number" value={asset.priceAtTrade} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: e.target.value} : a))} style={inpWrite} />
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '10px', top: '11px', color: '#1a1d21', fontWeight: 800, fontSize: '14px' }}>$</span>
+                        <input type="text" value={formatInput(asset.priceAtTrade)} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: e.target.value} : a))} style={{...inpWrite, paddingLeft: '22px'}} />
+                      </div>
                     ) : (
                       <div style={boxRead}>{fmtARS(pCompraARS)}</div>
                     )
@@ -228,7 +261,10 @@ export default function EventDetail() {
                     event.isClosed ? (
                       <div style={boxReadBlue}>{fmtARS(pActualARS)}</div>
                     ) : (
-                      <input type="number" value={currentPrices[asset.ticker] || ''} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: e.target.value})} style={inpWriteBlue} />
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '10px', top: '11px', color: '#0d6efd', fontWeight: 800, fontSize: '14px' }}>$</span>
+                        <input type="text" value={formatInput(currentPrices[asset.ticker])} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: e.target.value})} style={{...inpWriteBlue, paddingLeft: '22px'}} />
+                      </div>
                     )
                   )}
                 </div>
@@ -237,7 +273,7 @@ export default function EventDetail() {
               <div style={{ borderTop: '1px solid #eaecef', paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd' }}>SUBTOTAL</span>
                 <span style={{ fontSize: '16px', fontWeight: 900, color: '#198754' }}>
-                  {viewCurrency === 'USD' ? fmtUSD(pActualUSD * Number(asset.quantity || 0)) : fmtARS(pActualARS * Number(asset.quantity || 0))}
+                  {viewCurrency === 'USD' ? fmtUSD(pActualUSD * parseNum(asset.quantity)) : fmtARS(pActualARS * parseNum(asset.quantity))}
                 </span>
               </div>
             </div>
@@ -253,8 +289,8 @@ export default function EventDetail() {
       <div style={{ backgroundColor: '#f8f9fa', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '16px' }}>
         <h4 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: 800, color: '#6c757d' }}>Activos Vendidos (Para ALFA)</h4>
         {(event.soldAssets || []).map((asset) => {
-          const pActualARS = Number(soldCurrentPrices[asset.ticker]) || 0;
-          const pActualUSD = pActualARS / (Number(currentUsdRate) || 1);
+          const pActualARS = parseNum(soldCurrentPrices[asset.ticker]);
+          const pActualUSD = pActualARS / (parseNum(currentUsdRate) || 1);
 
           return (
             <div key={asset.ticker} style={{ marginBottom: '16px', borderBottom: '1px solid #eaecef', paddingBottom: 16 }}>
@@ -270,7 +306,10 @@ export default function EventDetail() {
                   event.isClosed ? (
                     <div style={boxReadBlue}>{fmtARS(pActualARS)}</div>
                   ) : (
-                    <input type="number" value={soldCurrentPrices[asset.ticker] || ''} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: e.target.value})} style={inpWriteBlue} />
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '12px', top: '11px', color: '#0d6efd', fontWeight: 800, fontSize: '14px' }}>$</span>
+                      <input type="text" value={formatInput(soldCurrentPrices[asset.ticker])} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: e.target.value})} style={{...inpWriteBlue, paddingLeft: '24px'}} />
+                    </div>
                   )
                 )}
               </div>
@@ -281,7 +320,10 @@ export default function EventDetail() {
 
       <div style={{ backgroundColor: 'white', padding: '20px 24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <label style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>Dólar MEP</label>
-        <input type="number" value={currentUsdRate} disabled={event.isClosed} onChange={(e) => setCurrentUsdRate(e.target.value)} style={{ width: '120px', border: 'none', fontSize: '20px', fontWeight: 900, outline: 'none', textAlign: 'right', color: '#1a1d21', backgroundColor: 'transparent' }} />
+        <div style={{ position: 'relative', width: '120px' }}>
+          <span style={{ position: 'absolute', left: '0', top: '2px', color: '#1a1d21', fontWeight: 900, fontSize: '18px' }}>$</span>
+          <input type="text" value={formatInput(currentUsdRate)} disabled={event.isClosed} onChange={(e) => setCurrentUsdRate(e.target.value)} style={{ width: '100%', border: 'none', fontSize: '20px', fontWeight: 900, outline: 'none', textAlign: 'right', color: '#1a1d21', backgroundColor: 'transparent', paddingLeft: '15px', boxSizing: 'border-box' }} />
+        </div>
       </div>
 
       {event.isClosed ? (
@@ -299,11 +341,11 @@ export default function EventDetail() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {historyReversed.map((entry, idx) => {
               const historicAssets = entry.assetsSnapshot || currentAssets;
-              const hTotalARS_Init = (event.soldAssets || []).reduce((sum, a) => sum + (a.quantity * a.priceAtTrade), 0);
-              const hTotalARS_Now = historicAssets.reduce((sum, a) => sum + (a.quantity * (entry.prices[a.ticker] || 0)), 0);
-              const hTotalUSD_Now = hTotalARS_Now / (entry.usdRate || 1);
-              const hTotalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (a.quantity * (entry.soldPrices[a.ticker] || 0)), 0);
-              const hTotalUSD_Now_Prev = hTotalARS_Now_Prev / (entry.usdRate || 1);
+              const hTotalARS_Init = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(a.priceAtTrade)), 0);
+              const hTotalARS_Now = historicAssets.reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(entry.prices[a.ticker])), 0);
+              const hTotalUSD_Now = hTotalARS_Now / parseNum(entry.usdRate || 1);
+              const hTotalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(entry.soldPrices[a.ticker])), 0);
+              const hTotalUSD_Now_Prev = hTotalARS_Now_Prev / parseNum(entry.usdRate || 1);
               const hAlfa = hTotalUSD_Now_Prev > 0 ? ((hTotalUSD_Now / hTotalUSD_Now_Prev) - 1) * 100 : 0;
 
               return (
@@ -311,11 +353,11 @@ export default function EventDetail() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>{entry.date}</div>
-                      <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 600, marginTop: '2px' }}>Dólar: ${entry.usdRate}</div>
+                      <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 600, marginTop: '2px' }}>Dólar: {fmtARS(entry.usdRate)}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '14px', fontWeight: 900, color: hAlfa >= 0 ? '#198754' : '#dc3545' }}>ALFA: {hAlfa > 0 ? '+' : ''}{hAlfa.toFixed(1)}%</div>
-                      <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: 700, marginTop: '2px' }}>US$ {hTotalUSD_Now.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                      <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: 700, marginTop: '2px' }}>{fmtUSD(hTotalUSD_Now)}</div>
                     </div>
                   </div>
 
@@ -324,7 +366,7 @@ export default function EventDetail() {
                     {historicAssets.map(a => (
                       <div key={a.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
                         <span style={{ fontWeight: 800, color: '#1a1d21' }}>{a.ticker} <span style={{ fontWeight: 600, color: '#adb5bd' }}>(x{fmtQty(a.quantity)})</span></span>
-                        <span style={{ fontWeight: 800, color: '#0d6efd' }}>{viewCurrency === 'USD' ? fmtUSD((entry.prices[a.ticker] || 0)/(entry.usdRate || 1)) : fmtARS(entry.prices[a.ticker] || 0)}</span>
+                        <span style={{ fontWeight: 800, color: '#0d6efd' }}>{viewCurrency === 'USD' ? fmtUSD(parseNum(entry.prices[a.ticker]) / parseNum(entry.usdRate || 1)) : fmtARS(entry.prices[a.ticker])}</span>
                       </div>
                     ))}
                     
@@ -332,7 +374,7 @@ export default function EventDetail() {
                     {(event.soldAssets || []).map(a => (
                       <div key={a.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
                         <span style={{ fontWeight: 800, color: '#6c757d' }}>{a.ticker} <span style={{ fontWeight: 600, color: '#adb5bd' }}>(x{fmtQty(a.quantity)})</span></span>
-                        <span style={{ fontWeight: 800, color: '#6c757d' }}>{viewCurrency === 'USD' ? fmtUSD((entry.soldPrices[a.ticker] || 0)/(entry.usdRate || 1)) : fmtARS(entry.soldPrices[a.ticker] || 0)}</span>
+                        <span style={{ fontWeight: 800, color: '#6c757d' }}>{viewCurrency === 'USD' ? fmtUSD(parseNum(entry.soldPrices[a.ticker]) / parseNum(entry.usdRate || 1)) : fmtARS(entry.soldPrices[a.ticker])}</span>
                       </div>
                     ))}
                   </div>
