@@ -140,7 +140,7 @@ export default function Home() {
   };
 
   const brokers = [
-    { id: 'jpm', name: 'J.P. Morgan', ...brokerData.jpm, logo: 'https://logo.clearbit.com/jpmorganchase.com' },
+    { id: 'jpm', name: 'J.P. Morgan', ...brokerData.jpm, logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/J_P_Morgan_Chase_Logo_2008_1.svg/512px-J_P_Morgan_Chase_Logo_2008_1.svg.png' },
     { id: 'one', name: 'One618', ...brokerData.one, logo: 'https://play-lh.googleusercontent.com/rmyAkju1LNJl3AEF4cN2ef4jGxzmiSfxga17vLkwPDc-nyDkkxP78TEoKj1cxF_xGtLHBs6BWb0ccR5WvhCj' },
     { id: 'latin', name: 'Latin Securities', ...brokerData.latin, logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png' }
   ];
@@ -214,7 +214,14 @@ export default function Home() {
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                   <div style={{ width: '44px', height: '44px', borderRadius: '14px', border: '1px solid #f8f9fa', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px', boxSizing: 'border-box', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                    <img src={b.logo} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <img 
+                      src={b.logo} 
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                      onError={(e) => { 
+                        e.target.style.display = 'none'; 
+                        e.target.parentNode.innerHTML = `<span style="font-weight:900;color:#1a1d21;font-size:14px;">${b.name.substring(0,3).toUpperCase()}</span>`; 
+                      }} 
+                    />
                   </div>
                   <div>
                     <div style={{ fontSize: '16px', fontWeight: 800, color: '#1a1d21' }}>{b.name}</div>
