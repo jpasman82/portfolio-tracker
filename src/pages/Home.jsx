@@ -72,15 +72,16 @@ export default function Home() {
       const priceMap = {};
 
       for (const ep of endpoints) {
-        // Ahora llamamos a TU propia API segura
-        const res = await fetch(`/api/byma?endpoint=${ep}`, {
+        const targetUrl = `/api/byma/${ep}`;
+        
+        const res = await fetch(targetUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ "excludeZeroPxAndQty": true, "T2": true, "T1": false, "T0": false })
         });
 
         if (!res.ok) {
-          throw new Error(`Error HTTP ${res.status}`);
+          throw new Error(`Servidor BYMA respondió con error HTTP ${res.status}`);
         }
         
         const json = await res.json();
