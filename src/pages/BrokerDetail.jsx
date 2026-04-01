@@ -20,6 +20,10 @@ export default function BrokerDetail() {
     if (val === undefined || val === null || val === '') return '';
     let str = val.toString();
     
+    if (typeof val === 'number') {
+      str = str.toString().replace('.', ',');
+    }
+
     if (str.endsWith('.')) {
       str = str.slice(0, -1) + ',';
     }
