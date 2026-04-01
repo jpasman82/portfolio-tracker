@@ -69,9 +69,8 @@ export default function Home() {
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Cargando Portfolio...</div>;
 
   return (
-    <div style={{ padding: '30px 20px', maxWidth: '600px', margin: 'auto', backgroundColor: '#fcfcfc', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '100px' }}>
+    <div style={{ padding: '30px 20px', maxWidth: '600px', margin: 'auto', backgroundColor: '#fcfcfc', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px' }}>
       
-      {/* HEADER MARCOS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <div>
           <div style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1px' }}>Portfolio Manager</div>
@@ -82,7 +81,6 @@ export default function Home() {
         </div>
       </div>
       
-      {/* TARJETA NEGRA CONSOLIDADA */}
       <div style={{ padding: '35px 25px', background: 'linear-gradient(135deg, #111418 0%, #2b3036 100%)', borderRadius: '32px', marginBottom: '35px', color: 'white', boxShadow: '0 15px 30px rgba(0,0,0,0.12)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: 'radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%' }}></div>
         
@@ -103,7 +101,6 @@ export default function Home() {
         <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1a1d21', margin: 0 }}>Composición por Broker</h3>
       </div>
       
-      {/* LISTA DE BROKERS */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {brokers.map(b => {
           const percentage = totalConsolidado > 0 ? ((b.balance / totalConsolidado) * 100).toFixed(1) : 0;
@@ -138,33 +135,12 @@ export default function Home() {
         )})}
       </div>
 
-      {/* BARRA DE NAVEGACIÓN INFERIOR */}
-      <div style={{ 
-        position: 'fixed', 
-        bottom: 0, 
-        left: '50%', 
-        transform: 'translateX(-50%)', 
-        width: '100%', 
-        maxWidth: '600px', 
-        backgroundColor: 'rgba(255,255,255,0.95)', 
-        backdropFilter: 'blur(10px)',
-        borderTop: '1px solid #eaecef', 
-        display: 'flex', 
-        justifyContent: 'space-around', 
-        padding: '12px 0', 
-        zIndex: 100, 
-        paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' 
-      }}>
-        {/* Botón Activo: Portfolio */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#1a1d21', textDecoration: 'none', gap: '4px' }}>
-          <span style={{ fontSize: '22px' }}>💼</span>
-          <span style={{ fontSize: '10px', fontWeight: 900 }}>Portfolio</span>
-        </div>
-        
-        {/* Botón Inactivo: Estrategias */}
-        <Link to="/rotaciones" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#adb5bd', textDecoration: 'none', gap: '4px' }}>
-          <span style={{ fontSize: '22px', filter: 'grayscale(100%) opacity(0.6)' }}>🔄</span>
-          <span style={{ fontSize: '10px', fontWeight: 700 }}>Estrategias</span>
+      <div style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', display: 'flex', backgroundColor: '#1a1d21', padding: '6px', borderRadius: '30px', gap: '4px', zIndex: 1000, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+        <Link to="/" style={{ padding: '12px 24px', borderRadius: '24px', backgroundColor: 'white', color: '#1a1d21', textDecoration: 'none', fontWeight: 800, fontSize: '14px', transition: 'all 0.2s', textAlign: 'center', minWidth: '100px' }}>
+          Portfolio
+        </Link>
+        <Link to="/rotaciones" style={{ padding: '12px 24px', borderRadius: '24px', backgroundColor: 'transparent', color: '#adb5bd', textDecoration: 'none', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s', textAlign: 'center', minWidth: '100px' }}>
+          Estrategias
         </Link>
       </div>
       
