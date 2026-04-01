@@ -25,7 +25,8 @@ export default function Home() {
 
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          const total = (data.assets || []).reduce((sum, a) => sum + (Number(a.quantity) * Number(a.price)), 0);
+          const rate = (doc.id === 'jpm') ? 1 : (Number(data.usdRate) || 1);
+          const total = (data.assets || []).reduce((sum, a) => sum + ((Number(a.quantity) * Number(a.price)) / rate), 0);
           
           newBrokerData[doc.id] = {
             balance: total,
@@ -47,7 +48,7 @@ export default function Home() {
         } else {
           setLatestGlobalUpdate('Sin registros de actualización');
         }
-      } catch (e) { console.error(e); }
+      } catch (e) {}
       finally { setLoading(false); }
     };
     fetchBalances();
