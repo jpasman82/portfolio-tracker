@@ -42,7 +42,10 @@ export default function Home() {
 
         if (latestTimestamp > 0) {
           const d = new Date(latestTimestamp);
-          setLatestGlobalUpdate(`${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')} a las ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}hs`);
+          const opcionesFecha = { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+          setLatestGlobalUpdate(`Actualizado el ${d.toLocaleDateString('es-AR', opcionesFecha)} hs`);
+        } else {
+          setLatestGlobalUpdate('Sin registros de actualización');
         }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
@@ -66,34 +69,32 @@ export default function Home() {
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Cargando Portfolio...</div>;
 
   return (
-    <div style={{ padding: '30px 20px', maxWidth: '600px', margin: 'auto', backgroundColor: '#fcfcfc', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ padding: '30px 20px', maxWidth: '600px', margin: 'auto', backgroundColor: '#fcfcfc', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '100px' }}>
       
+      {/* HEADER MARCOS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <div>
           <div style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1px' }}>Portfolio Manager</div>
-          <h2 style={{ fontSize: '28px', fontWeight: 900, margin: '4px 0 0 0', color: '#1a1d21' }}>María</h2>
+          <h2 style={{ fontSize: '28px', fontWeight: 900, margin: '4px 0 0 0', color: '#1a1d21' }}>Marcos</h2>
         </div>
         <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: '#1a1d21', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 800, color: 'white', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
           M
         </div>
       </div>
       
+      {/* TARJETA NEGRA CONSOLIDADA */}
       <div style={{ padding: '35px 25px', background: 'linear-gradient(135deg, #111418 0%, #2b3036 100%)', borderRadius: '32px', marginBottom: '35px', color: 'white', boxShadow: '0 15px 30px rgba(0,0,0,0.12)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: 'radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%' }}></div>
         
         <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>Balance Consolidado</div>
-        <div style={{ fontSize: '46px', fontWeight: 900, marginBottom: '25px', letterSpacing: '-1px', display: 'flex', alignItems: 'baseline' }}>
-          <span style={{ fontSize: '24px', opacity: 0.8, marginRight: '6px', marginTop: '6px' }}>US$</span>
-          {totalConsolidado.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+        <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: '25px' }}>
+          <span style={{ fontSize: '24px', opacity: 0.8, marginRight: '6px' }}>US$</span>
+          <span style={{ fontSize: '46px', fontWeight: 900, letterSpacing: '-1px' }}>{totalConsolidado.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#00c805', boxShadow: '0 0 8px rgba(0,200,5,0.5)' }}></div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#ced4da' }}>Online</span>
-          </div>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: '#adb5bd' }}>
-            Act: {latestGlobalUpdate || '---'}
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: '#ced4da' }}>
+            {latestGlobalUpdate}
           </div>
         </div>
       </div>
@@ -102,7 +103,8 @@ export default function Home() {
         <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1a1d21', margin: 0 }}>Composición por Broker</h3>
       </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '40px' }}>
+      {/* LISTA DE BROKERS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {brokers.map(b => {
           const percentage = totalConsolidado > 0 ? ((b.balance / totalConsolidado) * 100).toFixed(1) : 0;
           
@@ -131,35 +133,40 @@ export default function Home() {
               <div style={{ width: '100%', height: '6px', backgroundColor: '#f1f3f5', borderRadius: '3px', overflow: 'hidden' }}>
                 <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: '#1a1d21', borderRadius: '3px' }}></div>
               </div>
-
             </div>
           </Link>
         )})}
       </div>
-      
-      <Link to="/rotaciones" style={{ 
+
+      {/* BARRA DE NAVEGACIÓN INFERIOR */}
+      <div style={{ 
+        position: 'fixed', 
+        bottom: 0, 
+        left: '50%', 
+        transform: 'translateX(-50%)', 
+        width: '100%', 
+        maxWidth: '600px', 
+        backgroundColor: 'rgba(255,255,255,0.95)', 
+        backdropFilter: 'blur(10px)',
+        borderTop: '1px solid #eaecef', 
         display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        padding: '24px', 
-        backgroundColor: '#fff', 
-        color: '#1a1d21', 
-        textDecoration: 'none', 
-        borderRadius: '24px', 
-        border: '1px solid #eaecef',
-        boxShadow: '0 6px 16px rgba(0,0,0,0.02)'
+        justifyContent: 'space-around', 
+        padding: '12px 0', 
+        zIndex: 100, 
+        paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' 
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', border: '1px solid #eaecef' }}>
-            🔄
-          </div>
-          <div>
-            <div style={{ fontSize: '16px', fontWeight: 800 }}>Estrategias de María</div>
-            <div style={{ fontSize: '12px', color: '#adb5bd', fontWeight: 700, marginTop: '2px' }}>Tracker de rotaciones</div>
-          </div>
+        {/* Botón Activo: Portfolio */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#1a1d21', textDecoration: 'none', gap: '4px' }}>
+          <span style={{ fontSize: '22px' }}>💼</span>
+          <span style={{ fontSize: '10px', fontWeight: 900 }}>Portfolio</span>
         </div>
-        <div style={{ fontSize: '22px', color: '#dee2e6', fontWeight: 900 }}>›</div>
-      </Link>
+        
+        {/* Botón Inactivo: Estrategias */}
+        <Link to="/rotaciones" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#adb5bd', textDecoration: 'none', gap: '4px' }}>
+          <span style={{ fontSize: '22px', filter: 'grayscale(100%) opacity(0.6)' }}>🔄</span>
+          <span style={{ fontSize: '10px', fontWeight: 700 }}>Estrategias</span>
+        </Link>
+      </div>
       
     </div>
   );
