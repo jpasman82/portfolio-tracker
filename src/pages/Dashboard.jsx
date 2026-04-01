@@ -44,7 +44,7 @@ export default function Dashboard() {
     <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px' }}>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', marginTop: '10px' }}>
-        <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias De María</h2>
+        <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias de Marcos</h2>
         <Link to="/nuevo" style={{ padding: '10px 18px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '13px', fontWeight: 800 }}>+ Nueva</Link>
       </div>
 
@@ -89,12 +89,12 @@ export default function Dashboard() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', backgroundColor: '#fcfcfc', padding: '12px', borderRadius: '16px', border: '1px solid #f8f8f8' }}>
                     <div>
                       <div style={{ fontSize: '9px', fontWeight: 900, color: '#198754', textTransform: 'uppercase' }}>VALOR ACTUAL</div>
-                      <div style={{ fontSize: '17px', fontWeight: 900 }}>US$ {totalUSD_Now.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                      <div style={{ fontSize: '17px', fontWeight: 900 }}>US$ {totalUSD_Now.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
                       <div style={{ fontSize: '11px', color: '#198754', fontWeight: 700 }}>$ {totalARS_Now.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '9px', fontWeight: 900, color: '#adb5bd', textTransform: 'uppercase' }}>INVERTIDO</div>
-                      <div style={{ fontSize: '17px', fontWeight: 900, color: '#adb5bd' }}>US$ {totalUSD_Init.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                      <div style={{ fontSize: '17px', fontWeight: 900, color: '#adb5bd' }}>US$ {totalUSD_Init.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
                       <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 700 }}>$ {totalARS_Init.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
                     </div>
                   </div>
@@ -102,7 +102,7 @@ export default function Dashboard() {
 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                    <div style={{ fontSize: '11px', fontWeight: 800, color: profitUSD >= 0 ? '#198754' : '#dc3545', backgroundColor: profitUSD >= 0 ? '#eaffeb' : '#fff0f0', padding: '4px 10px', borderRadius: '10px' }}>
-                     {profitUSD >= 0 ? '▲' : '▼'} US$ {Math.abs(profitUSD).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                     {profitUSD >= 0 ? '▲' : '▼'} US$ {Math.abs(profitUSD).toLocaleString('en-US', {maximumFractionDigits: 0})}
                    </div>
                    <div style={{ fontSize: '11px', fontWeight: 800, color: profitARS >= 0 ? '#198754' : '#dc3545', backgroundColor: profitARS >= 0 ? '#eaffeb' : '#fff0f0', padding: '4px 10px', borderRadius: '10px' }}>
                      {profitARS >= 0 ? '▲' : '▼'} $ {Math.abs(profitARS).toLocaleString('es-AR', {maximumFractionDigits: 0})}
@@ -120,12 +120,14 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* MENÚ FLOTANTE */}
       <div style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', display: 'flex', backgroundColor: '#1a1d21', padding: '6px', borderRadius: '30px', gap: '4px', zIndex: 1000, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
-        <Link to="/" style={{ padding: '12px 24px', borderRadius: '24px', backgroundColor: 'transparent', color: '#adb5bd', textDecoration: 'none', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s', textAlign: 'center', minWidth: '100px' }}>
-          Portfolio
+        <Link to="/" style={{ padding: '12px 20px', borderRadius: '24px', backgroundColor: 'transparent', color: '#adb5bd', textDecoration: 'none', fontWeight: 700, fontSize: '13px', transition: 'all 0.2s', textAlign: 'center', minWidth: '80px' }}>
+          Brokers
         </Link>
-        <Link to="/rotaciones" style={{ padding: '12px 24px', borderRadius: '24px', backgroundColor: 'white', color: '#1a1d21', textDecoration: 'none', fontWeight: 800, fontSize: '14px', transition: 'all 0.2s', textAlign: 'center', minWidth: '100px' }}>
+        <Link to="/unificada" style={{ padding: '12px 20px', borderRadius: '24px', backgroundColor: 'transparent', color: '#adb5bd', textDecoration: 'none', fontWeight: 700, fontSize: '13px', transition: 'all 0.2s', textAlign: 'center', minWidth: '80px' }}>
+          Cartera
+        </Link>
+        <Link to="/rotaciones" style={{ padding: '12px 20px', borderRadius: '24px', backgroundColor: 'white', color: '#1a1d21', textDecoration: 'none', fontWeight: 800, fontSize: '13px', transition: 'all 0.2s', textAlign: 'center', minWidth: '80px' }}>
           Estrategias
         </Link>
       </div>
