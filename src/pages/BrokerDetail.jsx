@@ -18,12 +18,21 @@ export default function BrokerDetail() {
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
     let str = val.toString();
-    if (typeof val === 'number' || (str.includes('.') && !str.includes(','))) {
-      str = str.replace(/\./g, ',');
+    
+    if (typeof val === 'number') {
+      str = str.toString().replace('.', ',');
     }
-    let clean = str.replace(/[^0-9,]/g, '');
+
+    if (str.endsWith('.')) {
+      str = str.slice(0, -1) + ',';
+    }
+
+    let clean = str.replace(/\./g, '');
+    clean = clean.replace(/[^0-9,]/g, '');
+    
     let parts = clean.split(',');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    
     if (parts.length > 2) {
       parts = [parts[0], parts.slice(1).join('')];
     }
