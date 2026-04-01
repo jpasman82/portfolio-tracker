@@ -11,6 +11,7 @@ export default function BrokerDetail() {
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [usdRate, setUsdRate] = useState('');
+  const [debt, setDebt] = useState('');
 
   const brokerNames = { jpm: 'J.P. Morgan', one: 'One618', latin: 'Latin Securities' };
   const isUSD = id === 'jpm';
@@ -68,6 +69,9 @@ export default function BrokerDetail() {
           if (!isUSD && data.usdRate) {
             setUsdRate(formatDecimals(data.usdRate));
           }
+          if (data.debt) {
+            setDebt(formatDecimals(data.debt));
+          }
         }
       } catch (e) {}
       finally { setLoading(false); }
@@ -89,6 +93,7 @@ export default function BrokerDetail() {
       await setDoc(doc(db, "brokerPositions", id), { 
         assets: cleanAssets,
         usdRate: isUSD ? 1 : parseNum(usdRate),
+        debt: parseNum(debt),
         lastUpdated: new Date().toISOString()
       });
       setIsEditing(false);
@@ -97,7 +102,8 @@ export default function BrokerDetail() {
   };
 
   const rate = isUSD ? 1 : (parseNum(usdRate) || 1);
-  const totalUSD = assets.reduce((sum, a) => sum + ((parseNum(a.quantity) * parseNum(a.price)) / rate), 0);
+  const totalAssetsUSD = assets.reduce((sum, a) => sum + ((parseNum(a.quantity) * parseNum(a.price)) / rate), 0);
+  const totalUSD = totalAssetsUSD - parseNum(debt);
 
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800 }}>Cargando...</div>;
 
@@ -215,8 +221,33 @@ export default function BrokerDetail() {
         <button onClick={handleAddAsset} style={{ width: '100%', padding: '18px', marginTop: '20px', borderRadius: '20px', border: '2px dashed #dee2e6', backgroundColor: 'transparent', color: '#6c757d', fontWeight: 800, fontSize: '14px' }}>+ Nueva Especie</button>
       )}
 
+      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '20px', border: '1px solid #eaecef', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px' }}>
+        <div>
+          <div style={{ fontSize: '16px', fontWeight: 900, color: '#1a1d21' }}>Caución / Deuda</div>
+          <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 700, marginTop: '4px' }}>Obligaciones en USD</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          {!isEditing ? (
+            <div style={{ fontSize: '18px', fontWeight: 900, color: parseNum(debt) > 0 ? '#ff3b30' : '#1a1d21' }}>
+              {parseNum(debt) > 0 ? '-' : ''}{fmtUSD(parseNum(debt))}
+            </div>
+          ) : (
+            <div style={{ position: 'relative', width: '130px' }}>
+              <span style={{ position: 'absolute', left: '12px', top: '11px', color: '#ff3b30', fontWeight: 800, fontSize: '14px' }}>U$</span>
+              <input 
+                type="text" 
+                value={formatInput(debt)} 
+                onBlur={(e) => setDebt(formatDecimals(e.target.value))} 
+                onChange={(e) => setDebt(e.target.value)} 
+                style={{ width: '100%', padding: '10px 12px 10px 36px', border: '1px solid rgba(255,59,48,0.3)', backgroundColor: '#fff0f0', color: '#ff3b30', borderRadius: '12px', fontWeight: 800, outline: 'none', boxSizing: 'border-box', fontSize: '15px', textAlign: 'right' }} 
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
       {!isUSD && (
-        <div style={{ backgroundColor: 'white', padding: '20px 24px', borderRadius: '24px', border: '1px solid #eaecef', marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ backgroundColor: 'white', padding: '20px 24px', borderRadius: '24px', border: '1px solid #eaecef', marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <label style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>Dólar MEP</label>
           <div style={{ position: 'relative', width: '120px' }}>
             <span style={{ position: 'absolute', left: '0', top: '2px', color: '#1a1d21', fontWeight: 900, fontSize: '18px' }}>$</span>
