@@ -14,6 +14,7 @@ function App() {
         <Route path="/nuevo" element={<NewRotation />} />
         <Route path="/evento/:id" element={<EventDetail />} />
         <Route path="/broker/:id" element={<BrokerDetail />} />
+        <Route path="/unificada" element={<Unified />} />
       </Routes>
     </Router>
   );
