@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 export default function Home() {
@@ -10,6 +10,7 @@ export default function Home() {
     latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null }
   });
   const [loading, setLoading] = useState(true);
+  const [updatingPrices, setUpdatingPrices] = useState(false);
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
 
   const parseNum = (val) => {
@@ -29,14 +30,14 @@ export default function Home() {
         };
         let latestTimestamp = 0;
 
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          const rate = (doc.id === 'jpm') ? 1 : (parseNum(data.usdRate) || 1);
+        querySnapshot.forEach((document) => {
+          const data = document.data();
+          const rate = (document.id === 'jpm') ? 1 : (parseNum(data.usdRate) || 1);
           const assetsTotal = (data.assets || []).reduce((sum, a) => sum + ((parseNum(a.quantity) * parseNum(a.price)) / rate), 0);
           const debt = parseNum(data.debt) || 0;
           const total = assetsTotal - debt;
           
-          newBrokerData[doc.id] = {
+          newBrokerData[document.id] = {
             balance: total,
             assetsTotal: assetsTotal,
             debt: debt,
@@ -53,8 +54,8 @@ export default function Home() {
 
         if (latestTimestamp > 0) {
           const d = new Date(latestTimestamp);
-          const opcionesFecha = { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' };
-          setLatestGlobalUpdate(`Actualizado el ${d.toLocaleDateString('es-AR', opcionesFecha)} hs`);
+          const opcionesFecha = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+          setLatestGlobalUpdate(`Act: ${d.toLocaleDateString('es-AR', opcionesFecha)} hs`);
         } else {
           setLatestGlobalUpdate('Sin registros de actualización');
         }
@@ -63,6 +64,71 @@ export default function Home() {
     };
     fetchBalances();
   }, []);
+
+  const handleUpdatePrices = async () => {
+    setUpdatingPrices(true);
+    try {
+      const endpoints = ['equities', 'cedears', 'bonds'];
+      const priceMap = {};
+
+      for (const ep of endpoints) {
+        const targetUrl = `https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/${ep}`;
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
+        
+        const res = await fetch(proxyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            "excludeZeroPxAndQty": true,
+            "T2": true,
+            "T1": false,
+            "T0": false
+          })
+        });
+        
+        const json = await res.json();
+        if (json && json.data) {
+          json.data.forEach(item => {
+            if (item.symbol && item.closingPrice) {
+              priceMap[item.symbol] = item.closingPrice;
+            }
+          });
+        }
+      }
+
+      const querySnapshot = await getDocs(collection(db, "brokerPositions"));
+      const nowIso = new Date().toISOString();
+
+      for (const document of querySnapshot.docs) {
+        if (document.id === 'jpm') continue; 
+
+        const data = document.data();
+        let changed = false;
+
+        const updatedAssets = (data.assets || []).map(a => {
+          if (!a.ticker) return a;
+          const t = a.ticker.toUpperCase().trim();
+          if (priceMap[t] && priceMap[t] !== parseNum(a.price)) {
+            changed = true;
+            return { ...a, price: priceMap[t] };
+          }
+          return a;
+        });
+
+        if (changed) {
+          await updateDoc(doc(db, "brokerPositions", document.id), {
+            assets: updatedAssets,
+            lastUpdated: nowIso
+          });
+        }
+      }
+
+      window.location.reload();
+    } catch (error) {
+      alert('Hubo un error al actualizar los precios.');
+      setUpdatingPrices(false);
+    }
+  };
 
   const formatSubDate = (date) => {
     if (!date) return 'Sin datos';
@@ -89,21 +155,35 @@ export default function Home() {
           <div style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1px' }}>Portfolio Manager</div>
           <h2 style={{ fontSize: '28px', fontWeight: 900, margin: '4px 0 0 0', color: '#1a1d21' }}>Marcos</h2>
         </div>
-        <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: '#1a1d21', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 800, color: 'white', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
-          M
+        
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={handleUpdatePrices} 
+            disabled={updatingPrices}
+            style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'white', border: '1px solid #eaecef', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', color: updatingPrices ? '#adb5bd' : '#0d6efd', boxShadow: '0 4px 10px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+          >
+            {updatingPrices ? '...' : '🔄'}
+          </button>
+          <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: '#1a1d21', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 800, color: 'white', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+            M
+          </div>
         </div>
       </div>
       
       <div style={{ padding: '30px 25px', background: 'linear-gradient(135deg, #111418 0%, #2b3036 100%)', borderRadius: '32px', marginBottom: '35px', color: 'white', boxShadow: '0 15px 30px rgba(0,0,0,0.12)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: 'radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%' }}></div>
         
-        <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>Balance Neto Consolidado</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>Balance Neto Consolidado</div>
+          <div style={{ fontSize: '10px', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '8px' }}>{latestGlobalUpdate}</div>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: '20px' }}>
           <span style={{ fontSize: '24px', opacity: 0.8, marginRight: '6px' }}>US$</span>
           <span style={{ fontSize: '46px', fontWeight: 900, letterSpacing: '-1px' }}>{totalNeto.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
         </div>
         
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '15px 0', marginBottom: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
           <div>
             <div style={{ fontSize: '10px', fontWeight: 600, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Total Activos</div>
             <div style={{ fontSize: '18px', fontWeight: 800 }}>US$ {totalActivos.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
@@ -112,10 +192,6 @@ export default function Home() {
             <div style={{ fontSize: '10px', fontWeight: 600, color: '#ff453a', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Deuda / Caución</div>
             <div style={{ fontSize: '18px', fontWeight: 800, color: '#ff453a' }}>- US$ {totalDeuda.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
           </div>
-        </div>
-
-        <div style={{ fontSize: '11px', fontWeight: 600, color: '#ced4da' }}>
-          {latestGlobalUpdate}
         </div>
       </div>
       
