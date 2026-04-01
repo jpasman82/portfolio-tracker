@@ -5,9 +5,9 @@ import { db } from '../firebase/config';
 
 export default function Home() {
   const [brokerData, setBrokerData] = useState({
-    jpm: { balance: 0, updated: null },
-    one: { balance: 0, updated: null },
-    latin: { balance: 0, updated: null }
+    jpm: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+    one: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+    latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null }
   });
   const [loading, setLoading] = useState(true);
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
@@ -23,9 +23,9 @@ export default function Home() {
       try {
         const querySnapshot = await getDocs(collection(db, "brokerPositions"));
         const newBrokerData = {
-          jpm: { balance: 0, updated: null },
-          one: { balance: 0, updated: null },
-          latin: { balance: 0, updated: null }
+          jpm: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+          one: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+          latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null }
         };
         let latestTimestamp = 0;
 
@@ -33,11 +33,13 @@ export default function Home() {
           const data = doc.data();
           const rate = (doc.id === 'jpm') ? 1 : (parseNum(data.usdRate) || 1);
           const assetsTotal = (data.assets || []).reduce((sum, a) => sum + ((parseNum(a.quantity) * parseNum(a.price)) / rate), 0);
-          const debt = parseNum(data.debt);
+          const debt = parseNum(data.debt) || 0;
           const total = assetsTotal - debt;
           
           newBrokerData[doc.id] = {
             balance: total,
+            assetsTotal: assetsTotal,
+            debt: debt,
             updated: data.lastUpdated ? new Date(data.lastUpdated) : null
           };
 
@@ -73,7 +75,9 @@ export default function Home() {
     { id: 'latin', name: 'Latin Securities', ...brokerData.latin, logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png' }
   ];
 
-  const totalConsolidado = brokers.reduce((sum, b) => sum + b.balance, 0);
+  const totalActivos = brokers.reduce((sum, b) => sum + (b.assetsTotal || 0), 0);
+  const totalDeuda = brokers.reduce((sum, b) => sum + (b.debt || 0), 0);
+  const totalNeto = brokers.reduce((sum, b) => sum + b.balance, 0);
 
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Cargando Portfolio...</div>;
 
@@ -90,19 +94,28 @@ export default function Home() {
         </div>
       </div>
       
-      <div style={{ padding: '35px 25px', background: 'linear-gradient(135deg, #111418 0%, #2b3036 100%)', borderRadius: '32px', marginBottom: '35px', color: 'white', boxShadow: '0 15px 30px rgba(0,0,0,0.12)', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ padding: '30px 25px', background: 'linear-gradient(135deg, #111418 0%, #2b3036 100%)', borderRadius: '32px', marginBottom: '35px', color: 'white', boxShadow: '0 15px 30px rgba(0,0,0,0.12)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: 'radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%' }}></div>
         
-        <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>Balance Consolidado</div>
-        <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: '25px' }}>
+        <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>Balance Neto Consolidado</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: '20px' }}>
           <span style={{ fontSize: '24px', opacity: 0.8, marginRight: '6px' }}>US$</span>
-          <span style={{ fontSize: '46px', fontWeight: 900, letterSpacing: '-1px' }}>{totalConsolidado.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+          <span style={{ fontSize: '46px', fontWeight: 900, letterSpacing: '-1px' }}>{totalNeto.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
         </div>
         
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: '#ced4da' }}>
-            {latestGlobalUpdate}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '15px 0', marginBottom: '15px' }}>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Total Activos</div>
+            <div style={{ fontSize: '18px', fontWeight: 800 }}>US$ {totalActivos.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
           </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: '#ff453a', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Deuda / Caución</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: '#ff453a' }}>- US$ {totalDeuda.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+          </div>
+        </div>
+
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#ced4da' }}>
+          {latestGlobalUpdate}
         </div>
       </div>
       
@@ -112,7 +125,7 @@ export default function Home() {
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {brokers.map(b => {
-          const percentage = totalConsolidado > 0 ? ((b.balance / totalConsolidado) * 100).toFixed(1) : 0;
+          const percentage = totalNeto > 0 ? ((b.balance / totalNeto) * 100).toFixed(1) : 0;
           
           return (
           <Link key={b.id} to={`/broker/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
