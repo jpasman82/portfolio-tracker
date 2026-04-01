@@ -19,16 +19,25 @@ export default function EventDetail() {
 
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
-    let str = val.toString().replace(/\./g, ',');
+    let str = val.toString();
+    
+    if (typeof val === 'number' || (str.includes('.') && !str.includes(','))) {
+      str = str.replace(/\./g, ',');
+    }
+    
     let clean = str.replace(/[^0-9,]/g, '');
     let parts = clean.split(',');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    if (parts.length > 2) parts = [parts[0], parts.slice(1).join('')];
+    
+    if (parts.length > 2) {
+      parts = [parts[0], parts.slice(1).join('')];
+    }
     return parts.join(',');
   };
 
   const parseNum = (val) => {
     if (!val) return 0;
+    if (typeof val === 'number') return val;
     return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
   };
 
