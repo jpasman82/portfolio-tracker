@@ -38,15 +38,14 @@ export default function Dashboard() {
     color: Math.abs(val) > 0.1 ? 'white' : '#1a1d21'
   });
 
-  if (loading) return <div style={{ padding: '100px 0', textAlign: 'center', fontWeight: 800 }}>Cargando Latinbonos...</div>;
+  if (loading) return <div style={{ padding: '100px 0', textAlign: 'center', fontWeight: 800 }}>Cargando Estrategias...</div>;
 
   return (
-    <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto' }}>
-      <Link to="/" style={{ textDecoration: 'none', color: '#0d6efd', fontWeight: 700, fontSize: '13px', display: 'block', marginBottom: '15px' }}>← Volver al Resumen</Link>
+    <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px' }}>
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', marginTop: '10px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias De María</h2>
-        <Link to="/nuevo" style={{ padding: '12px 20px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '14px', fontWeight: 800 }}>+ Nueva</Link>
+        <Link to="/nuevo" style={{ padding: '10px 18px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '13px', fontWeight: 800 }}>+ Nueva</Link>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -79,8 +78,11 @@ export default function Dashboard() {
                 
                 <div style={{ marginBottom: '16px' }}>
                   <h3 style={{ fontSize: '19px', fontWeight: 800, margin: '0 0 8px 0', paddingRight: '80px', lineHeight: '1.2' }}>{event.eventName}</h3>
+                  
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '15px' }}>
-                    <span style={{ fontSize: '11px', color: '#6c757d', fontWeight: 800, backgroundColor: '#f0f2f5', padding: '4px 8px', borderRadius: '6px' }}>{event.tradeDate}</span>
+                    <span style={{ fontSize: '11px', color: '#6c757d', fontWeight: 800, backgroundColor: '#f0f2f5', padding: '4px 8px', borderRadius: '6px' }}>
+                      {event.tradeDate}
+                    </span>
                     {event.isClosed && <span style={{ fontSize: '9px', fontWeight: 900, backgroundColor: '#1a1d21', color: 'white', padding: '4px 8px', borderRadius: '6px' }}>CERRADA</span>}
                   </div>
                   
@@ -117,6 +119,17 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      {/* MENÚ FLOTANTE */}
+      <div style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', display: 'flex', backgroundColor: '#1a1d21', padding: '6px', borderRadius: '30px', gap: '4px', zIndex: 1000, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+        <Link to="/" style={{ padding: '12px 24px', borderRadius: '24px', backgroundColor: 'transparent', color: '#adb5bd', textDecoration: 'none', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s', textAlign: 'center', minWidth: '100px' }}>
+          Portfolio
+        </Link>
+        <Link to="/rotaciones" style={{ padding: '12px 24px', borderRadius: '24px', backgroundColor: 'white', color: '#1a1d21', textDecoration: 'none', fontWeight: 800, fontSize: '14px', transition: 'all 0.2s', textAlign: 'center', minWidth: '100px' }}>
+          Estrategias
+        </Link>
+      </div>
+
     </div>
   );
 }
