@@ -40,6 +40,14 @@ export default function EventDetail() {
     fetchData();
   }, [id]);
 
+  const handleAddAsset = () => {
+    setCurrentAssets([...currentAssets, { ticker: '', quantity: 0, priceAtTrade: 0 }]);
+  };
+
+  const handleRemoveAsset = (index) => {
+    setCurrentAssets(currentAssets.filter((_, i) => i !== index));
+  };
+
   const save = async (closeValue) => {
     setSaving(true);
     const now = new Date();
@@ -50,7 +58,8 @@ export default function EventDetail() {
       timestampIso: now.toISOString(),
       prices: currentPrices,
       soldPrices: soldCurrentPrices,
-      usdRate: Number(currentUsdRate)
+      usdRate: Number(currentUsdRate),
+      assetsSnapshot: currentAssets.map(a => ({ ...a }))
     };
 
     const updatedHistory = [...(event.priceHistory || []), historyEntry];
@@ -134,23 +143,42 @@ export default function EventDetail() {
       <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' }}>
           <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#1a1d21' }}>Posición Comprada</h4>
-          {!event.isClosed && !isEditingStructure && <button onClick={() => setIsEditingStructure(true)} style={{ border: 'none', background: '#f8f9fa', color: '#1a1d21', fontWeight: 800, fontSize: '11px', padding: '6px 12px', borderRadius: 10 }}>Editar Cant.</button>}
+          {!event.isClosed && (
+            <button onClick={() => setIsEditingStructure(!isEditingStructure)} style={{ border: 'none', background: isEditingStructure ? '#1a1d21' : '#f8f9fa', color: isEditingStructure ? 'white' : '#1a1d21', fontWeight: 800, fontSize: '11px', padding: '6px 12px', borderRadius: 10 }}>
+              {isEditingStructure ? 'Dejar de editar' : 'Editar Estructura'}
+            </button>
+          )}
         </div>
-        {currentAssets.map((asset) => (
-          <div key={asset.ticker} style={{ marginBottom: '16px', borderBottom: '1px solid #f8f9fa', paddingBottom: 16 }}>
-            <div style={{ fontSize: '16px', fontWeight: 900, marginBottom: '10px' }}>{asset.ticker}</div>
+        {currentAssets.map((asset, index) => (
+          <div key={index} style={{ marginBottom: '16px', borderBottom: '1px solid #f8f9fa', paddingBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              {isEditingStructure ? (
+                <input type="text" value={asset.ticker} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, ticker: e.target.value.toUpperCase()} : a))} placeholder="TICKER" style={{ fontSize: '16px', fontWeight: 900, border: '1px solid #eee', borderRadius: 8, padding: '4px 8px', width: '100px', outline: 'none' }} />
+              ) : (
+                <div style={{ fontSize: '16px', fontWeight: 900 }}>{asset.ticker}</div>
+              )}
+              {isEditingStructure && (
+                <button onClick={() => handleRemoveAsset(index)} style={{ color: '#ff3b30', border: 'none', background: '#fff0f0', padding: '4px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 800 }}>X</button>
+              )}
+            </div>
+            
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>CANTIDAD</label>
-                <input type="number" value={asset.quantity} disabled={!isEditingStructure} onChange={(e) => setCurrentAssets(currentAssets.map(a => a.ticker === asset.ticker ? {...a, quantity: Number(e.target.value)} : a))} style={{ width: '100%', padding: '12px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 12, fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />
+                <input type="number" value={asset.quantity} disabled={!isEditingStructure} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, quantity: Number(e.target.value)} : a))} style={{ width: '100%', padding: '12px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 12, fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div>
                 <label style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>PRECIO ACTUAL ($)</label>
-                <input type="number" value={currentPrices[asset.ticker]} disabled={event.isClosed} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '12px', border: '1px solid #0d6efd', backgroundColor: 'rgba(13,110,253,0.03)', color: '#0d6efd', borderRadius: 12, fontWeight: 800, textAlign: 'right', outline: 'none', boxSizing: 'border-box' }} />
+                <input type="number" value={currentPrices[asset.ticker] || ''} disabled={event.isClosed} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '12px', border: '1px solid #0d6efd', backgroundColor: 'rgba(13,110,253,0.03)', color: '#0d6efd', borderRadius: 12, fontWeight: 800, textAlign: 'right', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
           </div>
         ))}
+        {isEditingStructure && (
+          <button onClick={handleAddAsset} style={{ width: '100%', padding: '12px', borderRadius: 12, border: '2px dashed #dee2e6', background: 'transparent', fontWeight: 800, color: '#adb5bd', fontSize: '12px', marginTop: '10px' }}>
+            + Agregar Activo
+          </button>
+        )}
       </div>
 
       <div style={{ backgroundColor: '#f8f9fa', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '16px' }}>
@@ -163,7 +191,7 @@ export default function EventDetail() {
             </div>
             <div>
               <label style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>PRECIO ACTUAL ($)</label>
-              <input type="number" value={soldCurrentPrices[asset.ticker]} disabled={event.isClosed} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '12px', border: '1px solid #0d6efd', backgroundColor: 'rgba(13,110,253,0.03)', color: '#0d6efd', borderRadius: 12, fontWeight: 800, textAlign: 'right', outline: 'none', boxSizing: 'border-box' }} />
+              <input type="number" value={soldCurrentPrices[asset.ticker] || ''} disabled={event.isClosed} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '12px', border: '1px solid #0d6efd', backgroundColor: 'rgba(13,110,253,0.03)', color: '#0d6efd', borderRadius: 12, fontWeight: 800, textAlign: 'right', outline: 'none', boxSizing: 'border-box' }} />
             </div>
           </div>
         ))}
@@ -186,27 +214,45 @@ export default function EventDetail() {
       {historyReversed.length > 0 && (
         <div style={{ marginTop: '40px' }}>
           <h4 style={{ fontSize: '16px', fontWeight: 900, color: '#1a1d21', marginBottom: '15px' }}>Historial de Precios</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {historyReversed.map((entry, idx) => {
-              
+              const historicAssets = entry.assetsSnapshot || currentAssets;
               const hTotalARS_Init = (event.soldAssets || []).reduce((sum, a) => sum + (a.quantity * a.priceAtTrade), 0);
-              const hTotalARS_Now = currentAssets.reduce((sum, a) => sum + (a.quantity * (entry.prices[a.ticker] || 0)), 0);
+              const hTotalARS_Now = historicAssets.reduce((sum, a) => sum + (a.quantity * (entry.prices[a.ticker] || 0)), 0);
               const hTotalUSD_Now = hTotalARS_Now / (entry.usdRate || 1);
-              
               const hTotalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (a.quantity * (entry.soldPrices[a.ticker] || 0)), 0);
               const hTotalUSD_Now_Prev = hTotalARS_Now_Prev / (entry.usdRate || 1);
-
               const hAlfa = hTotalUSD_Now_Prev > 0 ? ((hTotalUSD_Now / hTotalUSD_Now_Prev) - 1) * 100 : 0;
 
               return (
-                <div key={idx} style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '16px', border: '1px solid #eaecef', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>{entry.date}</div>
-                    <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 600, marginTop: '2px' }}>Dólar: ${entry.usdRate}</div>
+                <div key={idx} style={{ backgroundColor: '#fff', padding: '18px', borderRadius: '20px', border: '1px solid #eaecef', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>{entry.date}</div>
+                      <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 600, marginTop: '2px' }}>Dólar: ${entry.usdRate}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 900, color: hAlfa >= 0 ? '#198754' : '#dc3545' }}>ALFA: {hAlfa > 0 ? '+' : ''}{hAlfa.toFixed(1)}%</div>
+                      <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: 700, marginTop: '2px' }}>US$ {hTotalUSD_Now.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 900, color: hAlfa >= 0 ? '#198754' : '#dc3545' }}>ALFA: {hAlfa > 0 ? '+' : ''}{hAlfa.toFixed(1)}%</div>
-                    <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: 700, marginTop: '2px' }}>US$ {hTotalUSD_Now.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+
+                  <div style={{ borderTop: '1px solid #f8f9fa', paddingTop: '12px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', marginBottom: '6px' }}>POSICIÓN COMPRADA</div>
+                    {historicAssets.map(a => (
+                      <div key={a.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: 800, color: '#1a1d21' }}>{a.ticker} <span style={{ fontWeight: 600, color: '#adb5bd' }}>(x{a.quantity})</span></span>
+                        <span style={{ fontWeight: 800, color: '#0d6efd' }}>${entry.prices[a.ticker] || 0}</span>
+                      </div>
+                    ))}
+                    
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', marginTop: '12px', marginBottom: '6px' }}>POSICIÓN VENDIDA (REF)</div>
+                    {(event.soldAssets || []).map(a => (
+                      <div key={a.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: 800, color: '#6c757d' }}>{a.ticker}</span>
+                        <span style={{ fontWeight: 800, color: '#6c757d' }}>${entry.soldPrices[a.ticker] || 0}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
