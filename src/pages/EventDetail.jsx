@@ -41,7 +41,7 @@ export default function EventDetail() {
   }, [id]);
 
   const handleAddAsset = () => {
-    setCurrentAssets([...currentAssets, { ticker: '', quantity: 0, priceAtTrade: 0 }]);
+    setCurrentAssets([...currentAssets, { ticker: '', quantity: '', priceAtTrade: '' }]);
   };
 
   const handleRemoveAsset = (index) => {
@@ -149,31 +149,49 @@ export default function EventDetail() {
             </button>
           )}
         </div>
-        {currentAssets.map((asset, index) => (
-          <div key={index} style={{ marginBottom: '16px', borderBottom: '1px solid #f8f9fa', paddingBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              {isEditingStructure ? (
-                <input type="text" value={asset.ticker} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, ticker: e.target.value.toUpperCase()} : a))} placeholder="TICKER" style={{ fontSize: '16px', fontWeight: 900, border: '1px solid #eee', borderRadius: 8, padding: '4px 8px', width: '100px', outline: 'none' }} />
-              ) : (
-                <div style={{ fontSize: '16px', fontWeight: 900 }}>{asset.ticker}</div>
-              )}
-              {isEditingStructure && (
-                <button onClick={() => handleRemoveAsset(index)} style={{ color: '#ff3b30', border: 'none', background: '#fff0f0', padding: '4px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 800 }}>X</button>
-              )}
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>CANTIDAD</label>
-                <input type="number" value={asset.quantity} disabled={!isEditingStructure} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, quantity: Number(e.target.value)} : a))} style={{ width: '100%', padding: '12px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 12, fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />
+        {currentAssets.map((asset, index) => {
+          const pCompra = Number(asset.priceAtTrade) || 0;
+          const pActual = Number(currentPrices[asset.ticker]) || 0;
+          const varPct = pCompra > 0 ? ((pActual / pCompra) - 1) * 100 : 0;
+
+          return (
+            <div key={index} style={{ marginBottom: '16px', borderBottom: '1px solid #f8f9fa', paddingBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {isEditingStructure ? (
+                    <input type="text" value={asset.ticker} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, ticker: e.target.value.toUpperCase()} : a))} placeholder="TICKER" style={{ fontSize: '16px', fontWeight: 900, border: '1px solid #eee', borderRadius: 8, padding: '4px 8px', width: '100px', outline: 'none' }} />
+                  ) : (
+                    <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>{asset.ticker}</div>
+                  )}
+                  
+                  {!isEditingStructure && pCompra > 0 && (
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: varPct >= 0 ? '#198754' : '#dc3545', backgroundColor: varPct >= 0 ? '#eaffeb' : '#fff0f0', padding: '4px 8px', borderRadius: 8 }}>
+                      {varPct >= 0 ? '▲' : '▼'} {Math.abs(varPct).toFixed(1)}%
+                    </div>
+                  )}
+                </div>
+                {isEditingStructure && (
+                  <button onClick={() => handleRemoveAsset(index)} style={{ color: '#ff3b30', border: 'none', background: '#fff0f0', padding: '4px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 800 }}>X</button>
+                )}
               </div>
-              <div>
-                <label style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>PRECIO ACTUAL ($)</label>
-                <input type="number" value={currentPrices[asset.ticker] || ''} disabled={event.isClosed} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '12px', border: '1px solid #0d6efd', backgroundColor: 'rgba(13,110,253,0.03)', color: '#0d6efd', borderRadius: 12, fontWeight: 800, textAlign: 'right', outline: 'none', boxSizing: 'border-box' }} />
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>CANTIDAD</label>
+                  <input type="number" value={asset.quantity} disabled={!isEditingStructure} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, quantity: Number(e.target.value)} : a))} style={{ width: '100%', padding: '10px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 8, fontWeight: 700, outline: 'none', boxSizing: 'border-box', fontSize: '14px' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>COMPRA ($)</label>
+                  <input type="number" value={asset.priceAtTrade} disabled={!isEditingStructure} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: Number(e.target.value)} : a))} style={{ width: '100%', padding: '10px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 8, fontWeight: 700, outline: 'none', boxSizing: 'border-box', fontSize: '14px' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>ACTUAL ($)</label>
+                  <input type="number" value={currentPrices[asset.ticker] || ''} disabled={event.isClosed} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: Number(e.target.value)})} style={{ width: '100%', padding: '10px', border: '1px solid #0d6efd', backgroundColor: 'rgba(13,110,253,0.03)', color: '#0d6efd', borderRadius: 8, fontWeight: 800, textAlign: 'right', outline: 'none', boxSizing: 'border-box', fontSize: '14px' }} />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {isEditingStructure && (
           <button onClick={handleAddAsset} style={{ width: '100%', padding: '12px', borderRadius: 12, border: '2px dashed #dee2e6', background: 'transparent', fontWeight: 800, color: '#adb5bd', fontSize: '12px', marginTop: '10px' }}>
             + Agregar Activo
