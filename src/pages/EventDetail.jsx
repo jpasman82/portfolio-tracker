@@ -9,6 +9,7 @@ export default function EventDetail() {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditingStructure, setIsEditingStructure] = useState(false);
+  const [advancedEditIndex, setAdvancedEditIndex] = useState(null);
   const [currentAssets, setCurrentAssets] = useState([]); 
   const [currentPrices, setCurrentPrices] = useState({}); 
   const [soldCurrentPrices, setSoldCurrentPrices] = useState({}); 
@@ -20,15 +21,12 @@ export default function EventDetail() {
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
     let str = val.toString();
-    
     if (typeof val === 'number' || (str.includes('.') && !str.includes(','))) {
       str = str.replace(/\./g, ',');
     }
-    
     let clean = str.replace(/[^0-9,]/g, '');
     let parts = clean.split(',');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    
     if (parts.length > 2) {
       parts = [parts[0], parts.slice(1).join('')];
     }
@@ -53,10 +51,8 @@ export default function EventDetail() {
           const data = docSnap.data();
           setEvent(data);
           setEventName(data.eventName);
-          
           const initUsd = data.currentUsdRateFromDb || data.initialUsdRate || 1;
           setCurrentUsdRate(formatDecimals(initUsd));
-          
           const assets = data.boughtAssetsFromDb || data.boughtAssets || [];
           const formattedAssets = assets.map(a => ({
             ...a,
@@ -65,11 +61,9 @@ export default function EventDetail() {
             usdRateAtTrade: formatDecimals(a.usdRateAtTrade || initUsd)
           }));
           setCurrentAssets(formattedAssets);
-          
           const pB = {};
           formattedAssets.forEach(a => pB[a.ticker] = formatDecimals(data.currentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0));
           setCurrentPrices(pB);
-          
           const pS = {};
           (data.soldAssets || []).forEach(a => pS[a.ticker] = formatDecimals(data.soldCurrentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0));
           setSoldCurrentPrices(pS);
@@ -86,6 +80,11 @@ export default function EventDetail() {
 
   const handleRemoveAsset = (index) => {
     setCurrentAssets(currentAssets.filter((_, i) => i !== index));
+  };
+
+  const toggleEditStructure = () => {
+    setIsEditingStructure(!isEditingStructure);
+    if (isEditingStructure) setAdvancedEditIndex(null);
   };
 
   const save = async (closeValue) => {
@@ -131,6 +130,7 @@ export default function EventDetail() {
         priceHistory: updatedHistory
       });
       setIsEditingStructure(false); 
+      setAdvancedEditIndex(null);
       window.location.reload();
     } catch (e) {}
     finally { setSaving(false); }
@@ -214,7 +214,7 @@ export default function EventDetail() {
             </div>
           </div>
           {!event.isClosed && (
-            <button onClick={() => setIsEditingStructure(!isEditingStructure)} style={{ border: 'none', background: isEditingStructure ? '#1a1d21' : '#f8f9fa', color: isEditingStructure ? 'white' : '#1a1d21', fontWeight: 800, fontSize: '11px', padding: '6px 12px', borderRadius: 10 }}>
+            <button onClick={toggleEditStructure} style={{ border: 'none', background: isEditingStructure ? '#1a1d21' : '#f8f9fa', color: isEditingStructure ? 'white' : '#1a1d21', fontWeight: 800, fontSize: '11px', padding: '6px 12px', borderRadius: 10 }}>
               {isEditingStructure ? 'Dejar de editar' : 'Editar'}
             </button>
           )}
@@ -249,7 +249,10 @@ export default function EventDetail() {
                   )}
                 </div>
                 {isEditingStructure && (
-                  <button onClick={() => handleRemoveAsset(index)} style={{ color: '#ff3b30', border: 'none', background: '#fff0f0', padding: '4px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 800 }}>X</button>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={() => setAdvancedEditIndex(advancedEditIndex === index ? null : index)} style={{ color: '#495057', border: 'none', background: '#e9ecef', padding: '4px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 800 }}>⚙️</button>
+                    <button onClick={() => handleRemoveAsset(index)} style={{ color: '#ff3b30', border: 'none', background: '#fff0f0', padding: '4px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 800 }}>X</button>
+                  </div>
                 )}
               </div>
               
@@ -294,6 +297,21 @@ export default function EventDetail() {
                 </div>
               </div>
               
+              {advancedEditIndex === index && (
+                <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#f1f3f5', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 900, color: '#495057' }}>AJUSTES DE ORIGEN</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>TIPO DE CAMBIO AL COMPRAR</label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '10px', top: '11px', color: '#1a1d21', fontWeight: 800, fontSize: '14px' }}>$</span>
+                        <input type="text" value={formatInput(asset.usdRateAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, usdRateAtTrade: formatDecimals(e.target.value)} : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, usdRateAtTrade: e.target.value} : a))} style={{...inpWrite, paddingLeft: '22px', backgroundColor: 'white'}} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ borderTop: '1px solid #eaecef', paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd' }}>SUBTOTAL</span>
                 <span style={{ fontSize: '16px', fontWeight: 900, color: '#198754' }}>
