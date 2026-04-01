@@ -20,10 +20,6 @@ export default function BrokerDetail() {
     if (val === undefined || val === null || val === '') return '';
     let str = val.toString();
     
-    if (typeof val === 'number') {
-      str = str.toString().replace('.', ',');
-    }
-
     if (str.endsWith('.')) {
       str = str.slice(0, -1) + ',';
     }
@@ -41,7 +37,7 @@ export default function BrokerDetail() {
   };
 
   const parseNum = (val) => {
-    if (!val) return 0;
+    if (val === undefined || val === null || val === '') return 0;
     if (typeof val === 'number') return val;
     return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
   };
@@ -50,9 +46,9 @@ export default function BrokerDetail() {
     return parseNum(val).toFixed(2).replace('.', ',');
   };
 
-  const fmtQty = (v) => formatInput(v);
-  const fmtARS = (v) => '$ ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
-  const fmtUSD = (v) => 'USD ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
+  const fmtQty = (v) => parseNum(v).toLocaleString('es-AR');
+  const fmtARS = (v) => '$ ' + parseNum(v).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtUSD = (v) => 'USD ' + parseNum(v).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -144,7 +140,7 @@ export default function BrokerDetail() {
               <div>
                 <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>{asset.ticker}</div>
                 <div style={{ fontSize: '13px', color: '#adb5bd', fontWeight: 700, marginTop: '4px' }}>
-                  {fmtQty(asset.quantity)} nom. a {isUSD ? fmtUSD(parseNum(asset.price)) : fmtARS(parseNum(asset.price))}
+                  {fmtQty(asset.quantity)} nom. a {isUSD ? fmtUSD(asset.price) : fmtARS(asset.price)}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -229,7 +225,7 @@ export default function BrokerDetail() {
         <div style={{ textAlign: 'right' }}>
           {!isEditing ? (
             <div style={{ fontSize: '18px', fontWeight: 900, color: parseNum(debt) > 0 ? '#ff3b30' : '#1a1d21' }}>
-              {parseNum(debt) > 0 ? '-' : ''}{fmtUSD(parseNum(debt))}
+              {parseNum(debt) > 0 ? '-' : ''}{fmtUSD(debt)}
             </div>
           ) : (
             <div style={{ position: 'relative', width: '130px' }}>
