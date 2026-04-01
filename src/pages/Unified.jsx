@@ -8,6 +8,10 @@ export default function Unified() {
   const [groupedData, setGroupedData] = useState({});
   const [totalUsd, setTotalUsd] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [pieMode, setPieMode] = useState('cat'); 
+  const [hoverData, setHoverData] = useState(null);
+
+  const baseColors = ['#0d6efd', '#20c997', '#ffc107', '#6f42c1', '#fd7e14', '#e83e8c', '#198754', '#0dcaf0', '#d63384', '#6610f2', '#ff5733', '#00b4d8', '#343a40'];
 
   const parseNum = (val) => {
     if (!val) return 0;
@@ -65,6 +69,12 @@ export default function Unified() {
           grouped[info.cat].total += item.valueUsd;
         });
 
+        Object.keys(grouped).forEach(cat => {
+          Object.keys(grouped[cat].subs).forEach(sub => {
+            grouped[cat].subs[sub].assets.sort((a, b) => b.valueUsd - a.valueUsd);
+          });
+        });
+
         setGroupedData(grouped);
         setTotalUsd(total);
       } catch (e) {}
@@ -75,39 +85,43 @@ export default function Unified() {
 
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Analizando Cartera...</div>;
 
-  const pieData = [];
+  let pieData = [];
   let totalForPie = 0;
-  const colors = ['#0d6efd', '#ffc107', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c'];
 
-  Object.keys(groupedData).forEach((cat) => {
-    if (groupedData[cat].total > 0) {
-      totalForPie += groupedData[cat].total;
-    }
-  });
-
-  let colorIndex = 0;
-  Object.keys(groupedData).forEach((cat) => {
-    if (groupedData[cat].total > 0) {
-      pieData.push({
-        name: cat,
-        value: groupedData[cat].total,
-        percentage: (groupedData[cat].total / totalForPie) * 100,
-        color: colors[colorIndex % colors.length]
+  if (pieMode === 'cat') {
+    Object.keys(groupedData).forEach(cat => {
+      if (groupedData[cat].total > 0) totalForPie += groupedData[cat].total;
+    });
+    let cIdx = 0;
+    Object.keys(groupedData).forEach(cat => {
+      if (groupedData[cat].total > 0) {
+        pieData.push({ name: cat, value: groupedData[cat].total, percentage: (groupedData[cat].total / totalForPie) * 100, color: baseColors[cIdx % baseColors.length] });
+        cIdx++;
+      }
+    });
+  } else {
+    Object.keys(groupedData).forEach(cat => {
+      Object.keys(groupedData[cat].subs).forEach(sub => {
+        if (groupedData[cat].subs[sub].total > 0) totalForPie += groupedData[cat].subs[sub].total;
       });
-      colorIndex++;
-    }
-  });
+    });
+    let cIdx = 0;
+    Object.keys(groupedData).forEach(cat => {
+      Object.keys(groupedData[cat].subs).forEach(sub => {
+        if (groupedData[cat].subs[sub].total > 0) {
+          pieData.push({ name: sub, value: groupedData[cat].subs[sub].total, percentage: (groupedData[cat].subs[sub].total / totalForPie) * 100, color: baseColors[cIdx % baseColors.length] });
+          cIdx++;
+        }
+      });
+    });
+  }
 
   pieData.sort((a, b) => b.value - a.value);
 
-  let cumulative = 0;
-  const gradientStops = pieData.map(slice => {
-    const start = cumulative;
-    const end = cumulative + slice.percentage;
-    cumulative = end;
-    return `${slice.color} ${start}% ${end}%`;
-  });
-  const conicGradient = pieData.length > 0 ? `conic-gradient(${gradientStops.join(', ')})` : '';
+  const radius = 70;
+  const strokeWidth = 35;
+  const circ = 2 * Math.PI * radius;
+  let strokeOffset = 0;
 
   return (
     <div style={{ padding: '30px 20px', maxWidth: '600px', margin: 'auto', backgroundColor: '#fcfcfc', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px' }}>
@@ -124,26 +138,80 @@ export default function Unified() {
 
       {pieData.length > 0 && (
         <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '35px', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#1a1d21', margin: '0 0 24px 0', textAlign: 'center' }}>Composición de Activos</h3>
           
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '30px' }}>
-            <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: conicGradient, boxShadow: '0 8px 16px rgba(0,0,0,0.08)' }}></div>
-            
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {pieData.map(item => (
-                <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: item.color }}></div>
-                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#495057' }}>{item.name}</span>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '15px', fontWeight: 900, color: '#1a1d21', marginRight: '10px' }}>{item.percentage.toFixed(1)}%</span>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#adb5bd' }}>{fmtUSD(item.value)}</span>
-                  </div>
+          <div style={{ display: 'flex', backgroundColor: '#f8f9fa', borderRadius: '12px', padding: '4px', marginBottom: '30px', margin: '0 auto 30px auto', width: 'fit-content' }}>
+            <button onClick={() => setPieMode('cat')} style={{ border: 'none', background: pieMode === 'cat' ? 'white' : 'transparent', color: pieMode === 'cat' ? '#1a1d21' : '#adb5bd', padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 800, boxShadow: pieMode === 'cat' ? '0 2px 6px rgba(0,0,0,0.05)' : 'none', cursor: 'pointer' }}>Categorías</button>
+            <button onClick={() => setPieMode('sub')} style={{ border: 'none', background: pieMode === 'sub' ? 'white' : 'transparent', color: pieMode === 'sub' ? '#1a1d21' : '#adb5bd', padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 800, boxShadow: pieMode === 'sub' ? '0 2px 6px rgba(0,0,0,0.05)' : 'none', cursor: 'pointer' }}>Subcategorías</button>
+          </div>
+
+          <div style={{ position: 'relative', width: '220px', height: '220px', margin: '0 auto 24px auto' }}>
+            <svg width="220" height="220" viewBox="0 0 200 200" style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
+              {pieData.map((slice) => {
+                const strokeLength = (slice.percentage / 100) * circ;
+                const sDasharray = `${strokeLength} ${circ - strokeLength}`;
+                const sDashoffset = -strokeOffset;
+                strokeOffset += strokeLength;
+
+                return (
+                  <circle
+                    key={slice.name}
+                    cx="100"
+                    cy="100"
+                    r={radius}
+                    fill="transparent"
+                    stroke={slice.color}
+                    strokeWidth={hoverData && hoverData.name === slice.name ? strokeWidth + 6 : strokeWidth}
+                    strokeDasharray={sDasharray}
+                    strokeDashoffset={sDashoffset}
+                    style={{
+                      transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                      cursor: 'pointer',
+                      opacity: hoverData && hoverData.name !== slice.name ? 0.25 : 1
+                    }}
+                    onMouseEnter={() => setHoverData(slice)}
+                    onMouseLeave={() => setHoverData(null)}
+                    onTouchStart={() => setHoverData(slice)}
+                  />
+                );
+              })}
+            </svg>
+
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none' }}>
+              {hoverData ? (
+                <div style={{ textAlign: 'center', padding: '10px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 900, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', maxWidth: '100px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hoverData.name}</div>
+                  <div style={{ fontSize: '26px', fontWeight: 900, color: hoverData.color, lineHeight: '1' }}>{hoverData.percentage.toFixed(1)}%</div>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#1a1d21', marginTop: '4px' }}>{fmtUSD(hoverData.value)}</div>
                 </div>
-              ))}
+              ) : (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd' }}>Composición</div>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#dee2e6' }}>(Tocar porción)</div>
+                </div>
+              )}
             </div>
           </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid #f8f9fa', paddingTop: '20px' }}>
+            {pieData.map(item => (
+              <div 
+                key={item.name} 
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: '10px', backgroundColor: hoverData && hoverData.name === item.name ? '#f8f9fa' : 'transparent', transition: 'background 0.2s', cursor: 'pointer' }}
+                onMouseEnter={() => setHoverData(item)}
+                onMouseLeave={() => setHoverData(null)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: item.color }}></div>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#495057' }}>{item.name}</span>
+                </div>
+                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#adb5bd' }}>{fmtUSD(item.value)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 900, color: '#1a1d21', minWidth: '45px' }}>{item.percentage.toFixed(1)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
         </div>
       )}
 
