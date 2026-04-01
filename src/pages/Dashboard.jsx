@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(null);
+  const [touchEndX, setTouchEndX] = useState(null);
+  const [touchEndY, setTouchEndY] = useState(null);
 
   const fetchEvents = async () => {
     try {
@@ -38,11 +44,48 @@ export default function Dashboard() {
     color: Math.abs(val) > 0.1 ? 'white' : '#1a1d21'
   });
 
+  const handleTouchStart = (e) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
+    const distanceX = touchStartX - touchEndX;
+    const distanceY = touchStartY - touchEndY;
+    
+    if (Math.abs(distanceX) > Math.abs(distanceY) && Math.abs(distanceX) > 70) {
+      if (distanceX < 0) {
+        navigate('/unificada');
+      }
+    }
+    
+    setTouchStartX(null);
+    setTouchStartY(null);
+    setTouchEndX(null);
+    setTouchEndY(null);
+  };
+
   if (loading) return <div style={{ padding: '100px 0', textAlign: 'center', fontWeight: 800 }}>Cargando Estrategias...</div>;
 
   return (
-    <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px' }}>
-      
+    <div 
+      onTouchStart={handleTouchStart} 
+      onTouchMove={handleTouchMove} 
+      onTouchEnd={handleTouchEnd}
+      style={{ padding: '20px 15px', maxWidth: '600px', margin: 'auto', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '40px' }}
+    >
+      <div style={{ display: 'flex', borderBottom: '1px solid #eaecef', marginBottom: '24px' }}>
+        <Link to="/" style={{ flex: 1, padding: '12px 0', textAlign: 'center', textDecoration: 'none', color: '#adb5bd', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid transparent' }}>Brokers</Link>
+        <Link to="/unificada" style={{ flex: 1, padding: '12px 0', textAlign: 'center', textDecoration: 'none', color: '#adb5bd', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid transparent' }}>Cartera</Link>
+        <Link to="/rotaciones" style={{ flex: 1, padding: '12px 0', textAlign: 'center', textDecoration: 'none', color: '#1a1d21', fontWeight: 900, fontSize: '14px', borderBottom: '3px solid #1a1d21' }}>Estrategias</Link>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', marginTop: '10px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias de Marcos</h2>
         <Link to="/nuevo" style={{ padding: '10px 18px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '13px', fontWeight: 800 }}>+ Nueva</Link>
@@ -119,19 +162,6 @@ export default function Dashboard() {
           );
         })}
       </div>
-
-      <div style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', display: 'flex', backgroundColor: '#1a1d21', padding: '6px', borderRadius: '30px', gap: '4px', zIndex: 1000, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
-        <Link to="/" style={{ padding: '12px 20px', borderRadius: '24px', backgroundColor: 'transparent', color: '#adb5bd', textDecoration: 'none', fontWeight: 700, fontSize: '13px', transition: 'all 0.2s', textAlign: 'center', minWidth: '80px' }}>
-          Brokers
-        </Link>
-        <Link to="/unificada" style={{ padding: '12px 20px', borderRadius: '24px', backgroundColor: 'transparent', color: '#adb5bd', textDecoration: 'none', fontWeight: 700, fontSize: '13px', transition: 'all 0.2s', textAlign: 'center', minWidth: '80px' }}>
-          Cartera
-        </Link>
-        <Link to="/rotaciones" style={{ padding: '12px 20px', borderRadius: '24px', backgroundColor: 'white', color: '#1a1d21', textDecoration: 'none', fontWeight: 800, fontSize: '13px', transition: 'all 0.2s', textAlign: 'center', minWidth: '80px' }}>
-          Estrategias
-        </Link>
-      </div>
-
     </div>
   );
 }
