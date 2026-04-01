@@ -12,6 +12,12 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
 
+  const parseNum = (val) => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
+  };
+
   useEffect(() => {
     const fetchBalances = async () => {
       try {
@@ -25,8 +31,10 @@ export default function Home() {
 
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          const rate = (doc.id === 'jpm') ? 1 : (Number(data.usdRate) || 1);
-          const total = (data.assets || []).reduce((sum, a) => sum + ((Number(a.quantity) * Number(a.price)) / rate), 0);
+          const rate = (doc.id === 'jpm') ? 1 : (parseNum(data.usdRate) || 1);
+          const assetsTotal = (data.assets || []).reduce((sum, a) => sum + ((parseNum(a.quantity) * parseNum(a.price)) / rate), 0);
+          const debt = parseNum(data.debt);
+          const total = assetsTotal - debt;
           
           newBrokerData[doc.id] = {
             balance: total,
