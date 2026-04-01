@@ -13,6 +13,8 @@ export default function Home() {
   const [updatingPrices, setUpdatingPrices] = useState(false);
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
 
+  const SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQAIR6KHV18vjerj20-Xizsi3nhbof-luaoiQj1ebU_K2Ttpz_nm9xJlNGAdpotn_8_7Jn-7wB36qc/pub?output=csv";
+
   const parseNum = (val) => {
     if (!val) return 0;
     if (typeof val === 'number') return val;
@@ -68,31 +70,26 @@ export default function Home() {
   const handleUpdatePrices = async () => {
     setUpdatingPrices(true);
     try {
-      const endpoints = ['equities', 'cedears', 'bonds'];
+      const res = await fetch(SHEETS_CSV_URL);
+      if (!res.ok) throw new Error("No se pudo leer el archivo de Google Sheets");
+      
+      const csvText = await res.text();
+      const rows = csvText.split('\n');
       const priceMap = {};
 
-      for (const ep of endpoints) {
-        const targetUrl = `/api/byma/${ep}`;
-        
-        const res = await fetch(targetUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ "excludeZeroPxAndQty": true, "T2": true, "T1": false, "T0": false })
-        });
-
-        if (!res.ok) {
-          throw new Error(`Servidor BYMA respondió con error HTTP ${res.status}`);
+      rows.forEach(row => {
+        const columns = row.split(/,|;/);
+        if (columns.length >= 2) {
+          const tickerRaw = columns[0].replace(/"/g, '').replace('BCBA:', '').replace('NASDAQ:', '').trim().toUpperCase();
+          let priceStr = columns[1].replace(/"/g, '').trim();
+          priceStr = priceStr.replace(/\./g, '').replace(',', '.');
+          
+          const price = Number(priceStr);
+          if (tickerRaw && !isNaN(price) && price > 0) {
+            priceMap[tickerRaw] = price;
+          }
         }
-        
-        const json = await res.json();
-        if (json && json.data) {
-          json.data.forEach(item => {
-            if (item.symbol && item.closingPrice) {
-              priceMap[item.symbol] = item.closingPrice;
-            }
-          });
-        }
-      }
+      });
 
       const querySnapshot = await getDocs(collection(db, "brokerPositions"));
       const nowIso = new Date().toISOString();
