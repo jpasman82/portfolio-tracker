@@ -25,7 +25,7 @@ export const assetDictionary = {
   "ALUA": { cat: "Acciones", sub: "Materiales", icon: "🏗️" },
   "COME": { cat: "Acciones", sub: "Holding", icon: "🏭" },
   "MIRG": { cat: "Acciones", sub: "Industria", icon: "📱" },
-  "LAR": { cat: "Acciones", sub: "Otros", icon: "📦" },
+  "LAR": { cat: "CEDEARs", sub: "Minería", icon: "⛏️" },
   "AAPL": { cat: "CEDEARs", sub: "Tecnología", icon: "💻" },
   "MSFT": { cat: "CEDEARs", sub: "Tecnología", icon: "💻" },
   "GOOGL": { cat: "CEDEARs", sub: "Tecnología", icon: "💻" },
