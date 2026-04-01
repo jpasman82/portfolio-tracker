@@ -42,7 +42,7 @@ export default function EventDetail() {
   }, [id]);
 
   const handleAddAsset = () => {
-    setCurrentAssets([...currentAssets, { ticker: '', quantity: '', priceAtTrade: '' }]);
+    setCurrentAssets([...currentAssets, { ticker: '', quantity: '', priceAtTrade: '', usdRateAtTrade: Number(currentUsdRate) }]);
   };
 
   const handleRemoveAsset = (index) => {
@@ -168,7 +168,7 @@ export default function EventDetail() {
         {currentAssets.map((asset, index) => {
           const pCompraARS = Number(asset.priceAtTrade) || 0;
           const pActualARS = Number(currentPrices[asset.ticker]) || 0;
-          const initUsd = event.initialUsdRate || 1;
+          const initUsd = asset.usdRateAtTrade || event.initialUsdRate || 1;
           const currUsd = Number(currentUsdRate) || 1;
           
           const pCompraUSD = pCompraARS / initUsd;
