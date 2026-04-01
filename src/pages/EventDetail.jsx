@@ -32,6 +32,10 @@ export default function EventDetail() {
     return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
   };
 
+  const formatDecimals = (val) => {
+    return parseNum(val).toFixed(2).replace('.', ',');
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -40,14 +44,25 @@ export default function EventDetail() {
           const data = docSnap.data();
           setEvent(data);
           setEventName(data.eventName);
-          setCurrentUsdRate(data.currentUsdRateFromDb || data.initialUsdRate);
+          
+          const initUsd = data.currentUsdRateFromDb || data.initialUsdRate || 1;
+          setCurrentUsdRate(formatDecimals(initUsd));
+          
           const assets = data.boughtAssetsFromDb || data.boughtAssets || [];
-          setCurrentAssets(assets);
+          const formattedAssets = assets.map(a => ({
+            ...a,
+            quantity: a.quantity?.toString().replace('.', ',') || '',
+            priceAtTrade: formatDecimals(a.priceAtTrade),
+            usdRateAtTrade: formatDecimals(a.usdRateAtTrade || initUsd)
+          }));
+          setCurrentAssets(formattedAssets);
+          
           const pB = {};
-          assets.forEach(a => pB[a.ticker] = data.currentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0);
+          formattedAssets.forEach(a => pB[a.ticker] = formatDecimals(data.currentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0));
           setCurrentPrices(pB);
+          
           const pS = {};
-          (data.soldAssets || []).forEach(a => pS[a.ticker] = data.soldCurrentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0);
+          (data.soldAssets || []).forEach(a => pS[a.ticker] = formatDecimals(data.soldCurrentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0));
           setSoldCurrentPrices(pS);
         }
       } catch (e) {}
@@ -163,13 +178,13 @@ export default function EventDetail() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
           <div style={{ borderRight: '1px solid #f0f0f0', paddingRight: '10px' }}>
             <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Invertido</div>
-            <div style={{ fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>$ {totalARS_Init.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
-            <div style={{ fontSize: '13px', color: '#adb5bd', fontWeight: 700 }}>US$ {totalUSD_Init.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+            <div style={{ fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>$ {totalARS_Init.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+            <div style={{ fontSize: '13px', color: '#adb5bd', fontWeight: 700 }}>US$ {totalUSD_Init.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
           </div>
           <div style={{ paddingLeft: '5px' }}>
             <div style={{ fontSize: '10px', fontWeight: 800, color: '#198754', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Valor Actual</div>
-            <div style={{ fontSize: '20px', fontWeight: 900, color: '#198754', marginTop: '4px' }}>$ {totalARS_Now.toLocaleString('es-AR', {maximumFractionDigits: 0})}</div>
-            <div style={{ fontSize: '13px', color: '#198754', fontWeight: 700 }}>US$ {totalUSD_Now.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+            <div style={{ fontSize: '20px', fontWeight: 900, color: '#198754', marginTop: '4px' }}>$ {totalARS_Now.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+            <div style={{ fontSize: '13px', color: '#198754', fontWeight: 700 }}>US$ {totalUSD_Now.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
           </div>
         </div>
       </div>
@@ -246,7 +261,7 @@ export default function EventDetail() {
                     isEditingStructure ? (
                       <div style={{ position: 'relative' }}>
                         <span style={{ position: 'absolute', left: '10px', top: '11px', color: '#1a1d21', fontWeight: 800, fontSize: '14px' }}>$</span>
-                        <input type="text" value={formatInput(asset.priceAtTrade)} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: e.target.value} : a))} style={{...inpWrite, paddingLeft: '22px'}} />
+                        <input type="text" value={formatInput(asset.priceAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: formatDecimals(e.target.value)} : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: e.target.value} : a))} style={{...inpWrite, paddingLeft: '22px'}} />
                       </div>
                     ) : (
                       <div style={boxRead}>{fmtARS(pCompraARS)}</div>
@@ -263,7 +278,7 @@ export default function EventDetail() {
                     ) : (
                       <div style={{ position: 'relative' }}>
                         <span style={{ position: 'absolute', left: '10px', top: '11px', color: '#0d6efd', fontWeight: 800, fontSize: '14px' }}>$</span>
-                        <input type="text" value={formatInput(currentPrices[asset.ticker])} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: e.target.value})} style={{...inpWriteBlue, paddingLeft: '22px'}} />
+                        <input type="text" value={formatInput(currentPrices[asset.ticker])} onBlur={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: formatDecimals(e.target.value)})} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: e.target.value})} style={{...inpWriteBlue, paddingLeft: '22px'}} />
                       </div>
                     )
                   )}
@@ -308,7 +323,7 @@ export default function EventDetail() {
                   ) : (
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', left: '12px', top: '11px', color: '#0d6efd', fontWeight: 800, fontSize: '14px' }}>$</span>
-                      <input type="text" value={formatInput(soldCurrentPrices[asset.ticker])} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: e.target.value})} style={{...inpWriteBlue, paddingLeft: '24px'}} />
+                      <input type="text" value={formatInput(soldCurrentPrices[asset.ticker])} onBlur={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: formatDecimals(e.target.value)})} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: e.target.value})} style={{...inpWriteBlue, paddingLeft: '24px'}} />
                     </div>
                   )
                 )}
@@ -322,7 +337,7 @@ export default function EventDetail() {
         <label style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>Dólar MEP</label>
         <div style={{ position: 'relative', width: '120px' }}>
           <span style={{ position: 'absolute', left: '0', top: '2px', color: '#1a1d21', fontWeight: 900, fontSize: '18px' }}>$</span>
-          <input type="text" value={formatInput(currentUsdRate)} disabled={event.isClosed} onChange={(e) => setCurrentUsdRate(e.target.value)} style={{ width: '100%', border: 'none', fontSize: '20px', fontWeight: 900, outline: 'none', textAlign: 'right', color: '#1a1d21', backgroundColor: 'transparent', paddingLeft: '15px', boxSizing: 'border-box' }} />
+          <input type="text" value={formatInput(currentUsdRate)} onBlur={(e) => setCurrentUsdRate(formatDecimals(e.target.value))} disabled={event.isClosed} onChange={(e) => setCurrentUsdRate(e.target.value)} style={{ width: '100%', border: 'none', fontSize: '20px', fontWeight: 900, outline: 'none', textAlign: 'right', color: '#1a1d21', backgroundColor: 'transparent', paddingLeft: '15px', boxSizing: 'border-box' }} />
         </div>
       </div>
 
