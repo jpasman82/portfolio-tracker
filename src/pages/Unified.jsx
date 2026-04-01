@@ -1,21 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { assetDictionary } from '../utils/dictionary';
 
 export default function Unified() {
-  const navigate = useNavigate();
   const [groupedData, setGroupedData] = useState({});
   const [totalUsd, setTotalUsd] = useState(0);
   const [loading, setLoading] = useState(true);
   const [pieMode, setPieMode] = useState('cat'); 
   const [hoverData, setHoverData] = useState(null);
-
-  const [touchStartX, setTouchStartX] = useState(null);
-  const [touchStartY, setTouchStartY] = useState(null);
-  const [touchEndX, setTouchEndX] = useState(null);
-  const [touchEndY, setTouchEndY] = useState(null);
 
   const baseColors = ['#0d6efd', '#20c997', '#ffc107', '#6f42c1', '#fd7e14', '#e83e8c', '#198754', '#0dcaf0', '#d63384', '#6610f2', '#ff5733', '#00b4d8', '#343a40'];
 
@@ -89,35 +83,6 @@ export default function Unified() {
     fetchAndGroup();
   }, []);
 
-  const handleTouchStart = (e) => {
-    setTouchStartX(e.targetTouches[0].clientX);
-    setTouchStartY(e.targetTouches[0].clientY);
-  };
-
-  const handleTouchMove = (e) => {
-    setTouchEndX(e.targetTouches[0].clientX);
-    setTouchEndY(e.targetTouches[0].clientY);
-  };
-
-  const handleTouchEnd = () => {
-    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
-    const distanceX = touchStartX - touchEndX;
-    const distanceY = touchStartY - touchEndY;
-    
-    if (Math.abs(distanceX) > Math.abs(distanceY) && Math.abs(distanceX) > 70) {
-      if (distanceX > 0) {
-        navigate('/rotaciones');
-      } else {
-        navigate('/');
-      }
-    }
-    
-    setTouchStartX(null);
-    setTouchStartY(null);
-    setTouchEndX(null);
-    setTouchEndY(null);
-  };
-
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Analizando Cartera...</div>;
 
   let pieData = [];
@@ -159,17 +124,7 @@ export default function Unified() {
   let strokeOffset = 0;
 
   return (
-    <div 
-      onTouchStart={handleTouchStart} 
-      onTouchMove={handleTouchMove} 
-      onTouchEnd={handleTouchEnd}
-      style={{ padding: '20px 20px', maxWidth: '600px', margin: 'auto', backgroundColor: '#fcfcfc', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '40px' }}
-    >
-      <div style={{ display: 'flex', borderBottom: '1px solid #eaecef', marginBottom: '24px' }}>
-        <Link to="/" style={{ flex: 1, padding: '12px 0', textAlign: 'center', textDecoration: 'none', color: '#adb5bd', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid transparent' }}>Brokers</Link>
-        <Link to="/unificada" style={{ flex: 1, padding: '12px 0', textAlign: 'center', textDecoration: 'none', color: '#1a1d21', fontWeight: 900, fontSize: '14px', borderBottom: '3px solid #1a1d21' }}>Cartera</Link>
-        <Link to="/rotaciones" style={{ flex: 1, padding: '12px 0', textAlign: 'center', textDecoration: 'none', color: '#adb5bd', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid transparent' }}>Estrategias</Link>
-      </div>
+    <div style={{ padding: '30px 20px', maxWidth: '600px', margin: 'auto', backgroundColor: '#fcfcfc', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '100px' }}>
       
       <div style={{ marginBottom: '35px' }}>
         <h2 style={{ fontSize: '28px', fontWeight: 900, margin: '0 0 5px 0', color: '#1a1d21' }}>Cartera Unificada</h2>
@@ -300,6 +255,22 @@ export default function Unified() {
           ))}
         </div>
       ))}
+
+      <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '600px', backgroundColor: 'white', display: 'flex', justifyContent: 'space-around', padding: '12px 10px 24px 10px', boxShadow: '0 -4px 20px rgba(0,0,0,0.06)', borderRadius: '24px 24px 0 0', zIndex: 1000, boxSizing: 'border-box' }}>
+        <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Brokers</span>
+        </Link>
+        <Link to="/unificada" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#1a1d21', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Cartera</span>
+        </Link>
+        <Link to="/rotaciones" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"></rect><rect x="10" y="8" width="4" height="13"></rect><rect x="2" y="13" width="4" height="8"></rect></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Estrategias</span>
+        </Link>
+      </div>
+
     </div>
   );
 }
