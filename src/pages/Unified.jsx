@@ -33,6 +33,8 @@ export default function Unified() {
           total -= debt;
 
           (data.assets || []).forEach(a => {
+            if (!a || !a.ticker) return;
+
             const t = a.ticker.toUpperCase();
             const qty = parseNum(a.quantity);
             const priceUsd = parseNum(a.price) / rate;
