@@ -17,6 +17,9 @@ export default function EventDetail() {
   const [eventName, setEventName] = useState('');
   const [saving, setSaving] = useState(false);
   const [viewCurrency, setViewCurrency] = useState('ARS');
+  const [updatingPrices, setUpdatingPrices] = useState(false);
+
+  const SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQAIR6KHV18vjerj20-Xizsi3nhbof-luaoiQj1ebU_K2Ttpz_nm9xJlNGAdpotn_8_7Jn-7wB36qc/pub?output=csv";
 
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
@@ -73,6 +76,70 @@ export default function EventDetail() {
     };
     fetchData();
   }, [id]);
+
+  const handleUpdatePrices = async () => {
+    setUpdatingPrices(true);
+    try {
+      const res = await fetch(SHEETS_CSV_URL);
+      if (!res.ok) throw new Error("No se pudo conectar con Google Sheets");
+      
+      const csvText = await res.text();
+      const rows = csvText.split('\n');
+      const priceMap = {};
+
+      rows.forEach(row => {
+        const columns = row.split(/,|;/);
+        if (columns.length >= 2) {
+          const tickerRaw = columns[0].replace(/"/g, '').replace('BCBA:', '').replace('NASDAQ:', '').trim().toUpperCase();
+          let priceStr = columns[1].replace(/"/g, '').trim();
+          
+          if (priceStr.includes(',') && priceStr.includes('.')) {
+            if (priceStr.lastIndexOf(',') > priceStr.lastIndexOf('.')) {
+              priceStr = priceStr.replace(/\./g, '').replace(',', '.');
+            } else {
+              priceStr = priceStr.replace(/,/g, '');
+            }
+          } else if (priceStr.includes(',')) {
+            priceStr = priceStr.replace(',', '.');
+          }
+          
+          const price = parseFloat(priceStr);
+          if (tickerRaw && !isNaN(price) && price > 0) {
+            priceMap[tickerRaw] = price;
+          }
+        }
+      });
+
+      let changed = false;
+      const newCurrentPrices = { ...currentPrices };
+      const newSoldCurrentPrices = { ...soldCurrentPrices };
+
+      currentAssets.forEach(a => {
+        if (priceMap[a.ticker]) {
+          newCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]);
+          changed = true;
+        }
+      });
+
+      (event.soldAssets || []).forEach(a => {
+        if (priceMap[a.ticker]) {
+          newSoldCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]);
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        setCurrentPrices(newCurrentPrices);
+        setSoldCurrentPrices(newSoldCurrentPrices);
+      } else {
+        alert("No se encontraron cotizaciones nuevas para los tickers de esta estrategia.");
+      }
+    } catch (error) {
+      alert(`Error al buscar precios: ${error.message}`);
+    } finally {
+      setUpdatingPrices(false);
+    }
+  };
 
   const handleAddAsset = () => {
     setCurrentAssets([...currentAssets, { ticker: '', quantity: '', priceAtTrade: '', usdRateAtTrade: currentUsdRate }]);
@@ -179,7 +246,19 @@ export default function EventDetail() {
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
            <span style={{ fontSize: '12px', color: '#adb5bd', fontWeight: 700 }}>Iniciada el {event.tradeDate}</span>
-           {event.lastUpdated && <span style={{ fontSize: '10px', color: '#1a1d21', fontWeight: 800, backgroundColor: '#e9ecef', padding: '4px 8px', borderRadius: '6px' }}>Act: {event.lastUpdated}hs</span>}
+           
+           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+             {event.lastUpdated && <span style={{ fontSize: '10px', color: '#1a1d21', fontWeight: 800, backgroundColor: '#e9ecef', padding: '4px 8px', borderRadius: '6px' }}>Act: {event.lastUpdated}hs</span>}
+             {!event.isClosed && (
+               <button 
+                 onClick={handleUpdatePrices} 
+                 disabled={updatingPrices}
+                 style={{ background: 'white', border: '1px solid #eaecef', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', color: updatingPrices ? '#adb5bd' : '#1a1d21', fontWeight: 800, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+               >
+                 {updatingPrices ? '...' : '🔄 Precios'}
+               </button>
+             )}
+           </div>
         </div>
       </div>
       
