@@ -134,28 +134,10 @@ export default function Dashboard() {
   if (loading) return <div style={{ padding: '100px 0', textAlign: 'center', fontWeight: 800 }}>Cargando Estrategias...</div>;
 
   return (
-    <div style={{ padding: '24px 0px', maxWidth: '600px', margin: 'auto', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', marginTop: '10px' }}>
-        <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias</h2>
-        
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            onClick={handleUpdatePrices} 
-            disabled={updatingPrices}
-            style={{ 
-              width: '40px', height: '40px', borderRadius: '14px', backgroundColor: 'white', 
-              border: '1px solid #eaecef', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-              fontSize: '18px', color: updatingPrices ? '#adb5bd' : '#1a1d21', 
-              boxShadow: '0 4px 10px rgba(0,0,0,0.02)', cursor: 'pointer' 
-            }}
-          >
-            {updatingPrices ? '...' : '🔄'}
-          </button>
-          <Link to="/nuevo" style={{ padding: '10px 18px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '14px', fontSize: '13px', fontWeight: 800, display: 'flex', alignItems: 'center' }}>
-            + Nueva
-          </Link>
-        </div>
+    <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias De María</h2>
+        <Link to="/nuevo" style={{ padding: '12px 20px', backgroundColor: '#1a1d21', color: 'white', textDecoration: 'none', borderRadius: '16px', fontSize: '14px', fontWeight: 800 }}>+ Nueva</Link>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -184,7 +166,8 @@ export default function Dashboard() {
             <Link key={event.id} to={`/evento/${event.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
               <div style={{ padding: '22px', backgroundColor: 'white', borderRadius: '28px', border: '1px solid #eaecef', position: 'relative', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', opacity: event.isClosed ? 0.7 : 1 }}>
                 
-                <button onClick={(e) => handleDelete(e, event.id)} style={{ position: 'absolute', top: '20px', right: '20px', border: 'none', background: '#fff0f0', color: '#ff3b30', fontSize: '10px', fontWeight: 800, padding: '6px 12px', borderRadius: '10px', zIndex: 10, cursor: 'pointer' }}>BORRAR</button>
+                {/* BOTÓN BORRAR - Con espacio reservado */}
+                <button onClick={(e) => handleDelete(e, event.id)} style={{ position: 'absolute', top: '20px', right: '20px', border: 'none', background: '#fff0f0', color: '#ff3b30', fontSize: '10px', fontWeight: 800, padding: '6px 12px', borderRadius: '10px', zIndex: 10 }}>BORRAR</button>
                 
                 <div style={{ marginBottom: '16px' }}>
                   <h3 style={{ fontSize: '19px', fontWeight: 800, margin: '0 0 8px 0', paddingRight: '80px', lineHeight: '1.2' }}>{event.eventName}</h3>
@@ -229,6 +212,22 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '600px', backgroundColor: 'white', display: 'flex', justifyContent: 'space-around', padding: '12px 10px 24px 10px', boxShadow: '0 -4px 20px rgba(0,0,0,0.06)', borderRadius: '24px 24px 0 0', zIndex: 1000, boxSizing: 'border-box' }}>
+        <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Brokers</span>
+        </Link>
+        <Link to="/unificada" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Cartera</span>
+        </Link>
+        <Link to="/rotaciones" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#1a1d21', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"></rect><rect x="10" y="8" width="4" height="13"></rect><rect x="2" y="13" width="4" height="8"></rect></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Estrategias</span>
+        </Link>
+      </div>
+
     </div>
   );
 }
