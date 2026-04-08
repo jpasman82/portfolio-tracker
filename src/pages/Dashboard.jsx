@@ -50,12 +50,9 @@ export default function Dashboard() {
           const tickerRaw = columns[0].replace(/"/g, '').replace('BCBA:', '').replace('NASDAQ:', '').trim().toUpperCase();
           let priceStr = columns[1].replace(/"/g, '').trim();
           
-          // Lógica robusta para decimales argentinos o americanos
           if (priceStr.includes(',') && priceStr.includes('.')) {
-            // Formato 1.250,50 -> quitamos puntos y cambiamos coma por punto
             priceStr = priceStr.replace(/\./g, '').replace(',', '.');
           } else if (priceStr.includes(',')) {
-            // Formato 1250,50 -> solo cambiamos coma por punto
             priceStr = priceStr.replace(',', '.');
           }
           
@@ -130,7 +127,7 @@ export default function Dashboard() {
   if (loading) return <div style={{ padding: '100px 0', textAlign: 'center', fontWeight: 800 }}>Cargando...</div>;
 
   return (
-    <div style={{ padding: '24px 0px', maxWidth: '600px', margin: 'auto', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ padding: '24px 0px', paddingBottom: '100px', maxWidth: '600px', margin: 'auto', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias</h2>
@@ -211,6 +208,23 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      {/* MENÚ DE NAVEGACIÓN INFERIOR */}
+      <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '600px', backgroundColor: 'white', display: 'flex', justifyContent: 'space-around', padding: '12px 10px 24px 10px', boxShadow: '0 -4px 20px rgba(0,0,0,0.06)', borderRadius: '24px 24px 0 0', zIndex: 1000, boxSizing: 'border-box' }}>
+        <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Brokers</span>
+        </Link>
+        <Link to="/unificada" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Cartera</span>
+        </Link>
+        <Link to="/rotaciones" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#1a1d21', flex: 1 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"></rect><rect x="10" y="8" width="4" height="13"></rect><rect x="2" y="13" width="4" height="8"></rect></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Estrategias</span>
+        </Link>
+      </div>
+
     </div>
   );
 }
