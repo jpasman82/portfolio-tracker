@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { fetchAllPrices, getMepRate } from '../utils/priceService';
 
 export default function Home() {
   const [brokerData, setBrokerData] = useState({
@@ -12,8 +13,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [updatingPrices, setUpdatingPrices] = useState(false);
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
-
-  const SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQAIR6KHV18vjerj20-Xizsi3nhbof-luaoiQj1ebU_K2Ttpz_nm9xJlNGAdpotn_8_7Jn-7wB36qc/pub?output=csv";
 
   const parseNum = (val) => {
     if (!val) return 0;
@@ -70,60 +69,35 @@ export default function Home() {
   const handleUpdatePrices = async () => {
     setUpdatingPrices(true);
     try {
-      const res = await fetch(SHEETS_CSV_URL);
-      if (!res.ok) throw new Error("No se pudo leer el archivo de Google Sheets");
-      
-      const csvText = await res.text();
-      const rows = csvText.split('\n');
-      const priceMap = {};
-
-      rows.forEach(row => {
-        const columns = row.split(/,|;/);
-        if (columns.length >= 2) {
-          const tickerRaw = columns[0].replace(/"/g, '').replace('BCBA:', '').replace('NASDAQ:', '').trim().toUpperCase();
-          let priceStr = columns[1].replace(/"/g, '').trim();
-          
-          if (priceStr.includes(',') && priceStr.includes('.')) {
-            if (priceStr.lastIndexOf(',') > priceStr.lastIndexOf('.')) {
-              priceStr = priceStr.replace(/\./g, '').replace(',', '.');
-            } else {
-              priceStr = priceStr.replace(/,/g, '');
-            }
-          } else if (priceStr.includes(',')) {
-            priceStr = priceStr.replace(',', '.');
-          }
-          
-          const price = Number(priceStr);
-          if (tickerRaw && !isNaN(price) && price > 0) {
-            priceMap[tickerRaw] = price;
-          }
-        }
-      });
-
+      const priceMap = await fetchAllPrices();
+      const mepRate = getMepRate(priceMap);
       const querySnapshot = await getDocs(collection(db, "brokerPositions"));
       const nowIso = new Date().toISOString();
 
       for (const document of querySnapshot.docs) {
-        if (document.id === 'jpm') continue; 
-
         const data = document.data();
-        let changed = false;
-        let updateFields = {};
+        const isARS = document.id !== 'jpm';
+        const payload = {};
 
         const updatedAssets = (data.assets || []).map(a => {
           if (!a.ticker) return a;
           const t = a.ticker.toUpperCase().trim();
-          if (priceMap[t] && priceMap[t] !== parseNum(a.price)) {
-            changed = true;
+          if (priceMap[t] !== undefined && priceMap[t] !== parseNum(a.price)) {
+            payload.assets = true; // marca que cambió
             return { ...a, price: priceMap[t] };
           }
           return a;
         });
 
-        if (changed) {
-          updateFields.assets = updatedAssets;
-          updateFields.lastUpdated = nowIso;
-          await updateDoc(doc(db, "brokerPositions", document.id), updateFields);
+        if (payload.assets) payload.assets = updatedAssets;
+        else delete payload.assets;
+
+        // Actualizar MEP sólo en brokers ARS (Latin, One618)
+        if (isARS && mepRate !== null) payload.usdRate = mepRate;
+
+        if (Object.keys(payload).length > 0) {
+          payload.lastUpdated = nowIso;
+          await updateDoc(doc(db, "brokerPositions", document.id), payload);
         }
       }
 

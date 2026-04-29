@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Link } from 'react-router-dom';
+import { fetchAllPrices, getMepRate } from '../utils/priceService';
 
 export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updatingPrices, setUpdatingPrices] = useState(false);
-
-  const SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQAIR6KHV18vjerj20-Xizsi3nhbof-luaoiQj1ebU_K2Ttpz_nm9xJlNGAdpotn_8_7Jn-7wB36qc/pub?output=csv";
 
   const fetchEvents = async () => {
     try {
@@ -37,36 +36,9 @@ export default function Dashboard() {
   const handleUpdatePrices = async () => {
     setUpdatingPrices(true);
     try {
-      const res = await fetch(SHEETS_CSV_URL);
-      if (!res.ok) throw new Error("No se pudo conectar con Google Sheets.");
-      
-      const csvText = await res.text();
-      const rows = csvText.split('\n');
-      const priceMap = {};
-
-      rows.forEach(row => {
-        const columns = row.split(/,|;/);
-        if (columns.length >= 2) {
-          const tickerRaw = columns[0].replace(/"/g, '').replace('BCBA:', '').replace('NASDAQ:', '').trim().toUpperCase();
-          let priceStr = columns[1].replace(/"/g, '').trim();
-          
-          if (priceStr.includes(',') && priceStr.includes('.')) {
-            priceStr = priceStr.replace(/\./g, '').replace(',', '.');
-          } else if (priceStr.includes(',')) {
-            priceStr = priceStr.replace(',', '.');
-          }
-          
-          const price = parseFloat(priceStr);
-          if (tickerRaw && !isNaN(price) && price > 0) {
-            priceMap[tickerRaw] = price;
-          }
-        }
-      });
-
+      const priceMap = await fetchAllPrices();
+      const mepRate = getMepRate(priceMap);
       const foundCount = Object.keys(priceMap).length;
-      if (foundCount === 0) {
-        throw new Error("No se encontraron precios válidos en el Sheet. Revisá el formato de las celdas.");
-      }
 
       const rotationsSnapshot = await getDocs(collection(db, "rotations"));
       let updatedCount = 0;
@@ -75,41 +47,36 @@ export default function Dashboard() {
         const data = document.data();
         if (data.isClosed) continue;
 
-        let changed = false;
+        let pricesChanged = false;
         const currentPrices = { ...(data.currentPricesFromDb || {}) };
         const soldCurrentPrices = { ...(data.soldCurrentPricesFromDb || {}) };
 
-        const boughtList = data.boughtAssetsFromDb || data.boughtAssets || [];
-        boughtList.forEach(a => {
-            const t = a.ticker?.toUpperCase().trim();
-            if (priceMap[t]) {
-                currentPrices[t] = priceMap[t];
-                changed = true;
-            }
+        (data.boughtAssetsFromDb || data.boughtAssets || []).forEach(a => {
+          const t = a.ticker?.toUpperCase().trim();
+          if (priceMap[t] !== undefined) { currentPrices[t] = priceMap[t]; pricesChanged = true; }
         });
 
-        const soldList = data.soldAssets || [];
-        soldList.forEach(a => {
-            const t = a.ticker?.toUpperCase().trim();
-            if (priceMap[t]) {
-                soldCurrentPrices[t] = priceMap[t];
-                changed = true;
-            }
+        (data.soldAssets || []).forEach(a => {
+          const t = a.ticker?.toUpperCase().trim();
+          if (priceMap[t] !== undefined) { soldCurrentPrices[t] = priceMap[t]; pricesChanged = true; }
         });
 
-        if (changed) {
-            await updateDoc(doc(db, "rotations", document.id), {
-                currentPricesFromDb: currentPrices,
-                soldCurrentPricesFromDb: soldCurrentPrices,
-                lastUpdated: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-            });
-            updatedCount++;
+        const payload = {};
+        if (pricesChanged) {
+          payload.currentPricesFromDb = currentPrices;
+          payload.soldCurrentPricesFromDb = soldCurrentPrices;
+        }
+        if (mepRate !== null) payload.currentUsdRateFromDb = mepRate;
+
+        if (Object.keys(payload).length > 0) {
+          payload.lastUpdated = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+          await updateDoc(doc(db, "rotations", document.id), payload);
+          if (pricesChanged) updatedCount++;
         }
       }
 
-      alert(`¡Éxito! Se leyeron ${foundCount} tickers del Sheet y se actualizaron ${updatedCount} estrategias.`);
+      alert(`¡Éxito! Se obtuvieron ${foundCount} tickers y se actualizaron ${updatedCount} estrategias.`);
       window.location.reload();
-
     } catch (error) {
       alert(`Error al actualizar: ${error.message}`);
     } finally {

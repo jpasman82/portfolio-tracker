@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { fetchAllPrices, getMepRate } from '../utils/priceService';
 
 export default function EventDetail() {
   const { id } = useParams(); 
@@ -18,8 +19,6 @@ export default function EventDetail() {
   const [saving, setSaving] = useState(false);
   const [viewCurrency, setViewCurrency] = useState('ARS');
   const [updatingPrices, setUpdatingPrices] = useState(false);
-
-  const SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQAIR6KHV18vjerj20-Xizsi3nhbof-luaoiQj1ebU_K2Ttpz_nm9xJlNGAdpotn_8_7Jn-7wB36qc/pub?output=csv";
 
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
@@ -80,49 +79,22 @@ export default function EventDetail() {
   const handleUpdatePrices = async () => {
     setUpdatingPrices(true);
     try {
-      const res = await fetch(SHEETS_CSV_URL);
-      if (!res.ok) throw new Error("No se pudo conectar con Google Sheets");
-      
-      const csvText = await res.text();
-      const rows = csvText.split('\n');
-      const priceMap = {};
-
-      rows.forEach(row => {
-        const columns = row.split(/,|;/);
-        if (columns.length >= 2) {
-          const tickerRaw = columns[0].replace(/"/g, '').replace('BCBA:', '').replace('NASDAQ:', '').trim().toUpperCase();
-          let priceStr = columns[1].replace(/"/g, '').trim();
-          
-          if (priceStr.includes(',') && priceStr.includes('.')) {
-            if (priceStr.lastIndexOf(',') > priceStr.lastIndexOf('.')) {
-              priceStr = priceStr.replace(/\./g, '').replace(',', '.');
-            } else {
-              priceStr = priceStr.replace(/,/g, '');
-            }
-          } else if (priceStr.includes(',')) {
-            priceStr = priceStr.replace(',', '.');
-          }
-          
-          const price = parseFloat(priceStr);
-          if (tickerRaw && !isNaN(price) && price > 0) {
-            priceMap[tickerRaw] = price;
-          }
-        }
-      });
+      const priceMap = await fetchAllPrices();
+      const mepRate = getMepRate(priceMap);
 
       let changed = false;
       const newCurrentPrices = { ...currentPrices };
       const newSoldCurrentPrices = { ...soldCurrentPrices };
 
       currentAssets.forEach(a => {
-        if (priceMap[a.ticker]) {
+        if (priceMap[a.ticker] !== undefined) {
           newCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]);
           changed = true;
         }
       });
 
       (event.soldAssets || []).forEach(a => {
-        if (priceMap[a.ticker]) {
+        if (priceMap[a.ticker] !== undefined) {
           newSoldCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]);
           changed = true;
         }
@@ -132,8 +104,10 @@ export default function EventDetail() {
         setCurrentPrices(newCurrentPrices);
         setSoldCurrentPrices(newSoldCurrentPrices);
       } else {
-        alert("No se encontraron cotizaciones nuevas para los tickers de esta estrategia.");
+        alert("No se encontraron cotizaciones para los tickers de esta estrategia.");
       }
+
+      if (mepRate !== null) setCurrentUsdRate(formatDecimals(mepRate));
     } catch (error) {
       alert(`Error al buscar precios: ${error.message}`);
     } finally {
