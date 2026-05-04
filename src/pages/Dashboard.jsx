@@ -9,6 +9,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [updatingPrices, setUpdatingPrices] = useState(false);
 
+  const parseNum = (val) => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
+  };
+
   const fetchEvents = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, "rotations"));
@@ -37,50 +43,72 @@ export default function Dashboard() {
     setUpdatingPrices(true);
     try {
       const priceMap = await fetchAllPrices();
-      const mepRate = getMepRate(priceMap);
-      const foundCount = Object.keys(priceMap).length;
+      
+      const nowIso = new Date().toISOString();
+      const timeStr = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 
-      const rotationsSnapshot = await getDocs(collection(db, "rotations"));
-      let updatedCount = 0;
-
-      for (const document of rotationsSnapshot.docs) {
-        const data = document.data();
+      const rotSnap = await getDocs(collection(db, "rotations"));
+      for (const d of rotSnap.docs) {
+        const data = d.data();
         if (data.isClosed) continue;
+        let changed = false;
+        const curP = { ...(data.currentPricesFromDb || {}) };
+        const soldP = { ...(data.soldCurrentPricesFromDb || {}) };
 
-        let pricesChanged = false;
-        const currentPrices = { ...(data.currentPricesFromDb || {}) };
-        const soldCurrentPrices = { ...(data.soldCurrentPricesFromDb || {}) };
-
-        (data.boughtAssetsFromDb || data.boughtAssets || []).forEach(a => {
+        ;(data.boughtAssetsFromDb || data.boughtAssets || []).forEach(a => {
           const t = a.ticker?.toUpperCase().trim();
-          if (priceMap[t] !== undefined) { currentPrices[t] = priceMap[t]; pricesChanged = true; }
-        });
-
-        (data.soldAssets || []).forEach(a => {
+          if (t && priceMap[t]) { curP[t] = priceMap[t]; changed = true; }
+        })
+        ;(data.soldAssets || []).forEach(a => {
           const t = a.ticker?.toUpperCase().trim();
-          if (priceMap[t] !== undefined) { soldCurrentPrices[t] = priceMap[t]; pricesChanged = true; }
-        });
+          if (t && priceMap[t]) { soldP[t] = priceMap[t]; changed = true; }
+        })
 
-        const payload = {};
-        if (pricesChanged) {
-          payload.currentPricesFromDb = currentPrices;
-          payload.soldCurrentPricesFromDb = soldCurrentPrices;
-        }
-        if (mepRate !== null) payload.currentUsdRateFromDb = mepRate;
-
-        if (Object.keys(payload).length > 0) {
-          payload.lastUpdated = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-          await updateDoc(doc(db, "rotations", document.id), payload);
-          if (pricesChanged) updatedCount++;
-        }
+        if (changed) await updateDoc(doc(db, "rotations", d.id), { currentPricesFromDb: curP, soldCurrentPricesFromDb: soldP, lastUpdated: timeStr });
       }
 
-      alert(`¡Éxito! Se obtuvieron ${foundCount} tickers y se actualizaron ${updatedCount} estrategias.`);
+      const brokSnap = await getDocs(collection(db, "brokerPositions"));
+      for (const d of brokSnap.docs) {
+        const data = d.data();
+        const updatedAssets = (data.assets || []).map(a => {
+          const t = a.ticker?.toUpperCase().trim();
+          if (t && priceMap[t]) return { ...a, price: priceMap[t] };
+          return a;
+        })
+        await updateDoc(doc(db, "brokerPositions", d.id), { assets: updatedAssets, lastUpdated: nowIso });
+      }
+
+      alert("Sincronización completada.");
       window.location.reload();
+
     } catch (error) {
-      alert(`Error al actualizar: ${error.message}`);
+      alert("Error: " + error.message);
     } finally {
       setUpdatingPrices(false);
+    }
+  };
+
+  const exportMaeData = async () => {
+    try {
+      const maeRes = await fetch('/api/mae/mercado/cotizaciones/rentafija', {
+        headers: { 'x-api-key': import.meta.env.VITE_MAE_API_KEY }
+      });
+      const json = await maeRes.json();
+      const lista = json.data || json;
+
+      let csv = "Ticker;Precio Ultimo;Precio Cierre;Variacion;Volumen;Segmento;Descripcion\n";
+      lista.forEach(i => {
+        csv += `${i.ticker};${i.precioUltimo};${i.precioCierre};${i.variacion};${i.volumenAcumulado};${i.segmento};${i.descripcion}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'data_mae_completa.csv';
+      a.click();
+    } catch (error) {
+      alert("Error al descargar datos: " + error.message);
     }
   };
 
@@ -100,6 +128,16 @@ export default function Dashboard() {
         <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias</h2>
         
         <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={exportMaeData} 
+            style={{ 
+              height: '40px', padding: '0 12px', borderRadius: '14px', backgroundColor: '#f8f9fa', 
+              border: '1px solid #eaecef', fontSize: '13px', fontWeight: 800, color: '#1a1d21', 
+              cursor: 'pointer' 
+            }}
+          >
+            📊 MAE CSV
+          </button>
           <button 
             onClick={handleUpdatePrices} 
             disabled={updatingPrices}
@@ -127,11 +165,11 @@ export default function Dashboard() {
           const initialUsdRate = event.initialUsdRate || 1;
           const currentUsdRate = event.currentUsdRateFromDb || initialUsdRate;
 
-          const totalARS_Init = soldAssets.reduce((sum, a) => sum + (a.quantity * a.priceAtTrade), 0);
+          const totalARS_Init = soldAssets.reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(a.priceAtTrade)), 0);
           const totalUSD_Init = totalARS_Init / initialUsdRate;
-          const totalARS_Now = boughtAssets.reduce((sum, a) => sum + (a.quantity * (currentPrices[a.ticker] || a.priceAtTrade || 0)), 0);
+          const totalARS_Now = boughtAssets.reduce((sum, a) => sum + (parseNum(a.quantity) * (currentPrices[a.ticker] || parseNum(a.priceAtTrade) || 0)), 0);
           const totalUSD_Now = totalARS_Now / currentUsdRate;
-          const totalARS_Now_Prev = soldAssets.reduce((sum, a) => sum + (a.quantity * (soldCurrentPrices[a.ticker] || a.priceAtTrade || 0)), 0);
+          const totalARS_Now_Prev = soldAssets.reduce((sum, a) => sum + (parseNum(a.quantity) * (soldCurrentPrices[a.ticker] || parseNum(a.priceAtTrade) || 0)), 0);
           const totalUSD_Now_Prev = totalARS_Now_Prev / currentUsdRate;
 
           const pUSD = totalUSD_Init > 0 ? ((totalUSD_Now / totalUSD_Init) - 1) * 100 : 0;
@@ -166,9 +204,9 @@ export default function Dashboard() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                  <div style={getBadgeStyle(pUSD)}><span style={{ fontSize: '7px', fontWeight: 900 }}>REND. USD</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pUSD.toFixed(1)}%</div></div>
-                  <div style={getBadgeStyle(pARS)}><span style={{ fontSize: '7px', fontWeight: 900 }}>REND. ARS</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pARS.toFixed(1)}%</div></div>
-                  <div style={getBadgeStyle(pALFA)}><span style={{ fontSize: '7px', fontWeight: 900 }}>ALFA</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pALFA.toFixed(1)}%</div></div>
+                  <div style={getBadgeStyle(pUSD)}><span style={{ fontSize: '7px', fontWeight: 900 }}>REND. USD</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pUSD >= 0 ? '+' : ''}{pUSD.toFixed(1)}%</div></div>
+                  <div style={getBadgeStyle(pARS)}><span style={{ fontSize: '7px', fontWeight: 900 }}>REND. ARS</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pARS >= 0 ? '+' : ''}{pARS.toFixed(1)}%</div></div>
+                  <div style={getBadgeStyle(pALFA)}><span style={{ fontSize: '7px', fontWeight: 900 }}>ALFA</span><div style={{ fontSize: '14px', fontWeight: 900 }}>{pALFA >= 0 ? '+' : ''}{pALFA.toFixed(1)}%</div></div>
                 </div>
               </div>
             </Link>
@@ -176,7 +214,6 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* MENÚ DE NAVEGACIÓN INFERIOR */}
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '600px', backgroundColor: 'white', display: 'flex', justifyContent: 'space-around', padding: '12px 10px 24px 10px', boxShadow: '0 -4px 20px rgba(0,0,0,0.06)', borderRadius: '24px 24px 0 0', zIndex: 1000, boxSizing: 'border-box' }}>
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1 }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>

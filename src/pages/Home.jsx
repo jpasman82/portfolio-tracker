@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { fetchAllPrices, getMepRate } from '../utils/priceService';
+import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
 
 export default function Home() {
   const [brokerData, setBrokerData] = useState({
@@ -34,7 +34,13 @@ export default function Home() {
         querySnapshot.forEach((document) => {
           const data = document.data();
           const rate = (document.id === 'jpm') ? 1 : (parseNum(data.usdRate) || 1);
-          const assetsTotal = (data.assets || []).reduce((sum, a) => sum + ((parseNum(a.quantity) * parseNum(a.price)) / rate), 0);
+          
+          const assetsTotal = (data.assets || []).reduce((sum, a) => {
+            const isBond = a.isBond || isBondTicker(a.ticker);
+            const divisor = isBond ? 100 : 1;
+            return sum + ((parseNum(a.quantity) * parseNum(a.price)) / divisor / rate);
+          }, 0);
+          
           const debt = parseNum(data.debt) || 0;
           const total = assetsTotal - debt;
           
@@ -60,31 +66,55 @@ export default function Home() {
         } else {
           setLatestGlobalUpdate('Sin registros de actualización');
         }
-      } catch (e) {}
-      finally { setLoading(false); }
+      } catch (e) {
+      } finally { 
+        setLoading(false); 
+      }
     };
-    fetchBalances();
+
+    const init = async () => {
+      try {
+        await fetchAllPrices();
+      } catch (e) {}
+      fetchBalances();
+    };
+
+    init();
   }, []);
 
   const handleUpdatePrices = async () => {
     setUpdatingPrices(true);
     try {
       const priceMap = await fetchAllPrices();
-      const mepRate = getMepRate(priceMap);
+      const mepRate = getMepRate();
       const querySnapshot = await getDocs(collection(db, "brokerPositions"));
       const nowIso = new Date().toISOString();
 
       for (const document of querySnapshot.docs) {
         const data = document.data();
-        const isARS = document.id !== 'jpm';
+        const isJPM = document.id === 'jpm';
         const payload = {};
 
         const updatedAssets = (data.assets || []).map(a => {
           if (!a.ticker) return a;
           const t = a.ticker.toUpperCase().trim();
-          if (priceMap[t] !== undefined && priceMap[t] !== parseNum(a.price)) {
-            payload.assets = true; // marca que cambió
-            return { ...a, price: priceMap[t] };
+          let newPrice = priceMap[t];
+          let isBond = isBondTicker(t);
+          
+          if (!isBond && a.isBond) isBond = true;
+          
+          if (newPrice !== undefined) {
+            if (isJPM && mepRate > 0) {
+              newPrice = newPrice / mepRate;
+            }
+
+            if (Math.abs(parseNum(a.price) - newPrice) > 0.001 || a.isBond !== isBond) {
+              payload.assets = true; 
+              return { ...a, price: newPrice, isBond };
+            }
+          } else if (isBond !== a.isBond) {
+             payload.assets = true;
+             return { ...a, isBond };
           }
           return a;
         });
@@ -92,8 +122,9 @@ export default function Home() {
         if (payload.assets) payload.assets = updatedAssets;
         else delete payload.assets;
 
-        // Actualizar MEP sólo en brokers ARS (Latin, One618)
-        if (isARS && mepRate !== null) payload.usdRate = mepRate;
+        if (!isJPM && mepRate !== null) {
+          payload.usdRate = mepRate;
+        }
 
         if (Object.keys(payload).length > 0) {
           payload.lastUpdated = nowIso;
@@ -190,6 +221,7 @@ export default function Home() {
                   <div style={{ width: '44px', height: '44px', borderRadius: '14px', border: '1px solid #f8f9fa', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px', boxSizing: 'border-box', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
                     <img 
                       src={b.logo} 
+                      alt={`${b.name} logo`}
                       style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
                       onError={(e) => { 
                         e.target.style.display = 'none'; 

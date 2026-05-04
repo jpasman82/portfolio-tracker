@@ -8,8 +8,13 @@ export default defineConfig({
       '/api/mae': {
         target: 'https://api.mae.com.ar',
         changeOrigin: true,
-        secure: true,
+        secure: false,
         rewrite: (path) => path.replace(/^\/api\/mae/, '/MarketData/v1'),
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('Origin', 'https://api.mae.com.ar');
+          });
+        }
       }
     }
   }

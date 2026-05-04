@@ -80,7 +80,7 @@ export default function EventDetail() {
     setUpdatingPrices(true);
     try {
       const priceMap = await fetchAllPrices();
-      const mepRate = getMepRate(priceMap);
+      const mepRate = getMepRate();
 
       let changed = false;
       const newCurrentPrices = { ...currentPrices };
@@ -91,14 +91,14 @@ export default function EventDetail() {
           newCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]);
           changed = true;
         }
-      });
+      })
 
-      (event.soldAssets || []).forEach(a => {
+      ;(event.soldAssets || []).forEach(a => {
         if (priceMap[a.ticker] !== undefined) {
           newSoldCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]);
           changed = true;
         }
-      });
+      })
 
       if (changed) {
         setCurrentPrices(newCurrentPrices);
@@ -413,13 +413,15 @@ export default function EventDetail() {
         })}
       </div>
 
-      <div style={{ backgroundColor: 'white', padding: '20px 24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <label style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>Dólar MEP</label>
-        <div style={{ position: 'relative', width: '120px' }}>
-          <span style={{ position: 'absolute', left: '0', top: '2px', color: '#1a1d21', fontWeight: 900, fontSize: '18px' }}>$</span>
-          <input type="text" value={formatInput(currentUsdRate)} onBlur={(e) => setCurrentUsdRate(formatDecimals(e.target.value))} disabled={event.isClosed} onChange={(e) => setCurrentUsdRate(e.target.value)} style={{ width: '100%', border: 'none', fontSize: '20px', fontWeight: 900, outline: 'none', textAlign: 'right', color: '#1a1d21', backgroundColor: 'transparent', paddingLeft: '15px', boxSizing: 'border-box' }} />
+      {parseNum(currentUsdRate) > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', backgroundColor: 'white', borderRadius: '20px', border: '1px solid #eaecef', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0d6efd' }} />
+            <span style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dólar MEP</span>
+          </div>
+          <span style={{ fontSize: '20px', fontWeight: 900, color: '#1a1d21' }}>$ {formatInput(currentUsdRate)}</span>
         </div>
-      </div>
+      )}
 
       {event.isClosed ? (
         <button onClick={() => save(false)} style={{ width: '100%', padding: '20px', backgroundColor: 'transparent', color: '#1a1d21', border: '2px solid #1a1d21', borderRadius: '20px', fontWeight: 800, fontSize: '15px' }}>Reabrir Operación</button>

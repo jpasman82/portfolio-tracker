@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { fetchAllPrices, isBondTicker } from '../utils/priceService';
 
 export default function BrokerDetail() {
   const { id } = useParams();
@@ -63,7 +64,8 @@ export default function BrokerDetail() {
           const formattedAssets = (data.assets || []).map(a => ({
             ticker: a.ticker,
             quantity: a.quantity?.toString().replace('.', ',') || '',
-            price: formatDecimals(a.price)
+            price: formatDecimals(a.price),
+            isBond: a.isBond || false
           }));
           setAssets(formattedAssets);
           if (!isUSD && data.usdRate) {
@@ -76,10 +78,18 @@ export default function BrokerDetail() {
       } catch (e) {}
       finally { setLoading(false); }
     };
-    fetchData();
+
+    const init = async () => {
+      try {
+        await fetchAllPrices();
+      } catch (e) {}
+      fetchData();
+    };
+
+    init();
   }, [id, isUSD]);
 
-  const handleAddAsset = () => setAssets([...assets, { ticker: '', quantity: '', price: '' }]);
+  const handleAddAsset = () => setAssets([...assets, { ticker: '', quantity: '', price: '', isBond: false }]);
   const handleRemove = (index) => setAssets(assets.filter((_, i) => i !== index));
 
   const save = async () => {
@@ -88,7 +98,8 @@ export default function BrokerDetail() {
       const cleanAssets = assets.map(a => ({
         ticker: a.ticker,
         quantity: parseNum(a.quantity),
-        price: parseNum(a.price)
+        price: parseNum(a.price),
+        isBond: isBondTicker(a.ticker) || a.isBond || false
       }));
       await setDoc(doc(db, "brokerPositions", id), { 
         assets: cleanAssets,
@@ -102,7 +113,11 @@ export default function BrokerDetail() {
   };
 
   const rate = isUSD ? 1 : (parseNum(usdRate) || 1);
-  const totalAssetsUSD = assets.reduce((sum, a) => sum + ((parseNum(a.quantity) * parseNum(a.price)) / rate), 0);
+  const totalAssetsUSD = assets.reduce((sum, asset) => {
+    const isBond = asset.isBond || isBondTicker(asset.ticker);
+    const divisor = isBond ? 100 : 1;
+    return sum + ((parseNum(asset.quantity) * parseNum(asset.price)) / divisor / rate);
+  }, 0);
   const totalUSD = totalAssetsUSD - parseNum(debt);
 
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800 }}>Cargando...</div>;
@@ -149,7 +164,7 @@ export default function BrokerDetail() {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '18px', fontWeight: 900, color: '#198754' }}>
-                  {fmtUSD((parseNum(asset.quantity) * parseNum(asset.price)) / rate)}
+                  {fmtUSD((parseNum(asset.quantity) * parseNum(asset.price)) / ((asset.isBond || isBondTicker(asset.ticker)) ? 100 : 1) / rate)}
                 </div>
               </div>
             </div>
@@ -210,7 +225,7 @@ export default function BrokerDetail() {
               
               <div style={{ borderTop: '1px solid #eaecef', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd' }}>SUBTOTAL</span>
-                <span style={{ fontSize: '16px', fontWeight: 900, color: '#198754' }}>{fmtUSD((parseNum(asset.quantity) * parseNum(asset.price)) / rate)}</span>
+                <span style={{ fontSize: '16px', fontWeight: 900, color: '#198754' }}>{fmtUSD((parseNum(asset.quantity) * parseNum(asset.price)) / ((asset.isBond || isBondTicker(asset.ticker)) ? 100 : 1) / rate)}</span>
               </div>
             </div>
           ))
@@ -246,20 +261,13 @@ export default function BrokerDetail() {
         </div>
       </div>
 
-      {!isUSD && (
-        <div style={{ backgroundColor: 'white', padding: '20px 24px', borderRadius: '24px', border: '1px solid #eaecef', marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <label style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>Dólar MEP</label>
-          <div style={{ position: 'relative', width: '120px' }}>
-            <span style={{ position: 'absolute', left: '0', top: '2px', color: '#1a1d21', fontWeight: 900, fontSize: '18px' }}>$</span>
-            <input 
-              type="text" 
-              value={formatInput(usdRate)} 
-              onBlur={(e) => setUsdRate(formatDecimals(e.target.value))} 
-              disabled={!isEditing} 
-              onChange={(e) => setUsdRate(e.target.value)} 
-              style={{ width: '100%', border: 'none', fontSize: '20px', fontWeight: 900, outline: 'none', textAlign: 'right', color: '#1a1d21', backgroundColor: 'transparent', paddingLeft: '15px', boxSizing: 'border-box' }} 
-            />
+      {!isUSD && parseNum(usdRate) > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', backgroundColor: 'white', borderRadius: '20px', border: '1px solid #eaecef', marginTop: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0d6efd' }} />
+            <span style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dólar MEP</span>
           </div>
+          <span style={{ fontSize: '20px', fontWeight: 900, color: '#1a1d21' }}>$ {formatInput(usdRate)}</span>
         </div>
       )}
 

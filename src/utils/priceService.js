@@ -1,125 +1,102 @@
-const STOCKS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQAIR6KHV18vjerj20-Xizsi3nhbof-luaoiQj1ebU_K2Ttpz_nm9xJlNGAdpotn_8_7Jn-7wB36qc/pub?output=csv";
-const BONDS_CSV_URL = import.meta.env.VITE_BONDS_CSV_URL || null;
-const MAE_API_KEY  = import.meta.env.VITE_MAE_API_KEY;
+let cachedPriceMap = {};
+let cachedMepRate = null;
+let cachedBonds = new Set();
 
-// En dev: Vite proxy evita CORS (la request sale desde tu máquina, no desde Google Cloud).
-// En prod: llamada directa — funciona si el API tiene CORS habilitado para requests con API key.
-const MAE_URL = import.meta.env.DEV
-  ? '/api/mae/mercado/cotizaciones/rentafija'
-  : 'https://api.mae.com.ar/MarketData/v1/mercado/cotizaciones/rentafija';
+export const fetchAllPrices = async () => {
+  const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTsH6upQFn5HjXEQOD3Rcr4y_JFzuNCgoIGcxQb9CCPP0huMYV5W4NbdzLwA41JQGO2CvxDDrDbPPZq/pub";
 
-function parseCsvPrice(raw) {
-  if (!raw) return NaN;
-  let s = raw.trim();
-  if (s.includes(',') && s.includes('.')) {
-    s = s.lastIndexOf(',') > s.lastIndexOf('.')
-      ? s.replace(/\./g, '').replace(',', '.')
-      : s.replace(/,/g, '');
-  } else if (s.includes(',')) {
-    s = s.replace(',', '.');
-  }
-  return parseFloat(s);
-}
-
-async function fetchSheetPrices(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`No se pudo leer el sheet (${res.status})`);
-
-  const priceMap = {};
-  (await res.text()).split('\n').forEach(row => {
-    const cols = row.split(/,|;/);
-    if (cols.length < 2) return;
-    const ticker = cols[0].replace(/"/g, '').replace('BCBA:', '').replace('NASDAQ:', '').trim().toUpperCase();
-    const price  = parseCsvPrice(cols[1].replace(/"/g, ''));
-    if (ticker && !isNaN(price) && price > 0) priceMap[ticker] = price;
-  });
-
-  return priceMap;
-}
-
-async function fetchA3Prices() {
-  if (!MAE_API_KEY) throw new Error('VITE_MAE_API_KEY no configurada');
-
-  const res = await fetch(MAE_URL, {
-    headers: { 'x-api-key': MAE_API_KEY }
-  });
-
-  if (!res.ok) throw new Error(`a3 API error ${res.status}`);
-
-  const raw   = await res.json();
-  const items = Array.isArray(raw) ? raw
-    : (raw.data ?? raw.items ?? raw.cotizaciones ?? raw.result ?? raw.titulos ?? []);
-
-  // LOG TEMPORAL — muestra la estructura del primer item para ajustar campos
-  if (items.length > 0) {
-    console.log('[a3 API] Total items:', items.length);
-    console.log('[a3 API] Primer item (campos):', JSON.stringify(items[0]));
-  } else {
-    console.warn('[a3 API] La respuesta llegó pero el array está vacío. Raw:', JSON.stringify(raw).substring(0, 500));
-  }
-
-  const priceMap = {};
-  items.forEach(item => {
-    const ticker = (
-      item.especie ?? item.Especie ?? item.simbolo ?? item.Simbolo ??
-      item.ticker  ?? item.Ticker  ?? item.symbol  ?? ''
-    ).toString().toUpperCase().trim();
-
-    const price = Number(
-      item.precioUltimo ?? item.ultimoPrecio ?? item.ultimo ?? item.Ultimo ??
-      item.precioCierre ?? item.PrecioCierre ?? item.precio ?? item.Precio ??
-      item.cierre       ?? item.Cierre       ?? 0
-    );
-
-    if (ticker && !isNaN(price) && price > 0) priceMap[ticker] = price;
-  });
-
-  console.log('[a3 API] Tickers parseados:', Object.keys(priceMap).length, '— muestra:', Object.entries(priceMap).slice(0, 5));
-
-  return priceMap;
-}
-
-/**
- * Devuelve el dólar MEP.
- * Prioridad: fila "MEP" directa en el sheet (escrita por Apps Script) →
- *            cálculo AL30 / AL30D → null si no hay datos.
- */
-export function getMepRate(priceMap) {
-  if (priceMap['MEP']  > 0) return priceMap['MEP'];
-  if (priceMap['AL30'] > 0 && priceMap['AL30D'] > 0) return priceMap['AL30'] / priceMap['AL30D'];
-  return null;
-}
-
-/**
- * Combina precios de todas las fuentes disponibles:
- *   1. Sheet de acciones (Google Sheets CSV)
- *   2. Sheet de bonos / MEP (Apps Script → Ambito, si VITE_BONDS_CSV_URL está configurada)
- *   3. API de a3 / MAE (renta fija completa)
- * Si alguna fuente falla, continúa con las demás.
- * Lanza error solo si todas las fuentes fallan.
- */
-export async function fetchAllPrices() {
-  const sources = [
-    fetchSheetPrices(STOCKS_CSV_URL),
-    ...(BONDS_CSV_URL ? [fetchSheetPrices(BONDS_CSV_URL)] : []),
-    fetchA3Prices(),
+  const sheets = [
+    { gid: '0', type: 'CEDEARS' },
+    { gid: '717163111', type: 'BONOS' },
+    { gid: '761290000', type: 'ACCIONES' },
+    { gid: '810811578', type: 'DOLAR' }
   ];
 
-  const results = await Promise.allSettled(sources);
-  const prices  = {};
+  try {
+    const priceMap = {};
+    let mepRate = null;
+    const newBonds = new Set();
 
-  results.forEach((r, i) => {
-    if (r.status === 'fulfilled') {
-      Object.assign(prices, r.value);
-    } else {
-      const label = i === 0 ? 'sheet acciones' : i === 1 && BONDS_CSV_URL ? 'sheet bonos' : 'a3 API';
-      console.warn(`[priceService] ${label} falló:`, r.reason?.message);
-    }
-  });
+    const parsePrice = (val) => {
+      if (!val) return 0;
+      let clean = val.replace(/\$|US\$|USD/gi, '').trim();
+      if (clean.includes('.') && clean.includes(',') && clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
+        clean = clean.replace(/\./g, '').replace(',', '.');
+      } else if (clean.includes(',') && !clean.includes('.')) {
+        clean = clean.replace(',', '.');
+      } else if (clean.includes(',') && clean.includes('.') && clean.lastIndexOf('.') > clean.lastIndexOf(',')) {
+        clean = clean.replace(/,/g, '');
+      }
+      const num = parseFloat(clean);
+      return isNaN(num) ? 0 : num;
+    };
 
-  if (Object.keys(prices).length === 0) {
-    throw new Error('No se pudieron obtener precios de ninguna fuente');
+    const fetchPromises = sheets.map(sheet =>
+      fetch(`${baseUrl}?gid=${sheet.gid}&single=true&output=tsv`)
+        .then(res => res.text())
+        .then(text => ({ text, type: sheet.type }))
+    );
+
+    const results = await Promise.all(fetchPromises);
+
+    results.forEach(({ text, type }) => {
+      const lines = text.split(/\r?\n/);
+      lines.forEach(line => {
+        const cells = line.split('\t');
+        if (cells.length >= 2) {
+          const colA_raw = cells[0].trim();
+          const colA = colA_raw.toUpperCase();
+          const colB = cells[1].trim();
+
+          if (!colA || !colB) return;
+
+          if (colA.includes('MEP')) {
+            const parsedMep = parsePrice(colB);
+            if (parsedMep > 0) {
+              mepRate = parsedMep;
+              priceMap['MEP'] = parsedMep;
+            }
+          } else {
+            let ticker = "";
+            if (colA_raw.includes('*')) {
+              const parts = colA_raw.split('*');
+              if (parts.length >= 2) ticker = parts[1].trim().toUpperCase();
+            } else {
+              ticker = colA;
+            }
+
+            if (ticker) {
+              const price = parsePrice(colB);
+              if (price > 0) {
+                priceMap[ticker] = price;
+                if (!ticker.endsWith('D')) priceMap[ticker + 'D'] = price;
+
+                if (type === 'BONOS') {
+                  newBonds.add(ticker);
+                  if (!ticker.endsWith('D')) newBonds.add(ticker + 'D');
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+
+    if (Object.keys(priceMap).length > 0) cachedPriceMap = priceMap;
+    if (mepRate > 0) cachedMepRate = mepRate;
+    if (newBonds.size > 0) cachedBonds = newBonds;
+
+    return priceMap;
+  } catch (error) {
+    throw new Error("No se pudo conectar con tu Google Sheet.");
   }
+};
 
-  return prices;
-}
+export const getMepRate = () => cachedMepRate;
+
+export const isBondTicker = (ticker) => {
+  if (!ticker) return false;
+  return cachedBonds.has(ticker.toUpperCase().trim());
+};
+
+export const diagnosticoSheet = async () => {};
