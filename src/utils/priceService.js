@@ -1,5 +1,6 @@
 let cachedPriceMap = {};
 let cachedMepRate = null;
+let cachedCclRate = null;
 let cachedBonds = new Set();
 
 export const fetchAllPrices = async () => {
@@ -39,6 +40,8 @@ export const fetchAllPrices = async () => {
 
     const results = await Promise.all(fetchPromises);
 
+    let cclRate = null;
+
     results.forEach(({ text, type }) => {
       const lines = text.split(/\r?\n/);
       lines.forEach(line => {
@@ -55,6 +58,12 @@ export const fetchAllPrices = async () => {
             if (parsedMep > 0) {
               mepRate = parsedMep;
               priceMap['MEP'] = parsedMep;
+            }
+          } else if (colA.includes('CCL') || colA.includes('CABLE')) {
+            const parsedCcl = parsePrice(colB);
+            if (parsedCcl > 0) {
+              cclRate = parsedCcl;
+              priceMap['CCL'] = parsedCcl;
             }
           } else {
             let ticker = "";
@@ -84,6 +93,7 @@ export const fetchAllPrices = async () => {
 
     if (Object.keys(priceMap).length > 0) cachedPriceMap = priceMap;
     if (mepRate > 0) cachedMepRate = mepRate;
+    if (cclRate > 0) cachedCclRate = cclRate;
     if (newBonds.size > 0) cachedBonds = newBonds;
 
     return priceMap;
@@ -93,6 +103,7 @@ export const fetchAllPrices = async () => {
 };
 
 export const getMepRate = () => cachedMepRate;
+export const getCclRate = () => cachedCclRate;
 
 export const isBondTicker = (ticker) => {
   if (!ticker) return false;

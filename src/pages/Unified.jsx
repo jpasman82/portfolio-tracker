@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { assetDictionary } from '../utils/dictionary';
+import { isBondTicker } from '../utils/priceService';
 
 export default function Unified() {
   const [groupedData, setGroupedData] = useState({});
@@ -45,7 +46,9 @@ export default function Unified() {
             if (!a || !a.ticker) return;
             const t = a.ticker.toUpperCase().trim();
             const qty = parseNum(a.quantity);
-            const priceUsd = parseNum(a.price) / rate;
+            const isBond = a.isBond || isBondTicker(t);
+            const bondDivisor = isBond ? 100 : 1;
+            const priceUsd = parseNum(a.price) / rate / bondDivisor;
             const valueUsd = qty * priceUsd;
 
             if (valueUsd !== 0) {
@@ -219,9 +222,16 @@ export default function Unified() {
         <div key={cat} style={{ marginBottom: '35px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px', borderBottom: '2px solid #eaecef', paddingBottom: '8px' }}>
             <h3 style={{ fontSize: '22px', fontWeight: 900, color: '#1a1d21', margin: 0 }}>{cat}</h3>
-            <span style={{ fontSize: '16px', fontWeight: 900, color: groupedData[cat].total < 0 ? '#ff3b30' : '#adb5bd' }}>
-              {fmtUSD(groupedData[cat].total)}
-            </span>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: '16px', fontWeight: 900, color: groupedData[cat].total < 0 ? '#ff3b30' : '#adb5bd' }}>
+                {fmtUSD(groupedData[cat].total)}
+              </span>
+              {totalUsd > 0 && (
+                <span style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd', marginLeft: '8px' }}>
+                  {((groupedData[cat].total / totalUsd) * 100).toFixed(1)}%
+                </span>
+              )}
+            </div>
           </div>
 
           {Object.keys(groupedData[cat].subs).sort().map(sub => (
@@ -233,7 +243,14 @@ export default function Unified() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '16px', fontWeight: 800, color: '#1a1d21' }}>{sub}</div>
-                  <div style={{ fontSize: '13px', fontWeight: 800, color: '#adb5bd' }}>{fmtUSD(groupedData[cat].subs[sub].total)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#adb5bd' }}>{fmtUSD(groupedData[cat].subs[sub].total)}</div>
+                    {totalUsd > 0 && (
+                      <div style={{ fontSize: '11px', fontWeight: 900, color: 'white', backgroundColor: '#6c757d', padding: '2px 7px', borderRadius: '6px' }}>
+                        {((groupedData[cat].subs[sub].total / totalUsd) * 100).toFixed(1)}%
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -244,8 +261,15 @@ export default function Unified() {
                       <div style={{ fontSize: '15px', fontWeight: 900, color: asset.valueUsd < 0 ? '#ff3b30' : '#495057' }}>{asset.ticker}</div>
                       <div style={{ fontSize: '11px', fontWeight: 700, color: '#adb5bd' }}>{asset.ticker === "DEUDA CAUCIÓN" ? "Pasivo financiero" : `${fmtQty(asset.quantity)} nominales`}</div>
                     </div>
-                    <div style={{ fontSize: '15px', fontWeight: 800, color: asset.valueUsd < 0 ? '#ff3b30' : '#198754', alignSelf: 'center' }}>
-                      {fmtUSD(asset.valueUsd)}
+                    <div style={{ textAlign: 'right', alignSelf: 'center' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: asset.valueUsd < 0 ? '#ff3b30' : '#198754' }}>
+                        {fmtUSD(asset.valueUsd)}
+                      </div>
+                      {totalUsd > 0 && (
+                        <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd' }}>
+                          {((asset.valueUsd / totalUsd) * 100).toFixed(1)}% cartera
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

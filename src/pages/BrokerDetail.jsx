@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { fetchAllPrices, isBondTicker } from '../utils/priceService';
+import { fetchAllPrices, isBondTicker, getCclRate } from '../utils/priceService';
 
 export default function BrokerDetail() {
   const { id } = useParams();
@@ -120,6 +120,15 @@ export default function BrokerDetail() {
   }, 0);
   const totalUSD = totalAssetsUSD - parseNum(debt);
 
+  const cclRate = getCclRate();
+  const totalUSD_CCL = isUSD && cclRate > 0
+    ? assets.reduce((sum, asset) => {
+        const isBond = asset.isBond || isBondTicker(asset.ticker);
+        const divisor = isBond ? 100 : 1;
+        return sum + ((parseNum(asset.quantity) * parseNum(asset.price)) / divisor / cclRate);
+      }, 0) - parseNum(debt)
+    : null;
+
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800 }}>Cargando...</div>;
 
   return (
@@ -150,25 +159,40 @@ export default function BrokerDetail() {
         <div style={{ fontSize: '36px', fontWeight: 900, color: '#1a1d21', letterSpacing: '-1px' }}>
           US$ {totalUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
         </div>
+        {totalUSD_CCL !== null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dólar Cable</span>
+            <span style={{ fontSize: '15px', fontWeight: 900, color: '#6c757d' }}>
+              US$ {totalUSD_CCL.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            </span>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {!isEditing ? (
-          assets.map((asset, index) => (
-            <div key={index} style={{ backgroundColor: 'white', padding: '20px', borderRadius: '20px', border: '1px solid #eaecef', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>{asset.ticker}</div>
-                <div style={{ fontSize: '13px', color: '#adb5bd', fontWeight: 700, marginTop: '4px' }}>
-                  {fmtQty(asset.quantity)} nom. a {isUSD ? fmtUSD(asset.price) : fmtARS(asset.price)}
+          assets.map((asset, index) => {
+            const assetValueUSD = (parseNum(asset.quantity) * parseNum(asset.price)) / ((asset.isBond || isBondTicker(asset.ticker)) ? 100 : 1) / rate;
+            const pct = totalAssetsUSD > 0 ? (assetValueUSD / totalAssetsUSD) * 100 : 0;
+            return (
+              <div key={index} style={{ backgroundColor: 'white', padding: '20px', borderRadius: '20px', border: '1px solid #eaecef', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>{asset.ticker}</div>
+                  <div style={{ fontSize: '13px', color: '#adb5bd', fontWeight: 700, marginTop: '4px' }}>
+                    {fmtQty(asset.quantity)} nom. a {isUSD ? fmtUSD(asset.price) : fmtARS(asset.price)}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#198754' }}>
+                    {fmtUSD(assetValueUSD)}
+                  </div>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd', marginTop: '2px' }}>
+                    {pct.toFixed(1)}%
+                  </div>
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '18px', fontWeight: 900, color: '#198754' }}>
-                  {fmtUSD((parseNum(asset.quantity) * parseNum(asset.price)) / ((asset.isBond || isBondTicker(asset.ticker)) ? 100 : 1) / rate)}
-                </div>
-              </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           assets.map((asset, index) => (
             <div key={index} style={{ backgroundColor: 'white', padding: '20px', borderRadius: '24px', border: '1px solid #0d6efd', boxShadow: '0 4px 10px rgba(13, 110, 253, 0.05)' }}>
