@@ -265,11 +265,15 @@ export default function Unified() {
                       <div style={{ fontSize: '15px', fontWeight: 800, color: asset.valueUsd < 0 ? '#ff3b30' : '#198754' }}>
                         {fmtUSD(asset.valueUsd)}
                       </div>
-                      {totalUsd > 0 && (
-                        <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd' }}>
-                          {((asset.valueUsd / totalUsd) * 100).toFixed(1)}% cartera
-                        </div>
-                      )}
+                      {totalUsd > 0 && (() => {
+                        const denominator = asset.valueUsd < 0 ? (totalUsd - asset.valueUsd) : totalUsd;
+                        const pct = (Math.abs(asset.valueUsd) / denominator) * 100;
+                        return (
+                          <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd' }}>
+                            {pct.toFixed(1)}% cartera
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}

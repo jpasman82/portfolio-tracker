@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { fetchAllPrices, isBondTicker, getCclRate } from '../utils/priceService';
+import { fetchAllPrices, isBondTicker, getMepRate, getCclRate } from '../utils/priceService';
 
 export default function BrokerDetail() {
   const { id } = useParams();
@@ -120,13 +120,10 @@ export default function BrokerDetail() {
   }, 0);
   const totalUSD = totalAssetsUSD - parseNum(debt);
 
+  const mepRate = getMepRate();
   const cclRate = getCclRate();
-  const totalUSD_CCL = isUSD && cclRate > 0
-    ? assets.reduce((sum, asset) => {
-        const isBond = asset.isBond || isBondTicker(asset.ticker);
-        const divisor = isBond ? 100 : 1;
-        return sum + ((parseNum(asset.quantity) * parseNum(asset.price)) / divisor / cclRate);
-      }, 0) - parseNum(debt)
+  const totalUSD_CCL = isUSD && mepRate > 0 && cclRate > 0
+    ? totalUSD * mepRate / cclRate
     : null;
 
   if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800 }}>Cargando...</div>;

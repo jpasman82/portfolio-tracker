@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
+import { fetchAllPrices, getMepRate, getCclRate, isBondTicker } from '../utils/priceService';
 
 export default function Home() {
   const [brokerData, setBrokerData] = useState({
@@ -211,22 +211,27 @@ export default function Home() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {brokers.map(b => {
           const percentage = totalNeto > 0 ? ((b.balance / totalNeto) * 100).toFixed(1) : 0;
-          
+          const mepRate = getMepRate();
+          const cclRate = getCclRate();
+          const balanceCCL = b.id === 'jpm' && mepRate > 0 && cclRate > 0
+            ? b.balance * mepRate / cclRate
+            : null;
+
           return (
           <Link key={b.id} to={`/broker/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
             <div style={{ padding: '22px', backgroundColor: 'white', borderRadius: '24px', border: '1px solid #eaecef', boxShadow: '0 6px 16px rgba(0,0,0,0.02)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                   <div style={{ width: '44px', height: '44px', borderRadius: '14px', border: '1px solid #f8f9fa', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px', boxSizing: 'border-box', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                    <img 
-                      src={b.logo} 
+                    <img
+                      src={b.logo}
                       alt={`${b.name} logo`}
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-                      onError={(e) => { 
-                        e.target.style.display = 'none'; 
-                        e.target.parentNode.innerHTML = `<span style="font-weight:900;color:#1a1d21;font-size:14px;">${b.name.substring(0,3).toUpperCase()}</span>`; 
-                      }} 
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentNode.innerHTML = `<span style="font-weight:900;color:#1a1d21;font-size:14px;">${b.name.substring(0,3).toUpperCase()}</span>`;
+                      }}
                     />
                   </div>
                   <div>
@@ -234,9 +239,14 @@ export default function Home() {
                     <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 600, marginTop: '2px' }}>{formatSubDate(b.updated)}</div>
                   </div>
                 </div>
-                
+
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>US$ {b.balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                  {balanceCCL !== null && (
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#6c757d', marginTop: '1px' }}>
+                      Cable US$ {balanceCCL.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    </div>
+                  )}
                   <div style={{ fontSize: '12px', fontWeight: 800, color: '#0d6efd', marginTop: '2px' }}>{percentage}%</div>
                 </div>
 
