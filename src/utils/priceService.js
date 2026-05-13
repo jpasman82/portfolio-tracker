@@ -3,92 +3,92 @@ let cachedMepRate = null;
 let cachedCclRate = null;
 let cachedBonds = new Set();
 
+const BASE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTsH6upQFn5HjXEQOD3Rcr4y_JFzuNCgoIGcxQb9CCPP0huMYV5W4NbdzLwA41JQGO2CvxDDrDbPPZq/pub";
+
+const parsePrice = (val) => {
+  if (!val) return 0;
+  let clean = val.replace(/\$|US\$|USD/gi, '').trim();
+  // Argentine format: 9.340,00 → remove dots, replace comma with dot
+  if (clean.includes('.') && clean.includes(',') && clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else if (clean.includes(',') && !clean.includes('.')) {
+    clean = clean.replace(',', '.');
+  } else if (clean.includes(',') && clean.includes('.') && clean.lastIndexOf('.') > clean.lastIndexOf(',')) {
+    clean = clean.replace(/,/g, '');
+  }
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : num;
+};
+
 export const fetchAllPrices = async () => {
-  const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTsH6upQFn5HjXEQOD3Rcr4y_JFzuNCgoIGcxQb9CCPP0huMYV5W4NbdzLwA41JQGO2CvxDDrDbPPZq/pub";
-
-  const sheets = [
-    { gid: '0', type: 'CEDEARS' },
-    { gid: '717163111', type: 'BONOS' },
-    { gid: '761290000', type: 'ACCIONES' },
-    { gid: '810811578', type: 'DOLAR' }
-  ];
-
   try {
     const priceMap = {};
     let mepRate = null;
+    let cclRate = null;
     const newBonds = new Set();
 
-    const parsePrice = (val) => {
-      if (!val) return 0;
-      let clean = val.replace(/\$|US\$|USD/gi, '').trim();
-      if (clean.includes('.') && clean.includes(',') && clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
-        clean = clean.replace(/\./g, '').replace(',', '.');
-      } else if (clean.includes(',') && !clean.includes('.')) {
-        clean = clean.replace(',', '.');
-      } else if (clean.includes(',') && clean.includes('.') && clean.lastIndexOf('.') > clean.lastIndexOf(',')) {
-        clean = clean.replace(/,/g, '');
+    const [lookupText, dolarText] = await Promise.all([
+      fetch(`${BASE_URL}?gid=1196344448&single=true&output=tsv`).then(r => r.text()),
+      fetch(`${BASE_URL}?gid=810811578&single=true&output=tsv`).then(r => r.text()),
+    ]);
+
+    // DOLAR sheet: extract MEP and CCL rates
+    dolarText.split(/\r?\n/).forEach(line => {
+      const cells = line.split('\t');
+      if (cells.length < 2) return;
+      const colA = cells[0].trim().toUpperCase();
+      const colB = cells[1].trim();
+      if (!colA || !colB) return;
+
+      if (colA.includes('MEP')) {
+        const v = parsePrice(colB);
+        if (v > 0) { mepRate = v; priceMap['MEP'] = v; }
+      } else if (colA.includes('CCL') || colA.includes('CABLE')) {
+        const v = parsePrice(colB);
+        if (v > 0) { cclRate = v; priceMap['CCL'] = v; }
       }
-      const num = parseFloat(clean);
-      return isNaN(num) ? 0 : num;
-    };
+    });
 
-    const fetchPromises = sheets.map(sheet =>
-      fetch(`${baseUrl}?gid=${sheet.gid}&single=true&output=tsv`)
-        .then(res => res.text())
-        .then(text => ({ text, type: sheet.type }))
-    );
+    // PRECIOS_LOOKUP sheet: prices for all instruments
+    // Bonds have plain ticker in col A (e.g. "AL30")
+    // Stocks/CEDEARs have "* TICKER *" format in col A, price is last token of col B
+    lookupText.split(/\r?\n/).forEach(line => {
+      const cells = line.split('\t');
+      if (cells.length < 2) return;
+      const colA_raw = cells[0].trim();
+      const colB_raw = cells[1].trim();
+      if (!colA_raw || !colB_raw) return;
 
-    const results = await Promise.all(fetchPromises);
+      let ticker = '';
+      let priceStr = '';
+      let isBond = false;
 
-    let cclRate = null;
+      if (colA_raw.includes('*')) {
+        const parts = colA_raw.split('*');
+        if (parts.length >= 2) ticker = parts[1].trim().toUpperCase();
+        // Price is the last space-separated token in colB (after the description)
+        const tokens = colB_raw.trim().split(/\s+/);
+        priceStr = tokens[tokens.length - 1] || '';
+      } else {
+        ticker = colA_raw.toUpperCase();
+        priceStr = colB_raw;
+        isBond = true;
+      }
 
-    results.forEach(({ text, type }) => {
-      const lines = text.split(/\r?\n/);
-      lines.forEach(line => {
-        const cells = line.split('\t');
-        if (cells.length >= 2) {
-          const colA_raw = cells[0].trim();
-          const colA = colA_raw.toUpperCase();
-          const colB = cells[1].trim();
+      if (!ticker || ticker === 'TICKER') return;
 
-          if (!colA || !colB) return;
-
-          if (colA.includes('MEP')) {
-            const parsedMep = parsePrice(colB);
-            if (parsedMep > 0) {
-              mepRate = parsedMep;
-              priceMap['MEP'] = parsedMep;
-            }
-          } else if (colA.includes('CCL') || colA.includes('CABLE')) {
-            const parsedCcl = parsePrice(colB);
-            if (parsedCcl > 0) {
-              cclRate = parsedCcl;
-              priceMap['CCL'] = parsedCcl;
-            }
-          } else {
-            let ticker = "";
-            if (colA_raw.includes('*')) {
-              const parts = colA_raw.split('*');
-              if (parts.length >= 2) ticker = parts[1].trim().toUpperCase();
-            } else {
-              ticker = colA;
-            }
-
-            if (ticker) {
-              const price = parsePrice(colB);
-              if (price > 0) {
-                priceMap[ticker] = price;
-                if (!ticker.endsWith('D')) priceMap[ticker + 'D'] = price;
-
-                if (type === 'BONOS') {
-                  newBonds.add(ticker);
-                  if (!ticker.endsWith('D')) newBonds.add(ticker + 'D');
-                }
-              }
-            }
+      const price = parsePrice(priceStr);
+      if (price > 0) {
+        priceMap[ticker] = price;
+        if (isBond) {
+          newBonds.add(ticker);
+          // Also register the D-suffixed variant with same price
+          if (!ticker.endsWith('D')) {
+            priceMap[ticker + 'D'] = price;
+            newBonds.add(ticker + 'D');
           }
         }
-      });
+      }
     });
 
     if (Object.keys(priceMap).length > 0) cachedPriceMap = priceMap;
