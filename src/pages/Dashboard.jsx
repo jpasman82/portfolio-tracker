@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Link } from 'react-router-dom';
-import { fetchAllPrices, getMepRate } from '../utils/priceService';
+// IMPORTANTE: Agregamos isBondTicker y la librería de Excel
+import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
+import * as XLSX from 'xlsx';
 
 export default function Dashboard() {
   const [events, setEvents] = useState([]);
@@ -112,6 +114,73 @@ export default function Dashboard() {
     }
   };
 
+  // NUEVA FUNCIÓN: Exportar toda la cartera a Excel
+  const exportarCartera = async () => {
+    try {
+      // 1. Buscamos los datos de los brokers en la base de datos
+      const querySnapshot = await getDocs(collection(db, "brokerPositions"));
+      const filas = [];
+
+      querySnapshot.forEach((document) => {
+        const data = document.data();
+        const brokerId = document.id;
+        
+        // Mapeamos los nombres lindos
+        let brokerName = 'Desconocido';
+        if (brokerId === 'jpm') brokerName = 'J.P. Morgan';
+        else if (brokerId === 'one') brokerName = 'One618';
+        else if (brokerId === 'latin') brokerName = 'Latin Securities';
+
+        const rate = brokerId === 'jpm' ? 1 : (parseNum(data.usdRate) || 1);
+
+        // 2. Procesamos cada activo
+        (data.assets || []).forEach(asset => {
+          const isBond = asset.isBond || isBondTicker(asset.ticker);
+          const divisor = isBond ? 100 : 1;
+          const cantidad = parseNum(asset.quantity);
+          const precio = parseNum(asset.price);
+          const subtotalUSD = (cantidad * precio) / divisor / rate;
+
+          filas.push({
+            "Origen": brokerName,
+            "Especie / Ticker": asset.ticker,
+            "Clase": isBond ? "Bono" : "Acción/Fondo",
+            "Cantidad Nominal": cantidad,
+            "Precio (Origen)": precio,
+            "T.C. (Dólar)": rate === 1 ? "1 (USD)" : rate,
+            "Valorizado (USD)": parseFloat(subtotalUSD.toFixed(2))
+          });
+        });
+
+        // 3. Agregamos las cauciones/deudas si existen
+        const debt = parseNum(data.debt);
+        if (debt > 0) {
+           filas.push({
+            "Origen": brokerName,
+            "Especie / Ticker": "CAUCIÓN / DEUDA",
+            "Clase": "Obligación",
+            "Cantidad Nominal": 1,
+            "Precio (Origen)": -debt,
+            "T.C. (Dólar)": "1 (USD)",
+            "Valorizado (USD)": -debt
+          });
+        }
+      });
+
+      // 4. Generamos el archivo Excel
+      const hoja = XLSX.utils.json_to_sheet(filas);
+      const libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, hoja, "Posición Consolidada");
+      
+      // Armamos un nombre de archivo con la fecha de hoy
+      const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
+      XLSX.writeFile(libro, `Cartera_Marcos_${fecha}.xlsx`);
+
+    } catch (error) {
+      alert("Error al exportar cartera a Excel: " + error.message);
+    }
+  };
+
   const getBadgeStyle = (val) => ({
     textAlign: 'center', padding: '10px 4px', borderRadius: '14px', border: '1px solid #eee', 
     display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '45px',
@@ -127,7 +196,19 @@ export default function Dashboard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ fontSize: '26px', fontWeight: 900, margin: 0 }}>Estrategias</h2>
         
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {/* NUEVO BOTÓN EXCEL CARTERA */}
+          <button 
+            onClick={exportarCartera} 
+            style={{ 
+              height: '40px', padding: '0 12px', borderRadius: '14px', backgroundColor: '#e2f0e9', 
+              border: '1px solid #c2e0cf', fontSize: '12px', fontWeight: 900, color: '#198754', 
+              cursor: 'pointer' 
+            }}
+          >
+            📥 EXCEL
+          </button>
+          
           <button 
             onClick={exportMaeData} 
             style={{ 
@@ -136,7 +217,7 @@ export default function Dashboard() {
               cursor: 'pointer' 
             }}
           >
-            📊 MAE CSV
+            📊 MAE
           </button>
           <button 
             onClick={handleUpdatePrices} 
