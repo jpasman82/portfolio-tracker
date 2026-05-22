@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/byma/:path*", "destination": "/api/byma" }
+  ]
+}

@@ -1,0 +1,208 @@
+/* ───── Base (mobile) ───── */
+.u-page {
+  padding: 30px 20px 100px;
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #fcfcfc;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, sans-serif;
+  box-sizing: border-box;
+}
+
+.u-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.u-sidebar {
+  order: -1;
+  margin-bottom: 30px;
+}
+
+.u-detail {}
+
+.pie-wrap {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 24px;
+}
+
+.u-asset-row {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #f0f1f3;
+  padding-top: 10px;
+}
+
+.u-asset-pct-bar { display: none; }
+
+/* Table header hidden on mobile */
+.u-table-header { display: none !important; }
+
+.u-bottomnav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 600px;
+  background: white;
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 10px 24px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+  border-radius: 24px 24px 0 0;
+  z-index: 1000;
+  box-sizing: border-box;
+}
+
+/* ───── Desktop (≥ 960px) ───── */
+@media (min-width: 960px) {
+  .u-page {
+    max-width: 1440px;
+    padding: 44px 56px 60px;
+  }
+
+  .u-header {
+    margin-bottom: 36px;
+  }
+
+  .u-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 36px;
+    align-items: start;
+  }
+
+  .u-sidebar {
+    order: 0;
+    position: sticky;
+    top: 28px;
+    margin-bottom: 0;
+  }
+
+  /* Pie chart bigger */
+  .pie-wrap {
+    width: 270px;
+    height: 270px;
+  }
+
+  /* Asset row → 4-column table */
+  .u-asset-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 150px 100px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Progress bar */
+  .u-asset-pct-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .u-asset-pct-bar-track {
+    height: 4px;
+    border-radius: 2px;
+    background: #eaecef;
+    overflow: hidden;
+  }
+
+  .u-asset-pct-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+  }
+
+  /* Category section accent */
+  .u-cat-section {
+    border-left: 4px solid transparent;
+    padding-left: 16px;
+    margin-bottom: 36px;
+    border-radius: 0 0 0 4px;
+  }
+
+  /* Sub-category card on desktop: less padding */
+  .u-sub-card {
+    padding: 16px 20px !important;
+  }
+
+  /* Hide mobile-only % text on desktop */
+  .u-mobile-pct {
+    display: none;
+  }
+
+  /* Show table header on desktop */
+  .u-table-header {
+    display: grid !important;
+  }
+
+  /* ── Larger fonts on desktop ── */
+  .u-page h2 {
+    font-size: 42px !important;
+  }
+
+  .u-page .u-subtitle {
+    font-size: 18px !important;
+  }
+
+  /* Sidebar total value */
+  .u-total-label {
+    font-size: 14px !important;
+  }
+
+  .u-total-amount {
+    font-size: 50px !important;
+    letter-spacing: -2px;
+  }
+
+  /* Category titles */
+  .u-cat-title {
+    font-size: 30px !important;
+  }
+
+  .u-cat-pct {
+    font-size: 18px !important;
+  }
+
+  /* Sub-category */
+  .u-sub-title {
+    font-size: 20px !important;
+  }
+
+  .u-sub-amount {
+    font-size: 15px !important;
+  }
+
+  /* Asset ticker */
+  .u-asset-ticker-text {
+    font-size: 18px !important;
+  }
+
+  .u-asset-val {
+    font-size: 17px !important;
+  }
+
+  /* Pie legend */
+  .u-legend-name {
+    font-size: 15px !important;
+  }
+
+  .u-legend-pct {
+    font-size: 16px !important;
+  }
+
+  .u-legend-val {
+    font-size: 13px !important;
+  }
+
+  /* Bottom nav becomes a slim footer-style bar */
+  .u-bottomnav {
+    max-width: 1440px;
+    border-radius: 0;
+    border-top: 1px solid #eaecef;
+    box-shadow: none;
+    padding: 10px 56px 14px;
+  }
+}
