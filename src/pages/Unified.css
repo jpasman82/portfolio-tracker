@@ -3,9 +3,10 @@
   padding: 30px 20px 100px;
   max-width: 600px;
   margin: 0 auto;
-  background-color: #fcfcfc;
+  background-color: #080F12;
   min-height: 100vh;
-  font-family: system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   box-sizing: border-box;
 }
 
@@ -16,7 +17,7 @@
 
 .u-sidebar {
   order: -1;
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 
 .u-detail {}
@@ -25,20 +26,42 @@
   position: relative;
   width: 220px;
   height: 220px;
-  margin: 0 auto 24px;
+  margin: 0 auto 20px;
 }
 
 .u-asset-row {
   display: flex;
   justify-content: space-between;
-  border-top: 1px solid #f0f1f3;
   padding-top: 10px;
+  gap: 8px;
 }
 
 .u-asset-pct-bar { display: none; }
-
-/* Table header hidden on mobile */
 .u-table-header { display: none !important; }
+
+.u-total-amount {
+  font-size: 34px;
+}
+
+.u-cat-title {
+  font-size: 19px;
+}
+
+.u-sub-title {
+  font-size: 16px;
+}
+
+.u-sub-amount {
+  font-size: 13px;
+}
+
+.u-asset-ticker-text {
+  font-size: 15px;
+}
+
+.u-asset-val {
+  font-size: 15px;
+}
 
 .u-bottomnav {
   position: fixed;
@@ -47,14 +70,24 @@
   transform: translateX(-50%);
   width: 100%;
   max-width: 600px;
-  background: white;
   display: flex;
   justify-content: space-around;
   padding: 12px 10px 24px;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
-  border-radius: 24px 24px 0 0;
+  border-radius: 20px 20px 0 0;
   z-index: 1000;
   box-sizing: border-box;
+}
+
+/* ───── Scroll reveal animation ───── */
+.u-sub-card {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.u-sub-card.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ───── Desktop (≥ 960px) ───── */
@@ -70,7 +103,7 @@
 
   .u-grid {
     display: grid;
-    grid-template-columns: 1fr 380px;
+    grid-template-columns: 1fr 360px;
     gap: 36px;
     align-items: start;
   }
@@ -80,12 +113,18 @@
     position: sticky;
     top: 28px;
     margin-bottom: 0;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    scrollbar-width: none;
   }
 
-  /* Pie chart bigger */
+  .u-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
   .pie-wrap {
-    width: 270px;
-    height: 270px;
+    width: 220px;
+    height: 220px;
   }
 
   /* Asset row → 4-column table */
@@ -96,7 +135,6 @@
     gap: 12px;
   }
 
-  /* Progress bar */
   .u-asset-pct-bar {
     display: flex;
     flex-direction: column;
@@ -106,7 +144,7 @@
   .u-asset-pct-bar-track {
     height: 4px;
     border-radius: 2px;
-    background: #eaecef;
+    background: #1e3040;
     overflow: hidden;
   }
 
@@ -115,58 +153,46 @@
     border-radius: 2px;
   }
 
-  /* Category section accent */
   .u-cat-section {
-    border-left: 4px solid transparent;
+    border-left: 3px solid transparent;
     padding-left: 16px;
     margin-bottom: 36px;
-    border-radius: 0 0 0 4px;
   }
 
-  /* Sub-category card on desktop: less padding */
   .u-sub-card {
     padding: 16px 20px !important;
   }
 
-  /* Hide mobile-only % text on desktop */
   .u-mobile-pct {
     display: none;
   }
 
-  /* Show table header on desktop */
   .u-table-header {
     display: grid !important;
   }
 
-  /* ── Larger fonts on desktop ── */
-  .u-page h2 {
-    font-size: 42px !important;
-  }
-
-  .u-page .u-subtitle {
-    font-size: 18px !important;
-  }
-
-  /* Sidebar total value */
-  .u-total-label {
-    font-size: 14px !important;
+  /* Larger fonts */
+  .u-title {
+    font-size: 38px !important;
   }
 
   .u-total-amount {
-    font-size: 50px !important;
-    letter-spacing: -2px;
+    font-size: 47px !important;
+    letter-spacing: -1.5px;
   }
 
-  /* Category titles */
+  .u-total-label {
+    font-size: 12px !important;
+  }
+
   .u-cat-title {
-    font-size: 30px !important;
+    font-size: 28px !important;
   }
 
   .u-cat-pct {
     font-size: 18px !important;
   }
 
-  /* Sub-category */
   .u-sub-title {
     font-size: 20px !important;
   }
@@ -175,7 +201,6 @@
     font-size: 15px !important;
   }
 
-  /* Asset ticker */
   .u-asset-ticker-text {
     font-size: 18px !important;
   }
@@ -184,25 +209,21 @@
     font-size: 17px !important;
   }
 
-  /* Pie legend */
   .u-legend-name {
     font-size: 15px !important;
   }
 
   .u-legend-pct {
-    font-size: 16px !important;
+    font-size: 15px !important;
   }
 
   .u-legend-val {
     font-size: 13px !important;
   }
 
-  /* Bottom nav becomes a slim footer-style bar */
   .u-bottomnav {
     max-width: 1440px;
     border-radius: 0;
-    border-top: 1px solid #eaecef;
-    box-shadow: none;
     padding: 10px 56px 14px;
   }
 }

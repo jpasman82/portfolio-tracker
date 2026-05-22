@@ -1,13 +1,17 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
 
 export default defineConfig({
   plugins: [react()],
+  css: {
+    postcss: {
+      plugins: [tailwindcss(), autoprefixer()],
+    },
+  },
   server: {
     proxy: {
-      // Todo lo que empiece con /api/byma se redirige a apigw.byma.com.ar
-      // /api/byma/oauth/token/          → https://apigw.byma.com.ar/oauth/token/
-      // /api/byma/snapshot/v1/equity    → https://apigw.byma.com.ar/snapshot/v1/equity
       '/api/byma': {
         target: 'https://apigw.byma.com.ar',
         changeOrigin: true,

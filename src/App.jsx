@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase/config';
@@ -16,7 +16,8 @@ import {
   clearBiometric
 } from './utils/biometricAuth';
 
-// ── Pantalla de bloqueo biométrico ───────────────────────────────────────────
+const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5 mb-1";
+
 function BiometricLockScreen({ onUnlock }) {
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -43,28 +44,13 @@ function BiometricLockScreen({ onUnlock }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#111418', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <div style={{ width: '100%', maxWidth: '360px', textAlign: 'center' }}>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-[#080F12] p-5 font-[Space_Grotesk,system-ui,sans-serif] relative overflow-hidden">
+      <div className="pointer-events-none absolute top-[-150px] right-[-200px] w-[600px] h-[500px] rounded-full bg-teal-400/[0.04] blur-[100px]" />
+      <div className="pointer-events-none absolute bottom-0 left-[-100px] w-[400px] h-[400px] rounded-full bg-teal-400/[0.03] blur-[100px]" />
 
-        <div style={{ width: '72px', height: '72px', backgroundColor: '#0d6efd', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px auto', boxShadow: '0 10px 30px rgba(13,110,253,0.3)' }}>
-          <span style={{ fontSize: '34px' }}>💼</span>
-        </div>
-
-        <h1 style={{ fontSize: '26px', fontWeight: 900, color: 'white', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>Portfolio Manager</h1>
-        <p style={{ fontSize: '14px', color: '#6c757d', margin: '0 0 48px 0' }}>Verificá tu identidad para continuar</p>
-
-        {errorMsg && (
-          <div style={{ backgroundColor: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.2)', color: '#ff453a', padding: '12px', borderRadius: '12px', fontSize: '13px', fontWeight: 700, marginBottom: '24px' }}>
-            {errorMsg}
-          </div>
-        )}
-
-        <button
-          onClick={handleUnlock}
-          disabled={status === 'loading'}
-          style={{ width: '100%', padding: '20px', backgroundColor: '#0d6efd', color: 'white', border: 'none', borderRadius: '20px', fontWeight: 900, fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 8px 24px rgba(13,110,253,0.25)', marginBottom: '20px', opacity: status === 'loading' ? 0.7 : 1 }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <div className="w-full max-w-[360px] text-center relative z-10">
+        <div className="w-16 h-16 bg-teal-400/10 border border-teal-400/30 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(45,212,191,0.15)]">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
             <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
             <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
@@ -75,12 +61,37 @@ function BiometricLockScreen({ onUnlock }) {
             <path d="M8.65 22c.21-.66.45-1.32.57-2"/>
             <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
           </svg>
+        </div>
+
+        <p className={`${KICKER} justify-center mb-2`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
+          Portfolio Manager
+        </p>
+        <h1 className="text-2xl font-bold tracking-tight text-[#F0FAFA] mb-2">Acceso bloqueado</h1>
+        <p className="font-mono text-[13px] tracking-[0.15em] uppercase text-[#5B8A8A] mb-10">Verificá tu identidad para continuar</p>
+
+        {errorMsg && (
+          <div className="bg-red-400/10 border border-red-400/30 text-red-300 px-4 py-3 rounded-xl font-mono text-[13px] tracking-[0.1em] mb-6">
+            {errorMsg}
+          </div>
+        )}
+
+        <button
+          onClick={handleUnlock}
+          disabled={status === 'loading'}
+          className="w-full py-4 bg-teal-400 hover:bg-teal-300 text-[#080F12] font-bold rounded-xl font-mono text-[13px] uppercase tracking-[0.18em] shadow-[0_8px_24px_rgba(45,212,191,0.2)] transition-colors flex items-center justify-center gap-3 mb-4 disabled:opacity-60"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
+            <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
+            <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
+          </svg>
           {status === 'loading' ? 'Verificando...' : 'Usar Huella / Face ID'}
         </button>
 
         <button
           onClick={handleSignOut}
-          style={{ background: 'none', border: 'none', color: '#6c757d', fontSize: '13px', fontWeight: 700, cursor: 'pointer', padding: '8px' }}
+          className="bg-transparent border-none text-[#5B8A8A] hover:text-[#A8C8C8] font-mono text-[12px] tracking-[0.15em] uppercase cursor-pointer py-2 transition-colors"
         >
           Cerrar sesión y usar contraseña
         </button>
@@ -89,7 +100,6 @@ function BiometricLockScreen({ onUnlock }) {
   );
 }
 
-// ── Modal de activación biométrica ───────────────────────────────────────────
 function BiometricSetupModal({ user, onDone }) {
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -114,27 +124,35 @@ function BiometricSetupModal({ user, onDone }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 9999 }}>
-      <div style={{ width: '100%', maxWidth: '500px', backgroundColor: '#1a1d21', borderRadius: '32px 32px 0 0', padding: '32px 28px 48px 28px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end justify-center z-[9999]">
+      <div className="w-full max-w-[500px] bg-[#122329] border border-teal-400/20 rounded-t-3xl px-7 pb-12 pt-8 font-[Space_Grotesk,system-ui,sans-serif]">
+        <div className="w-10 h-1 bg-teal-400/20 rounded-full mx-auto mb-8" />
 
-        <div style={{ width: '40px', height: '4px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '2px', margin: '0 auto 28px auto' }} />
-
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '14px' }}>
-            {status === 'success' ? '✅' : '🔐'}
+        <div className="text-center mb-8">
+          <div className="w-14 h-14 bg-teal-400/10 border border-teal-400/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            {status === 'success' ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            )}
           </div>
-          <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'white', margin: '0 0 10px 0' }}>
+          <h2 className="text-xl font-bold text-[#F0FAFA] mb-2">
             {status === 'success' ? '¡Biometría activada!' : 'Activar acceso biométrico'}
           </h2>
-          <p style={{ fontSize: '14px', color: '#adb5bd', margin: 0, lineHeight: '1.6' }}>
+          <p className="text-sm text-[#A8C8C8] leading-relaxed">
             {status === 'success'
-              ? 'La próxima vez ingresás con huella o Face ID, sin contraseña.'
-              : 'Accedé más rápido con huella digital o Face ID, sin necesidad de contraseña.'}
+              ? 'La próxima vez ingresás con huella o Face ID.'
+              : 'Accedé más rápido con huella digital o Face ID, sin contraseña.'}
           </p>
         </div>
 
         {errorMsg && (
-          <div style={{ backgroundColor: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.2)', color: '#ff453a', padding: '12px', borderRadius: '12px', fontSize: '13px', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>
+          <div className="bg-red-400/10 border border-red-400/30 text-red-300 px-4 py-3 rounded-xl font-mono text-[13px] tracking-[0.1em] mb-4 text-center">
             {errorMsg}
           </div>
         )}
@@ -144,13 +162,13 @@ function BiometricSetupModal({ user, onDone }) {
             <button
               onClick={handleActivate}
               disabled={status === 'loading'}
-              style={{ width: '100%', padding: '18px', backgroundColor: '#0d6efd', color: 'white', border: 'none', borderRadius: '16px', fontWeight: 900, fontSize: '15px', cursor: 'pointer', marginBottom: '12px', opacity: status === 'loading' ? 0.7 : 1 }}
+              className="w-full py-4 bg-teal-400 hover:bg-teal-300 text-[#080F12] font-bold rounded-xl font-mono text-[13px] uppercase tracking-[0.18em] shadow-[0_8px_24px_rgba(45,212,191,0.2)] transition-colors mb-3 disabled:opacity-60"
             >
               {status === 'loading' ? 'Registrando...' : 'Activar huella / Face ID'}
             </button>
             <button
               onClick={onDone}
-              style={{ width: '100%', padding: '16px', backgroundColor: 'transparent', color: '#6c757d', border: 'none', borderRadius: '16px', fontWeight: 700, fontSize: '15px', cursor: 'pointer' }}
+              className="w-full py-4 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 text-[#A8C8C8] font-mono text-[12px] uppercase tracking-[0.18em] rounded-xl transition-colors"
             >
               Ahora no
             </button>
@@ -161,7 +179,6 @@ function BiometricSetupModal({ user, onDone }) {
   );
 }
 
-// ── App principal ────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -198,8 +215,13 @@ export default function App() {
 
   if (loadingAuth) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#111418', color: 'white', fontWeight: 800 }}>
-        Verificando seguridad...
+      <div className="flex justify-center items-center h-screen bg-[#080F12]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-[#1e3040] border-t-teal-400 rounded-full animate-spin" />
+          <p className="font-mono text-[13px] tracking-[0.22em] uppercase text-[#5B8A8A] animate-pulse">
+            Verificando seguridad...
+          </p>
+        </div>
       </div>
     );
   }

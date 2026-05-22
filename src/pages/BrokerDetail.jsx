@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { fetchAllPrices, isBondTicker, getMepRate, getCclRate } from '../utils/priceService';
+
+const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
+const INPUT = "w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 focus:border-teal-400/60 text-[#F0FAFA] placeholder-[#3d5a5a] rounded-xl text-sm outline-none transition-colors box-border";
+const LABEL = "block font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1.5";
 
 export default function BrokerDetail() {
   const { id } = useParams();
@@ -20,24 +24,12 @@ export default function BrokerDetail() {
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
     let str = val.toString();
-    
-    if (typeof val === 'number') {
-      str = str.toString().replace('.', ',');
-    }
-
-    if (str.endsWith('.')) {
-      str = str.slice(0, -1) + ',';
-    }
-
-    let clean = str.replace(/\./g, '');
-    clean = clean.replace(/[^0-9,]/g, '');
-    
+    if (typeof val === 'number') str = str.replace('.', ',');
+    if (str.endsWith('.')) str = str.slice(0, -1) + ',';
+    let clean = str.replace(/\./g, '').replace(/[^0-9,]/g, '');
     let parts = clean.split(',');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    
-    if (parts.length > 2) {
-      parts = [parts[0], parts.slice(1).join('')];
-    }
+    if (parts.length > 2) parts = [parts[0], parts.slice(1).join('')];
     return parts.join(',');
   };
 
@@ -47,13 +39,10 @@ export default function BrokerDetail() {
     return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
   };
 
-  const formatDecimals = (val) => {
-    return parseNum(val).toFixed(2).replace('.', ',');
-  };
-
+  const formatDecimals = (val) => parseNum(val).toFixed(2).replace('.', ',');
   const fmtQty = (v) => parseNum(v).toLocaleString('es-AR');
-  const fmtARS = (v) => '$ ' + parseNum(v).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  const fmtUSD = (v) => 'USD ' + parseNum(v).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtARS = (v) => '$ ' + parseNum(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtUSD = (v) => 'USD ' + parseNum(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -68,24 +57,16 @@ export default function BrokerDetail() {
             isBond: a.isBond || false
           }));
           setAssets(formattedAssets);
-          if (!isUSD && data.usdRate) {
-            setUsdRate(formatDecimals(data.usdRate));
-          }
-          if (data.debt) {
-            setDebt(formatDecimals(data.debt));
-          }
+          if (!isUSD && data.usdRate) setUsdRate(formatDecimals(data.usdRate));
+          if (data.debt) setDebt(formatDecimals(data.debt));
         }
       } catch (e) {}
       finally { setLoading(false); }
     };
-
     const init = async () => {
-      try {
-        await fetchAllPrices();
-      } catch (e) {}
+      try { await fetchAllPrices(); } catch (e) {}
       fetchData();
     };
-
     init();
   }, [id, isUSD]);
 
@@ -101,7 +82,7 @@ export default function BrokerDetail() {
         price: parseNum(a.price),
         isBond: isBondTicker(a.ticker) || a.isBond || false
       }));
-      await setDoc(doc(db, "brokerPositions", id), { 
+      await setDoc(doc(db, "brokerPositions", id), {
         assets: cleanAssets,
         usdRate: isUSD ? 1 : parseNum(usdRate),
         debt: parseNum(debt),
@@ -126,108 +107,122 @@ export default function BrokerDetail() {
     ? totalUSD * mepRate / cclRate
     : null;
 
-  if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800 }}>Cargando...</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-screen bg-[#080F12]">
+      <div className="w-10 h-10 border-2 border-[#1e3040] border-t-teal-400 rounded-full animate-spin" />
+    </div>
+  );
 
   return (
-    <div style={{ padding: '24px 15px', maxWidth: '600px', margin: 'auto', paddingBottom: '120px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#0d6efd', fontWeight: 800, padding: 0, fontSize: '14px' }}>
-          ← Volver
-        </button>
-        <button 
-          onClick={() => setIsEditing(!isEditing)} 
-          style={{ 
-            background: isEditing ? '#f8f9fa' : '#1a1d21', 
-            color: isEditing ? '#1a1d21' : 'white', 
-            border: isEditing ? '1px solid #dee2e6' : 'none', 
-            padding: '8px 16px', 
-            borderRadius: '12px', 
-            fontWeight: 800, 
-            fontSize: '13px' 
-          }}
+    <div className="px-4 pt-6 max-w-[600px] mx-auto pb-32 font-[Space_Grotesk,system-ui,sans-serif] bg-[#080F12] min-h-screen relative overflow-hidden">
+      <div className="pointer-events-none absolute top-[-150px] right-[-200px] w-[600px] h-[500px] rounded-full bg-teal-400/[0.04] blur-[100px]" />
+
+      {/* Top nav */}
+      <div className="flex justify-between items-center mb-6 relative z-10">
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 text-teal-400 hover:text-teal-300 font-mono text-[12px] tracking-[0.15em] uppercase transition-colors bg-transparent border-none cursor-pointer"
         >
-          {isEditing ? 'Cancelar Edición' : 'Editar Posición'}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Volver
+        </button>
+        <button
+          onClick={() => setIsEditing(!isEditing)}
+          className={`font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-lg transition-colors border ${
+            isEditing
+              ? 'bg-[#0C1518] border-teal-400/30 text-[#A8C8C8]'
+              : 'bg-teal-400/10 border-teal-400/20 hover:border-teal-400/50 text-teal-400'
+          }`}
+        >
+          {isEditing ? 'Cancelar' : 'Editar Posición'}
         </button>
       </div>
-      
-      <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '24px', boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: 800, margin: '0 0 8px 0', color: '#6c757d' }}>{brokerNames[id]}</h2>
-        <div style={{ fontSize: '36px', fontWeight: 900, color: '#1a1d21', letterSpacing: '-1px' }}>
+
+      {/* Balance card */}
+      <div className="bg-[#122329] border border-teal-400/20 rounded-2xl p-5 mb-5 shadow-[0_20px_40px_rgba(0,0,0,0.3)] relative z-10">
+        <p className={KICKER}>
+          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
+          {brokerNames[id]}
+        </p>
+        <div className="text-4xl font-black tracking-tight text-teal-400 mt-2">
           US$ {totalUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
         </div>
         {totalUSD_CCL !== null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dólar Cable</span>
-            <span style={{ fontSize: '15px', fontWeight: 900, color: '#6c757d' }}>
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-teal-400/10">
+            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A]">Dólar Cable</span>
+            <span className="font-bold text-[#A8C8C8]">
               US$ {totalUSD_CCL.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </span>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Assets list */}
+      <div className="flex flex-col gap-3 relative z-10">
         {!isEditing ? (
           assets.map((asset, index) => {
             const assetValueUSD = (parseNum(asset.quantity) * parseNum(asset.price)) / ((asset.isBond || isBondTicker(asset.ticker)) ? 100 : 1) / rate;
             const pct = totalAssetsUSD > 0 ? (assetValueUSD / totalAssetsUSD) * 100 : 0;
             return (
-              <div key={index} style={{ backgroundColor: 'white', padding: '20px', borderRadius: '20px', border: '1px solid #eaecef', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={index} className="bg-[#122329] border border-teal-400/10 hover:border-teal-400/20 rounded-xl p-4 flex justify-between items-center transition-colors">
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>{asset.ticker}</div>
-                  <div style={{ fontSize: '13px', color: '#adb5bd', fontWeight: 700, marginTop: '4px' }}>
-                    {fmtQty(asset.quantity)} nom. a {isUSD ? fmtUSD(asset.price) : fmtARS(asset.price)}
+                  <div className="text-base font-black text-[#F0FAFA] font-mono">{asset.ticker}</div>
+                  <div className="font-mono text-[12px] text-[#5B8A8A] mt-1">
+                    {fmtQty(asset.quantity)} nom. · {isUSD ? fmtUSD(asset.price) : fmtARS(asset.price)}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#198754' }}>
-                    {fmtUSD(assetValueUSD)}
-                  </div>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd', marginTop: '2px' }}>
-                    {pct.toFixed(1)}%
-                  </div>
+                <div className="text-right">
+                  <div className="font-bold text-teal-400">{fmtUSD(assetValueUSD)}</div>
+                  <div className="font-mono text-[12px] text-[#5B8A8A] mt-0.5">{pct.toFixed(1)}%</div>
                 </div>
               </div>
             );
           })
         ) : (
           assets.map((asset, index) => (
-            <div key={index} style={{ backgroundColor: 'white', padding: '20px', borderRadius: '24px', border: '1px solid #0d6efd', boxShadow: '0 4px 10px rgba(13, 110, 253, 0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <input 
-                  placeholder="TICKER" 
-                  value={asset.ticker} 
+            <div key={index} className="bg-[#122329] border border-teal-400/30 rounded-xl p-4">
+              <div className="flex justify-between items-center mb-4">
+                <input
+                  placeholder="TICKER"
+                  value={asset.ticker}
                   onChange={(e) => {
                     const newAssets = [...assets];
                     newAssets[index].ticker = e.target.value.toUpperCase();
                     setAssets(newAssets);
-                  }} 
-                  style={{ fontWeight: 900, border: 'none', outline: 'none', fontSize: '20px', width: '120px', color: '#1a1d21', backgroundColor: 'transparent' }} 
+                  }}
+                  className="font-black bg-transparent border-none outline-none text-lg text-[#F0FAFA] w-28 font-mono placeholder-[#3d5a5a]"
                 />
-                <button onClick={() => handleRemove(index)} style={{ color: '#ff3b30', border: 'none', background: '#fff0f0', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 800 }}>BORRAR</button>
+                <button
+                  onClick={() => handleRemove(index)}
+                  className="font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 bg-red-400/10 border border-red-400/20 hover:border-red-400/50 text-red-400 rounded-lg transition-colors"
+                >
+                  Borrar
+                </button>
               </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
-                  <label style={{ display: 'block', fontSize: '10px', fontWeight: 800, color: '#adb5bd', marginBottom: '6px' }}>CANTIDAD</label>
-                  <input 
-                    type="text" 
-                    value={formatInput(asset.quantity)} 
+                  <label className={LABEL}>Cantidad</label>
+                  <input
+                    type="text"
+                    value={formatInput(asset.quantity)}
                     onChange={(e) => {
                       const newAssets = [...assets];
                       newAssets[index].quantity = e.target.value;
                       setAssets(newAssets);
-                    }} 
-                    style={{ width: '100%', padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#f8f9fa', fontSize: '16px', fontWeight: 700, boxSizing: 'border-box', outline: 'none' }} 
+                    }}
+                    className={INPUT}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '10px', fontWeight: 800, color: '#adb5bd', marginBottom: '6px' }}>{isUSD ? 'PRECIO (USD)' : 'PRECIO (ARS)'}</label>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '12px', top: '11px', color: '#1a1d21', fontWeight: 800, fontSize: '14px' }}>{isUSD ? 'U$' : '$'}</span>
-                    <input 
-                      type="text" 
-                      value={formatInput(asset.price)} 
+                  <label className={LABEL}>{isUSD ? 'Precio (USD)' : 'Precio (ARS)'}</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-[#5B8A8A] font-mono text-sm">{isUSD ? 'U$' : '$'}</span>
+                    <input
+                      type="text"
+                      value={formatInput(asset.price)}
                       onBlur={(e) => {
                         const newAssets = [...assets];
                         newAssets[index].price = formatDecimals(e.target.value);
@@ -237,16 +232,18 @@ export default function BrokerDetail() {
                         const newAssets = [...assets];
                         newAssets[index].price = e.target.value;
                         setAssets(newAssets);
-                      }} 
-                      style={{ width: '100%', padding: '12px 12px 12px 34px', borderRadius: '12px', border: 'none', backgroundColor: '#f8f9fa', fontSize: '16px', fontWeight: 700, boxSizing: 'border-box', outline: 'none' }} 
+                      }}
+                      className={`${INPUT} pl-8`}
                     />
                   </div>
                 </div>
               </div>
-              
-              <div style={{ borderTop: '1px solid #eaecef', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd' }}>SUBTOTAL</span>
-                <span style={{ fontSize: '16px', fontWeight: 900, color: '#198754' }}>{fmtUSD((parseNum(asset.quantity) * parseNum(asset.price)) / ((asset.isBond || isBondTicker(asset.ticker)) ? 100 : 1) / rate)}</span>
+
+              <div className="border-t border-teal-400/10 pt-3 flex justify-between items-center">
+                <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A]">Subtotal</span>
+                <span className="font-bold text-teal-400">
+                  {fmtUSD((parseNum(asset.quantity) * parseNum(asset.price)) / ((asset.isBond || isBondTicker(asset.ticker)) ? 100 : 1) / rate)}
+                </span>
               </div>
             </div>
           ))
@@ -254,28 +251,34 @@ export default function BrokerDetail() {
       </div>
 
       {isEditing && (
-        <button onClick={handleAddAsset} style={{ width: '100%', padding: '18px', marginTop: '20px', borderRadius: '20px', border: '2px dashed #dee2e6', backgroundColor: 'transparent', color: '#6c757d', fontWeight: 800, fontSize: '14px' }}>+ Nueva Especie</button>
+        <button
+          onClick={handleAddAsset}
+          className="w-full py-4 mt-4 border-2 border-dashed border-teal-400/20 hover:border-teal-400/40 bg-transparent text-[#5B8A8A] hover:text-[#A8C8C8] font-mono text-[12px] tracking-[0.15em] uppercase rounded-xl transition-colors"
+        >
+          + Nueva Especie
+        </button>
       )}
 
-      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '20px', border: '1px solid #eaecef', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px' }}>
+      {/* Debt card */}
+      <div className="bg-[#122329] border border-teal-400/10 rounded-xl p-4 flex justify-between items-center mt-4 relative z-10">
         <div>
-          <div style={{ fontSize: '16px', fontWeight: 900, color: '#1a1d21' }}>Caución / Deuda</div>
-          <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 700, marginTop: '4px' }}>Obligaciones en USD</div>
+          <div className="font-bold text-[#F0FAFA]">Caución / Deuda</div>
+          <div className="font-mono text-[12px] text-[#5B8A8A] mt-0.5">Obligaciones en USD</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div className="text-right">
           {!isEditing ? (
-            <div style={{ fontSize: '18px', fontWeight: 900, color: parseNum(debt) > 0 ? '#ff3b30' : '#1a1d21' }}>
+            <div className={`font-bold ${parseNum(debt) > 0 ? 'text-red-400' : 'text-[#F0FAFA]'}`}>
               {parseNum(debt) > 0 ? '-' : ''}{fmtUSD(debt)}
             </div>
           ) : (
-            <div style={{ position: 'relative', width: '130px' }}>
-              <span style={{ position: 'absolute', left: '12px', top: '11px', color: '#ff3b30', fontWeight: 800, fontSize: '14px' }}>U$</span>
-              <input 
-                type="text" 
-                value={formatInput(debt)} 
-                onBlur={(e) => setDebt(formatDecimals(e.target.value))} 
-                onChange={(e) => setDebt(e.target.value)} 
-                style={{ width: '100%', padding: '10px 12px 10px 36px', border: '1px solid rgba(255,59,48,0.3)', backgroundColor: '#fff0f0', color: '#ff3b30', borderRadius: '12px', fontWeight: 800, outline: 'none', boxSizing: 'border-box', fontSize: '15px', textAlign: 'right' }} 
+            <div className="relative w-36">
+              <span className="absolute left-3 top-2.5 text-red-400 font-mono text-sm">U$</span>
+              <input
+                type="text"
+                value={formatInput(debt)}
+                onBlur={(e) => setDebt(formatDecimals(e.target.value))}
+                onChange={(e) => setDebt(e.target.value)}
+                className="w-full pl-8 pr-3 py-2.5 bg-red-400/5 border border-red-400/20 hover:border-red-400/40 focus:border-red-400/60 text-red-400 rounded-xl text-sm outline-none transition-colors text-right box-border"
               />
             </div>
           )}
@@ -283,17 +286,21 @@ export default function BrokerDetail() {
       </div>
 
       {!isUSD && parseNum(usdRate) > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', backgroundColor: 'white', borderRadius: '20px', border: '1px solid #eaecef', marginTop: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0d6efd' }} />
-            <span style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dólar MEP</span>
+        <div className="flex justify-between items-center px-4 py-3 bg-[#122329] border border-teal-400/10 rounded-xl mt-3 relative z-10">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-teal-400 shadow-[0_0_6px_#2DD4BF]" />
+            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A]">Dólar MEP</span>
           </div>
-          <span style={{ fontSize: '20px', fontWeight: 900, color: '#1a1d21' }}>$ {formatInput(usdRate)}</span>
+          <span className="font-black text-[#F0FAFA]">$ {formatInput(usdRate)}</span>
         </div>
       )}
 
       {isEditing && (
-        <button onClick={save} disabled={saving} style={{ position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 30px)', maxWidth: '570px', padding: '20px', backgroundColor: '#0d6efd', color: 'white', borderRadius: '20px', fontWeight: 800, fontSize: '16px', border: 'none', boxShadow: '0 8px 20px rgba(13, 110, 253, 0.3)', zIndex: 1000 }}>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-30px)] max-w-[570px] py-4 bg-teal-400 hover:bg-teal-300 text-[#080F12] rounded-xl font-bold font-mono text-[13px] uppercase tracking-[0.18em] shadow-[0_8px_24px_rgba(45,212,191,0.3)] z-[1000] transition-colors disabled:opacity-60"
+        >
           {saving ? 'Guardando...' : 'Confirmar Cambios'}
         </button>
       )}

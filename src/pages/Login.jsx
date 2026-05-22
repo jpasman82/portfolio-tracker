@@ -1,6 +1,10 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { auth } from '../firebase/config';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+
+const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5 mb-1";
+const INPUT = "w-full px-4 py-3 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 focus:border-teal-400/60 text-[#F0FAFA] placeholder-[#3d5a5a] rounded-xl text-sm outline-none transition-colors";
+const LABEL = "block font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-2";
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,7 +16,6 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       await signInWithEmailAndPassword(auth, email, password);
       sessionStorage.setItem('justLoggedIn', 'true');
@@ -28,60 +31,67 @@ export default function Login() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#111418', padding: '20px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      
-      <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#1a1d21', padding: '40px 30px', borderRadius: '32px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.05)' }}>
-        
-        <div style={{ textAlign: 'center', marginBottom: '35px' }}>
-          <div style={{ width: '60px', height: '60px', backgroundColor: '#0d6efd', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 15px auto', boxShadow: '0 10px 20px rgba(13, 110, 253, 0.3)' }}>
-            <span style={{ fontSize: '28px', color: 'white' }}>💼</span>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-[#080F12] p-5 font-[Space_Grotesk,system-ui,sans-serif] relative overflow-hidden">
+      <div className="pointer-events-none absolute top-[-150px] right-[-200px] w-[600px] h-[500px] rounded-full bg-teal-400/[0.04] blur-[100px]" />
+      <div className="pointer-events-none absolute bottom-0 left-[-100px] w-[400px] h-[400px] rounded-full bg-teal-400/[0.03] blur-[100px]" />
+
+      <div className="w-full max-w-[420px] bg-[#122329] border border-teal-400/20 rounded-2xl p-8 shadow-[0_40px_80px_rgba(0,0,0,0.6)] relative z-10">
+
+        <div className="text-center mb-8">
+          <div className="w-14 h-14 bg-teal-400/10 border border-teal-400/30 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-[0_0_30px_rgba(45,212,191,0.12)]">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+            </svg>
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 900, color: 'white', margin: '0 0 5px 0', letterSpacing: '-0.5px' }}>Portfolio Manager</h1>
-          <p style={{ fontSize: '14px', color: '#adb5bd', margin: 0 }}>Acceso seguro</p>
+          <p className={`${KICKER} justify-center`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
+            Acceso seguro
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#F0FAFA] mt-1">Portfolio Manager</h1>
         </div>
 
         {error && (
-          <div style={{ backgroundColor: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.2)', color: '#ff453a', padding: '12px', borderRadius: '12px', fontSize: '13px', fontWeight: 700, marginBottom: '20px', textAlign: 'center' }}>
+          <div className="bg-red-400/10 border border-red-400/30 text-red-300 px-4 py-3 rounded-xl font-mono text-[13px] tracking-[0.1em] mb-6 text-center">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#adb5bd', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email</label>
-            <input 
-              type="email" 
+            <label className={LABEL}>Email</label>
+            <input
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tu@email.com"
               required
               autoComplete="username"
-              style={{ width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.03)', color: 'white', fontSize: '16px', fontWeight: 600, boxSizing: 'border-box', outline: 'none' }}
+              className={INPUT}
             />
           </div>
-          
+
           <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#adb5bd', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Contraseña</label>
-            <input 
-              type="password" 
+            <label className={LABEL}>Contraseña</label>
+            <input
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
               autoComplete="current-password"
-              style={{ width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.03)', color: 'white', fontSize: '16px', fontWeight: 600, boxSizing: 'border-box', outline: 'none' }}
+              className={INPUT}
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
-            style={{ width: '100%', padding: '18px', backgroundColor: '#0d6efd', color: 'white', border: 'none', borderRadius: '16px', fontWeight: 900, fontSize: '15px', marginTop: '10px', cursor: 'pointer', boxShadow: '0 8px 20px rgba(13, 110, 253, 0.2)' }}
+            className="w-full py-3 bg-teal-400 hover:bg-teal-300 text-[#080F12] font-bold rounded-xl font-mono text-[13px] uppercase tracking-[0.18em] shadow-[0_8px_24px_rgba(45,212,191,0.2)] transition-colors mt-2 disabled:opacity-60"
           >
             {loading ? 'Procesando...' : 'Ingresar'}
           </button>
         </form>
-
       </div>
     </div>
   );

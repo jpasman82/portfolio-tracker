@@ -1,19 +1,26 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { fetchAllPrices, getMepRate } from '../utils/priceService';
 
+const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
+const INPUT = "w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 focus:border-teal-400/60 text-[#F0FAFA] placeholder-[#3d5a5a] rounded-xl text-sm outline-none transition-colors box-border";
+const INPUT_TEAL = "w-full px-3 py-2.5 bg-teal-400/5 border border-teal-400/20 hover:border-teal-400/40 focus:border-teal-400/60 text-teal-300 rounded-xl text-sm outline-none transition-colors box-border text-right";
+const LABEL = "font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] block mb-1.5";
+const BOX_READ = "w-full px-3 bg-[#0C1518] border border-teal-400/10 rounded-xl text-sm font-bold text-[#A8C8C8] box-border flex items-center justify-end h-[42px] overflow-hidden";
+const BOX_READ_TEAL = "w-full px-3 bg-teal-400/5 border border-teal-400/20 rounded-xl text-sm font-bold text-teal-300 box-border flex items-center justify-end h-[42px] overflow-hidden";
+
 export default function EventDetail() {
-  const { id } = useParams(); 
+  const { id } = useParams();
   const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditingStructure, setIsEditingStructure] = useState(false);
   const [advancedEditIndex, setAdvancedEditIndex] = useState(null);
-  const [currentAssets, setCurrentAssets] = useState([]); 
-  const [currentPrices, setCurrentPrices] = useState({}); 
-  const [soldCurrentPrices, setSoldCurrentPrices] = useState({}); 
+  const [currentAssets, setCurrentAssets] = useState([]);
+  const [currentPrices, setCurrentPrices] = useState({});
+  const [soldCurrentPrices, setSoldCurrentPrices] = useState({});
   const [currentUsdRate, setCurrentUsdRate] = useState('');
   const [eventName, setEventName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -23,15 +30,11 @@ export default function EventDetail() {
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
     let str = val.toString();
-    if (typeof val === 'number' || (str.includes('.') && !str.includes(','))) {
-      str = str.replace(/\./g, ',');
-    }
+    if (typeof val === 'number' || (str.includes('.') && !str.includes(','))) str = str.replace(/\./g, ',');
     let clean = str.replace(/[^0-9,]/g, '');
     let parts = clean.split(',');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    if (parts.length > 2) {
-      parts = [parts[0], parts.slice(1).join('')];
-    }
+    if (parts.length > 2) parts = [parts[0], parts.slice(1).join('')];
     return parts.join(',');
   };
 
@@ -41,9 +44,10 @@ export default function EventDetail() {
     return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
   };
 
-  const formatDecimals = (val) => {
-    return parseNum(val).toFixed(2).replace('.', ',');
-  };
+  const formatDecimals = (val) => parseNum(val).toFixed(2).replace('.', ',');
+  const fmtQty = (v) => formatInput(v);
+  const fmtARS = (v) => '$ ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
+  const fmtUSD = (v) => 'USD ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,32 +85,17 @@ export default function EventDetail() {
     try {
       const priceMap = await fetchAllPrices();
       const mepRate = getMepRate();
-
       let changed = false;
       const newCurrentPrices = { ...currentPrices };
       const newSoldCurrentPrices = { ...soldCurrentPrices };
-
       currentAssets.forEach(a => {
-        if (priceMap[a.ticker] !== undefined) {
-          newCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]);
-          changed = true;
-        }
-      })
-
+        if (priceMap[a.ticker] !== undefined) { newCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]); changed = true; }
+      });
       ;(event.soldAssets || []).forEach(a => {
-        if (priceMap[a.ticker] !== undefined) {
-          newSoldCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]);
-          changed = true;
-        }
-      })
-
-      if (changed) {
-        setCurrentPrices(newCurrentPrices);
-        setSoldCurrentPrices(newSoldCurrentPrices);
-      } else {
-        alert("No se encontraron cotizaciones para los tickers de esta estrategia.");
-      }
-
+        if (priceMap[a.ticker] !== undefined) { newSoldCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]); changed = true; }
+      });
+      if (changed) { setCurrentPrices(newCurrentPrices); setSoldCurrentPrices(newSoldCurrentPrices); }
+      else alert("No se encontraron cotizaciones para los tickers de esta estrategia.");
       if (mepRate !== null) setCurrentUsdRate(formatDecimals(mepRate));
     } catch (error) {
       alert(`Error al buscar precios: ${error.message}`);
@@ -119,9 +108,7 @@ export default function EventDetail() {
     setCurrentAssets([...currentAssets, { ticker: '', quantity: '', priceAtTrade: '', usdRateAtTrade: currentUsdRate }]);
   };
 
-  const handleRemoveAsset = (index) => {
-    setCurrentAssets(currentAssets.filter((_, i) => i !== index));
-  };
+  const handleRemoveAsset = (index) => setCurrentAssets(currentAssets.filter((_, i) => i !== index));
 
   const toggleEditStructure = () => {
     setIsEditingStructure(!isEditingStructure);
@@ -132,52 +119,33 @@ export default function EventDetail() {
     setSaving(true);
     const now = new Date();
     const timestamp = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
     const cleanAssets = currentAssets.map(a => ({
       ...a,
       quantity: parseNum(a.quantity),
       priceAtTrade: parseNum(a.priceAtTrade),
       usdRateAtTrade: parseNum(a.usdRateAtTrade) || parseNum(currentUsdRate)
     }));
-    
     const cleanCurrentPrices = {};
     Object.keys(currentPrices).forEach(k => cleanCurrentPrices[k] = parseNum(currentPrices[k]));
-
     const cleanSoldCurrentPrices = {};
     Object.keys(soldCurrentPrices).forEach(k => cleanSoldCurrentPrices[k] = parseNum(soldCurrentPrices[k]));
-    
     const finalUsdRate = parseNum(currentUsdRate);
-
-    const historyEntry = {
-      date: timestamp,
-      timestampIso: now.toISOString(),
-      prices: cleanCurrentPrices,
-      soldPrices: cleanSoldCurrentPrices,
-      usdRate: finalUsdRate,
-      assetsSnapshot: cleanAssets
-    };
-
+    const historyEntry = { date: timestamp, timestampIso: now.toISOString(), prices: cleanCurrentPrices, soldPrices: cleanSoldCurrentPrices, usdRate: finalUsdRate, assetsSnapshot: cleanAssets };
     const updatedHistory = [...(event.priceHistory || []), historyEntry];
-
     try {
-      await updateDoc(doc(db, "rotations", id), { 
-        eventName, 
-        boughtAssetsFromDb: cleanAssets, 
-        currentPricesFromDb: cleanCurrentPrices, 
-        soldCurrentPricesFromDb: cleanSoldCurrentPrices, 
-        currentUsdRateFromDb: finalUsdRate, 
-        isClosed: closeValue,
-        lastUpdated: timestamp,
-        priceHistory: updatedHistory
-      });
-      setIsEditingStructure(false); 
+      await updateDoc(doc(db, "rotations", id), { eventName, boughtAssetsFromDb: cleanAssets, currentPricesFromDb: cleanCurrentPrices, soldCurrentPricesFromDb: cleanSoldCurrentPrices, currentUsdRateFromDb: finalUsdRate, isClosed: closeValue, lastUpdated: timestamp, priceHistory: updatedHistory });
+      setIsEditingStructure(false);
       setAdvancedEditIndex(null);
       window.location.reload();
     } catch (e) {}
     finally { setSaving(false); }
   };
 
-  if (loading || !event) return <div style={{ padding: '100px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Cargando...</div>;
+  if (loading || !event) return (
+    <div className="flex justify-center items-center min-h-screen bg-[#080F12]">
+      <div className="w-10 h-10 border-2 border-[#1e3040] border-t-teal-400 rounded-full animate-spin" />
+    </div>
+  );
 
   const totalARS_Init = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(a.priceAtTrade)), 0);
   const totalUSD_Init = totalARS_Init / parseNum(event.initialUsdRate || 1);
@@ -190,255 +158,336 @@ export default function EventDetail() {
   const pARS = totalARS_Init > 0 ? ((totalARS_Now / totalARS_Init) - 1) * 100 : 0;
   const pALFA = totalUSD_Now_Prev > 0 ? ((totalUSD_Now / totalUSD_Now_Prev) - 1) * 100 : 0;
 
-  const badgeStyle = (val) => ({
-    borderRadius: '16px', padding: '12px 5px', textAlign: 'center', 
-    backgroundColor: val > 0.1 ? '#00c805' : val < -0.1 ? '#ff3b30' : '#f8f9fa', 
-    color: Math.abs(val) > 0.1 ? 'white' : '#1a1d21'
-  });
+  const getBadgeClasses = (val) => {
+    if (val > 0.1) return 'bg-teal-400/10 text-teal-300 border border-teal-400/30';
+    if (val < -0.1) return 'bg-red-400/10 text-red-300 border border-red-400/30';
+    return 'bg-[#1a2428] text-[#A8C8C8] border border-[#2a3a40]';
+  };
 
   const historyReversed = [...(event.priceHistory || [])].reverse();
 
-  const fmtQty = (v) => formatInput(v);
-  const fmtARS = (v) => '$ ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
-  const fmtUSD = (v) => 'USD ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
-
-  const boxRead = { width: '100%', padding: '0 12px', border: 'none', backgroundColor: '#f8f9fa', borderRadius: 12, fontWeight: 700, boxSizing: 'border-box', fontSize: '14px', color: '#1a1d21', display: 'flex', alignItems: 'center', height: '42px', overflow: 'hidden', justifyContent: 'flex-end' };
-  const boxReadBlue = { ...boxRead, backgroundColor: 'rgba(13,110,253,0.03)', border: '1px solid rgba(13,110,253,0.2)', color: '#0d6efd' };
-  const inpWrite = { width: '100%', padding: '10px 12px', border: '1px solid #dee2e6', backgroundColor: '#fff', borderRadius: 12, fontWeight: 700, outline: 'none', boxSizing: 'border-box', fontSize: '14px', color: '#1a1d21', height: '42px', textAlign: 'right' };
-  const inpWriteBlue = { ...inpWrite, border: '1px solid #0d6efd', color: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.02)' };
-
   return (
-    <div style={{ padding: '24px 15px', maxWidth: '500px', margin: 'auto', paddingBottom: '120px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <button onClick={() => navigate('/rotaciones')} style={{ background: 'none', border: 'none', color: '#0d6efd', fontWeight: 800, marginBottom: 15, fontSize: '14px', padding: 0 }}>← Volver a Estrategias</button>
-      
-      <div style={{ marginBottom: 25 }}>
-        <input 
-          value={eventName} 
-          onChange={(e) => setEventName(e.target.value)} 
-          disabled={!isEditingStructure || event.isClosed} 
-          style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '24px', fontWeight: 900, outline: 'none', marginBottom: 5, color: '#1a1d21', padding: 0 }} 
+    <div className="px-4 pt-6 max-w-[500px] mx-auto pb-32 font-[Space_Grotesk,system-ui,sans-serif] bg-[#080F12] min-h-screen relative overflow-hidden">
+      <div className="pointer-events-none absolute top-[-150px] right-[-200px] w-[600px] h-[500px] rounded-full bg-teal-400/[0.04] blur-[100px]" />
+
+      {/* Back button */}
+      <button
+        onClick={() => navigate('/rotaciones')}
+        className="flex items-center gap-2 text-teal-400 hover:text-teal-300 font-mono text-[12px] tracking-[0.15em] uppercase transition-colors bg-transparent border-none cursor-pointer mb-5 relative z-10"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 5l-7 7 7 7"/>
+        </svg>
+        Volver a Estrategias
+      </button>
+
+      {/* Event title */}
+      <div className="mb-6 relative z-10">
+        <input
+          value={eventName}
+          onChange={(e) => setEventName(e.target.value)}
+          disabled={!isEditingStructure || event.isClosed}
+          className="w-full bg-transparent border-none outline-none text-2xl font-bold text-[#F0FAFA] p-0 mb-2 tracking-tight disabled:opacity-100"
+          style={{ WebkitAppearance: 'none' }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-           <span style={{ fontSize: '12px', color: '#adb5bd', fontWeight: 700 }}>Iniciada el {event.tradeDate}</span>
-           
-           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-             {event.lastUpdated && <span style={{ fontSize: '10px', color: '#1a1d21', fontWeight: 800, backgroundColor: '#e9ecef', padding: '4px 8px', borderRadius: '6px' }}>Act: {event.lastUpdated}hs</span>}
-             {!event.isClosed && (
-               <button 
-                 onClick={handleUpdatePrices} 
-                 disabled={updatingPrices}
-                 style={{ background: 'white', border: '1px solid #eaecef', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', color: updatingPrices ? '#adb5bd' : '#1a1d21', fontWeight: 800, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
-               >
-                 {updatingPrices ? '...' : '🔄 Precios'}
-               </button>
-             )}
-           </div>
-        </div>
-      </div>
-      
-      <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '24px', border: '1px solid #eee', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          <div style={{ borderRight: '1px solid #f0f0f0', paddingRight: '10px' }}>
-            <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Invertido</div>
-            <div style={{ fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>$ {totalARS_Init.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-            <div style={{ fontSize: '13px', color: '#adb5bd', fontWeight: 700 }}>US$ {totalUSD_Init.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-          </div>
-          <div style={{ paddingLeft: '5px' }}>
-            <div style={{ fontSize: '10px', fontWeight: 800, color: '#198754', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Valor Actual</div>
-            <div style={{ fontSize: '20px', fontWeight: 900, color: '#198754', marginTop: '4px' }}>$ {totalARS_Now.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-            <div style={{ fontSize: '13px', color: '#198754', fontWeight: 700 }}>US$ {totalUSD_Now.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+        <div className="flex justify-between items-center">
+          <span className="font-mono text-[12px] text-[#5B8A8A] tracking-[0.1em]">Iniciada el {event.tradeDate}</span>
+          <div className="flex items-center gap-2">
+            {event.lastUpdated && (
+              <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[#5B8A8A] bg-[#0C1518] border border-teal-400/10 px-2 py-1 rounded-lg">
+                Act: {event.lastUpdated}hs
+              </span>
+            )}
+            {!event.isClosed && (
+              <button
+                onClick={handleUpdatePrices}
+                disabled={updatingPrices}
+                className="w-7 h-7 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 flex items-center justify-center text-teal-400 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={updatingPrices ? 'animate-spin' : ''}>
+                  <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '24px' }}>
-        <div style={badgeStyle(pUSD)}><div style={{ fontSize: '9px', fontWeight: 800, opacity: 0.9 }}>REND. USD</div><div style={{ fontSize: '18px', fontWeight: 900, marginTop: '2px' }}>{pUSD.toFixed(1)}%</div></div>
-        <div style={badgeStyle(pARS)}><div style={{ fontSize: '9px', fontWeight: 800, opacity: 0.9 }}>REND. ARS</div><div style={{ fontSize: '18px', fontWeight: 900, marginTop: '2px' }}>{pARS.toFixed(1)}%</div></div>
-        <div style={badgeStyle(pALFA)}><div style={{ fontSize: '9px', fontWeight: 800, opacity: 0.9 }}>ALFA</div><div style={{ fontSize: '18px', fontWeight: 900, marginTop: '2px' }}>{pALFA.toFixed(1)}%</div></div>
+      {/* Summary values */}
+      <div className="bg-[#122329] border border-teal-400/15 rounded-2xl p-5 mb-4 relative z-10">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="border-r border-teal-400/10 pr-4">
+            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-2">Invertido</div>
+            <div className="text-xl font-black text-[#A8C8C8]">$ {totalARS_Init.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="font-mono text-[13px] text-[#5B8A8A] mt-0.5">US$ {totalUSD_Init.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          </div>
+          <div className="pl-1">
+            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-teal-400/70 mb-2">Valor Actual</div>
+            <div className="text-xl font-black text-teal-400">$ {totalARS_Now.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="font-mono text-[13px] text-teal-400/60 mt-0.5">US$ {totalUSD_Now.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          </div>
+        </div>
       </div>
 
-      <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#1a1d21' }}>Posición Comprada</h4>
-            <div style={{ display: 'flex', background: '#eaecef', borderRadius: '8px', padding: '3px' }}>
-              <button onClick={() => setViewCurrency('ARS')} style={{ border: 'none', background: viewCurrency === 'ARS' ? '#1a1d21' : 'transparent', color: viewCurrency === 'ARS' ? 'white' : '#6c757d', padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 800 }}>ARS</button>
-              <button onClick={() => setViewCurrency('USD')} style={{ border: 'none', background: viewCurrency === 'USD' ? '#1a1d21' : 'transparent', color: viewCurrency === 'USD' ? 'white' : '#6c757d', padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 800 }}>USD</button>
+      {/* Performance badges */}
+      <div className="grid grid-cols-3 gap-2 mb-5 relative z-10">
+        {[
+          { label: 'REND. USD', val: pUSD },
+          { label: 'REND. ARS', val: pARS },
+          { label: 'ALFA', val: pALFA },
+        ].map(({ label, val }) => (
+          <div key={label} className={`text-center py-3 rounded-xl ${getBadgeClasses(val)}`}>
+            <div className="font-mono text-[8px] tracking-[0.15em] uppercase mb-1 opacity-80">{label}</div>
+            <div className="text-lg font-black">{val.toFixed(1)}%</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bought position */}
+      <div className="bg-[#122329] border border-teal-400/15 rounded-2xl p-5 mb-4 relative z-10">
+        <div className="flex justify-between items-center mb-5">
+          <div className="flex items-center gap-3">
+            <p className={KICKER}>
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
+              Posición Comprada
+            </p>
+            <div className="flex bg-[#0C1518] border border-teal-400/10 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewCurrency('ARS')}
+                className={`px-2.5 py-1 rounded-md font-mono text-[11px] uppercase tracking-[0.12em] transition-colors ${viewCurrency === 'ARS' ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
+              >ARS</button>
+              <button
+                onClick={() => setViewCurrency('USD')}
+                className={`px-2.5 py-1 rounded-md font-mono text-[11px] uppercase tracking-[0.12em] transition-colors ${viewCurrency === 'USD' ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
+              >USD</button>
             </div>
           </div>
           {!event.isClosed && (
-            <button onClick={toggleEditStructure} style={{ border: 'none', background: isEditingStructure ? '#1a1d21' : '#f8f9fa', color: isEditingStructure ? 'white' : '#1a1d21', fontWeight: 800, fontSize: '11px', padding: '6px 12px', borderRadius: 10 }}>
-              {isEditingStructure ? 'Dejar de editar' : 'Editar'}
+            <button
+              onClick={toggleEditStructure}
+              className={`font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-lg transition-colors border ${
+                isEditingStructure
+                  ? 'bg-[#0C1518] border-teal-400/30 text-[#A8C8C8]'
+                  : 'bg-teal-400/10 border-teal-400/20 hover:border-teal-400/40 text-teal-400'
+              }`}
+            >
+              {isEditingStructure ? 'Cerrar' : 'Editar'}
             </button>
           )}
         </div>
+
         {currentAssets.map((asset, index) => {
           const pCompraARS = parseNum(asset.priceAtTrade);
           const pActualARS = parseNum(currentPrices[asset.ticker]);
           const initUsd = parseNum(asset.usdRateAtTrade) || parseNum(event.initialUsdRate) || 1;
           const currUsd = parseNum(currentUsdRate) || 1;
-          
           const pCompraUSD = pCompraARS / initUsd;
           const pActualUSD = pActualARS / currUsd;
-
-          const varPct = viewCurrency === 'USD' 
+          const varPct = viewCurrency === 'USD'
             ? (pCompraUSD > 0 ? ((pActualUSD / pCompraUSD) - 1) * 100 : 0)
             : (pCompraARS > 0 ? ((pActualARS / pCompraARS) - 1) * 100 : 0);
 
           return (
-            <div key={index} style={{ marginBottom: '16px', borderBottom: '1px solid #f8f9fa', paddingBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div key={index} className="mb-4 pb-4 border-b border-teal-400/5">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
                   {isEditingStructure ? (
-                    <input type="text" value={asset.ticker} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, ticker: e.target.value.toUpperCase()} : a))} placeholder="TICKER" style={{ fontSize: '16px', fontWeight: 900, border: '1px solid #eee', borderRadius: 8, padding: '4px 8px', width: '100px', outline: 'none' }} />
+                    <input
+                      type="text"
+                      value={asset.ticker}
+                      onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, ticker: e.target.value.toUpperCase() } : a))}
+                      placeholder="TICKER"
+                      className="text-base font-black bg-[#0C1518] border border-teal-400/20 rounded-lg px-2 py-1 w-24 text-[#F0FAFA] outline-none font-mono"
+                    />
                   ) : (
-                    <div style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>{asset.ticker}</div>
+                    <div className="text-base font-black text-[#F0FAFA] font-mono">{asset.ticker}</div>
                   )}
-                  
                   {!isEditingStructure && pCompraARS > 0 && (
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: varPct >= 0 ? '#198754' : '#dc3545', backgroundColor: varPct >= 0 ? '#eaffeb' : '#fff0f0', padding: '4px 8px', borderRadius: 8 }}>
+                    <div className={`font-mono text-[11px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-lg ${varPct >= 0 ? 'bg-teal-400/10 text-teal-300' : 'bg-red-400/10 text-red-300'}`}>
                       {varPct >= 0 ? '▲' : '▼'} {Math.abs(varPct).toFixed(1)}%
                     </div>
                   )}
                 </div>
                 {isEditingStructure && (
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button onClick={() => setAdvancedEditIndex(advancedEditIndex === index ? null : index)} style={{ color: '#495057', border: 'none', background: '#e9ecef', padding: '4px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 800 }}>⚙️</button>
-                    <button onClick={() => handleRemoveAsset(index)} style={{ color: '#ff3b30', border: 'none', background: '#fff0f0', padding: '4px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 800 }}>X</button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setAdvancedEditIndex(advancedEditIndex === index ? null : index)}
+                      className="w-7 h-7 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 text-[#5B8A8A] rounded-lg transition-colors flex items-center justify-center"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => handleRemoveAsset(index)}
+                      className="font-mono text-[11px] uppercase tracking-[0.1em] px-2 py-1 bg-red-400/10 border border-red-400/20 hover:border-red-400/40 text-red-400 rounded-lg transition-colors"
+                    >X</button>
                   </div>
                 )}
               </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+
+              <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>CANTIDAD</label>
+                  <label className={LABEL}>Cantidad</label>
                   {isEditingStructure ? (
-                    <input type="text" value={formatInput(asset.quantity)} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, quantity: e.target.value} : a))} style={inpWrite} />
+                    <input type="text" value={formatInput(asset.quantity)} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, quantity: e.target.value } : a))} className={INPUT} />
                   ) : (
-                    <div style={boxRead}>{fmtQty(asset.quantity)}</div>
+                    <div className={BOX_READ}>{fmtQty(asset.quantity)}</div>
                   )}
                 </div>
                 <div>
-                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>COMPRA</label>
+                  <label className={LABEL}>Compra</label>
                   {viewCurrency === 'USD' ? (
-                    <div style={boxRead}>{fmtUSD(pCompraUSD)}</div>
+                    <div className={BOX_READ}>{fmtUSD(pCompraUSD)}</div>
                   ) : (
                     isEditingStructure ? (
-                      <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '10px', top: '11px', color: '#1a1d21', fontWeight: 800, fontSize: '14px' }}>$</span>
-                        <input type="text" value={formatInput(asset.priceAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: formatDecimals(e.target.value)} : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, priceAtTrade: e.target.value} : a))} style={{...inpWrite, paddingLeft: '22px'}} />
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-[#5B8A8A] text-sm font-mono">$</span>
+                        <input type="text" value={formatInput(asset.priceAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, priceAtTrade: formatDecimals(e.target.value) } : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, priceAtTrade: e.target.value } : a))} className={`${INPUT} pl-7 text-right`} />
                       </div>
                     ) : (
-                      <div style={boxRead}>{fmtARS(pCompraARS)}</div>
+                      <div className={BOX_READ}>{fmtARS(pCompraARS)}</div>
                     )
                   )}
                 </div>
                 <div>
-                  <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>ACTUAL</label>
+                  <label className={LABEL}>Actual</label>
                   {viewCurrency === 'USD' ? (
-                    <div style={boxReadBlue}>{fmtUSD(pActualUSD)}</div>
+                    <div className={BOX_READ_TEAL}>{fmtUSD(pActualUSD)}</div>
                   ) : (
                     event.isClosed ? (
-                      <div style={boxReadBlue}>{fmtARS(pActualARS)}</div>
+                      <div className={BOX_READ_TEAL}>{fmtARS(pActualARS)}</div>
                     ) : (
-                      <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '10px', top: '11px', color: '#0d6efd', fontWeight: 800, fontSize: '14px' }}>$</span>
-                        <input type="text" value={formatInput(currentPrices[asset.ticker])} onBlur={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: formatDecimals(e.target.value)})} onChange={(e) => setCurrentPrices({...currentPrices, [asset.ticker]: e.target.value})} style={{...inpWriteBlue, paddingLeft: '22px'}} />
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-teal-400/70 text-sm font-mono">$</span>
+                        <input type="text" value={formatInput(currentPrices[asset.ticker])} onBlur={(e) => setCurrentPrices({ ...currentPrices, [asset.ticker]: formatDecimals(e.target.value) })} onChange={(e) => setCurrentPrices({ ...currentPrices, [asset.ticker]: e.target.value })} className={`${INPUT_TEAL} pl-7`} />
                       </div>
                     )
                   )}
                 </div>
               </div>
-              
+
               {advancedEditIndex === index && (
-                <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#f1f3f5', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ fontSize: '10px', fontWeight: 900, color: '#495057' }}>AJUSTES DE ORIGEN</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-                    <div>
-                      <label style={{ fontSize: '9px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>TIPO DE CAMBIO AL COMPRAR</label>
-                      <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '10px', top: '11px', color: '#1a1d21', fontWeight: 800, fontSize: '14px' }}>$</span>
-                        <input type="text" value={formatInput(asset.usdRateAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, usdRateAtTrade: formatDecimals(e.target.value)} : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? {...a, usdRateAtTrade: e.target.value} : a))} style={{...inpWrite, paddingLeft: '22px', backgroundColor: 'white'}} />
-                      </div>
+                <div className="mt-3 p-3 bg-[#0C1518] border border-teal-400/10 rounded-xl">
+                  <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-3">Ajustes de Origen</div>
+                  <div>
+                    <label className={LABEL}>Tipo de cambio al comprar</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-[#5B8A8A] text-sm font-mono">$</span>
+                      <input type="text" value={formatInput(asset.usdRateAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, usdRateAtTrade: formatDecimals(e.target.value) } : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, usdRateAtTrade: e.target.value } : a))} className={`${INPUT} pl-7 text-right`} />
                     </div>
                   </div>
                 </div>
               )}
 
-              <div style={{ borderTop: '1px solid #eaecef', paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#adb5bd' }}>SUBTOTAL</span>
-                <span style={{ fontSize: '16px', fontWeight: 900, color: '#198754' }}>
+              <div className="border-t border-teal-400/10 pt-3 mt-3 flex justify-between items-center">
+                <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A]">Subtotal</span>
+                <span className="font-bold text-teal-400">
                   {viewCurrency === 'USD' ? fmtUSD(pActualUSD * parseNum(asset.quantity)) : fmtARS(pActualARS * parseNum(asset.quantity))}
                 </span>
               </div>
             </div>
           );
         })}
+
         {isEditingStructure && (
-          <button onClick={handleAddAsset} style={{ width: '100%', padding: '12px', borderRadius: 12, border: '2px dashed #dee2e6', background: 'transparent', fontWeight: 800, color: '#adb5bd', fontSize: '12px', marginTop: '10px' }}>
+          <button
+            onClick={handleAddAsset}
+            className="w-full py-3 border-2 border-dashed border-teal-400/20 hover:border-teal-400/40 bg-transparent text-[#5B8A8A] hover:text-[#A8C8C8] font-mono text-[12px] tracking-[0.15em] uppercase rounded-xl transition-colors mt-2"
+          >
             + Agregar Activo
           </button>
         )}
       </div>
 
-      <div style={{ backgroundColor: '#f8f9fa', padding: '24px', borderRadius: '24px', border: '1px solid #eaecef', marginBottom: '16px' }}>
-        <h4 style={{ margin: '0 0 20px 0', fontSize: '14px', fontWeight: 800, color: '#6c757d' }}>Activos Vendidos (Para ALFA)</h4>
+      {/* Sold position (ALFA reference) */}
+      <div className="bg-[#0C1518] border border-teal-400/10 rounded-2xl p-5 mb-4 relative z-10">
+        <p className={`${KICKER} mb-4`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#5B8A8A]" />
+          Activos Vendidos (Referencia ALFA)
+        </p>
+
         {(event.soldAssets || []).map((asset) => {
           const pActualARS = parseNum(soldCurrentPrices[asset.ticker]);
           const pActualUSD = pActualARS / (parseNum(currentUsdRate) || 1);
 
           return (
-            <div key={asset.ticker} style={{ marginBottom: '16px', borderBottom: '1px solid #eaecef', paddingBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '16px', fontWeight: 900, color: '#495057' }}>{asset.ticker}</span>
-                <span style={{fontSize: '12px', fontWeight: 700, color: '#adb5bd', backgroundColor: 'white', padding: '4px 8px', borderRadius: 8, border: '1px solid #eaecef'}}>Cant: {fmtQty(asset.quantity)}</span>
+            <div key={asset.ticker} className="mb-4 pb-4 border-b border-teal-400/5">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-sm font-black text-[#A8C8C8] font-mono">{asset.ticker}</span>
+                <span className="font-mono text-[11px] text-[#5B8A8A] bg-[#122329] border border-teal-400/10 px-2 py-1 rounded-lg">
+                  Cant: {fmtQty(asset.quantity)}
+                </span>
               </div>
               <div>
-                <label style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', display: 'block', marginBottom: '4px' }}>PRECIO ACTUAL</label>
+                <label className={LABEL}>Precio Actual</label>
                 {viewCurrency === 'USD' ? (
-                  <div style={boxReadBlue}>{fmtUSD(pActualUSD)}</div>
+                  <div className={BOX_READ_TEAL}>{fmtUSD(pActualUSD)}</div>
                 ) : (
                   event.isClosed ? (
-                    <div style={boxReadBlue}>{fmtARS(pActualARS)}</div>
+                    <div className={BOX_READ_TEAL}>{fmtARS(pActualARS)}</div>
                   ) : (
-                    <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: '12px', top: '11px', color: '#0d6efd', fontWeight: 800, fontSize: '14px' }}>$</span>
-                      <input type="text" value={formatInput(soldCurrentPrices[asset.ticker])} onBlur={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: formatDecimals(e.target.value)})} onChange={(e) => setSoldCurrentPrices({...soldCurrentPrices, [asset.ticker]: e.target.value})} style={{...inpWriteBlue, paddingLeft: '24px'}} />
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-teal-400/70 text-sm font-mono">$</span>
+                      <input type="text" value={formatInput(soldCurrentPrices[asset.ticker])} onBlur={(e) => setSoldCurrentPrices({ ...soldCurrentPrices, [asset.ticker]: formatDecimals(e.target.value) })} onChange={(e) => setSoldCurrentPrices({ ...soldCurrentPrices, [asset.ticker]: e.target.value })} className={`${INPUT_TEAL} pl-7`} />
                     </div>
                   )
                 )}
               </div>
             </div>
-          )
+          );
         })}
       </div>
 
+      {/* MEP rate */}
       {parseNum(currentUsdRate) > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', backgroundColor: 'white', borderRadius: '20px', border: '1px solid #eaecef', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0d6efd' }} />
-            <span style={{ fontSize: '12px', fontWeight: 800, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dólar MEP</span>
+        <div className="flex justify-between items-center px-4 py-3 bg-[#122329] border border-teal-400/10 rounded-xl mb-5 relative z-10">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-teal-400 shadow-[0_0_6px_#2DD4BF]" />
+            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A]">Dólar MEP</span>
           </div>
-          <span style={{ fontSize: '20px', fontWeight: 900, color: '#1a1d21' }}>$ {formatInput(currentUsdRate)}</span>
+          <span className="font-black text-[#F0FAFA]">$ {formatInput(currentUsdRate)}</span>
         </div>
       )}
 
-      {event.isClosed ? (
-        <button onClick={() => save(false)} style={{ width: '100%', padding: '20px', backgroundColor: 'transparent', color: '#1a1d21', border: '2px solid #1a1d21', borderRadius: '20px', fontWeight: 800, fontSize: '15px' }}>Reabrir Operación</button>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <button onClick={() => save(false)} disabled={saving} style={{ width: '100%', padding: '20px', backgroundColor: '#0d6efd', color: 'white', border: 'none', borderRadius: '20px', fontWeight: 800, fontSize: '16px', boxShadow: '0 8px 20px rgba(13,110,253,0.2)' }}>{saving ? 'Guardando...' : 'Guardar y Registrar Precios'}</button>
-          <button onClick={() => { if(window.confirm("¿Cerrar operación definitivamente?")) save(true) }} style={{ color: '#dc3545', border: 'none', background: 'none', fontSize: '13px', fontWeight: 700, padding: '10px' }}>Cerrar Operación</button>
-        </div>
-      )}
+      {/* Action buttons */}
+      <div className="relative z-10 mb-6">
+        {event.isClosed ? (
+          <button
+            onClick={() => save(false)}
+            className="w-full py-4 bg-[#0C1518] border border-teal-400/20 hover:border-teal-400/40 text-[#A8C8C8] rounded-xl font-mono text-[13px] uppercase tracking-[0.18em] transition-colors"
+          >
+            Reabrir Operación
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => save(false)}
+              disabled={saving}
+              className="w-full py-4 bg-teal-400 hover:bg-teal-300 text-[#080F12] rounded-xl font-bold font-mono text-[13px] uppercase tracking-[0.18em] shadow-[0_8px_24px_rgba(45,212,191,0.2)] transition-colors disabled:opacity-60"
+            >
+              {saving ? 'Guardando...' : 'Guardar y Registrar Precios'}
+            </button>
+            <button
+              onClick={() => { if (window.confirm("¿Cerrar operación definitivamente?")) save(true); }}
+              className="bg-transparent border-none text-red-400/70 hover:text-red-400 font-mono text-[12px] uppercase tracking-[0.15em] py-3 transition-colors cursor-pointer"
+            >
+              Cerrar Operación
+            </button>
+          </div>
+        )}
+      </div>
 
+      {/* Price history */}
       {historyReversed.length > 0 && (
-        <div style={{ marginTop: '40px' }}>
-          <h4 style={{ fontSize: '16px', fontWeight: 900, color: '#1a1d21', marginBottom: '15px' }}>Historial de Precios</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="relative z-10 mt-4">
+          <p className={`${KICKER} mb-4`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
+            Historial de Precios
+          </p>
+          <div className="flex flex-col gap-3">
             {historyReversed.map((entry, idx) => {
               const historicAssets = entry.assetsSnapshot || currentAssets;
-              const hTotalARS_Init = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(a.priceAtTrade)), 0);
               const hTotalARS_Now = historicAssets.reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(entry.prices[a.ticker])), 0);
               const hTotalUSD_Now = hTotalARS_Now / parseNum(entry.usdRate || 1);
               const hTotalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(entry.soldPrices[a.ticker])), 0);
@@ -446,32 +495,42 @@ export default function EventDetail() {
               const hAlfa = hTotalUSD_Now_Prev > 0 ? ((hTotalUSD_Now / hTotalUSD_Now_Prev) - 1) * 100 : 0;
 
               return (
-                <div key={idx} style={{ backgroundColor: '#fff', padding: '18px', borderRadius: '20px', border: '1px solid #eaecef', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div key={idx} className="bg-[#122329] border border-teal-400/10 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-3">
                     <div>
-                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#1a1d21' }}>{entry.date}</div>
-                      <div style={{ fontSize: '11px', color: '#adb5bd', fontWeight: 600, marginTop: '2px' }}>Dólar: {fmtARS(entry.usdRate)}</div>
+                      <div className="font-bold text-[#F0FAFA] text-sm">{entry.date}</div>
+                      <div className="font-mono text-[12px] text-[#5B8A8A] mt-0.5">Dólar: {fmtARS(entry.usdRate)}</div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 900, color: hAlfa >= 0 ? '#198754' : '#dc3545' }}>ALFA: {hAlfa > 0 ? '+' : ''}{hAlfa.toFixed(1)}%</div>
-                      <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: 700, marginTop: '2px' }}>{fmtUSD(hTotalUSD_Now)}</div>
+                    <div className="text-right">
+                      <div className={`font-bold text-sm ${hAlfa >= 0 ? 'text-teal-400' : 'text-red-400'}`}>
+                        ALFA: {hAlfa > 0 ? '+' : ''}{hAlfa.toFixed(1)}%
+                      </div>
+                      <div className="font-mono text-[12px] text-[#5B8A8A] mt-0.5">{fmtUSD(hTotalUSD_Now)}</div>
                     </div>
                   </div>
 
-                  <div style={{ borderTop: '1px solid #f8f9fa', paddingTop: '12px' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', marginBottom: '6px' }}>POSICIÓN COMPRADA</div>
+                  <div className="border-t border-teal-400/5 pt-3">
+                    <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-2">Posición Comprada</div>
                     {historicAssets.map(a => (
-                      <div key={a.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 800, color: '#1a1d21' }}>{a.ticker} <span style={{ fontWeight: 600, color: '#adb5bd' }}>(x{fmtQty(a.quantity)})</span></span>
-                        <span style={{ fontWeight: 800, color: '#0d6efd' }}>{viewCurrency === 'USD' ? fmtUSD(parseNum(entry.prices[a.ticker]) / parseNum(entry.usdRate || 1)) : fmtARS(entry.prices[a.ticker])}</span>
+                      <div key={a.ticker} className="flex justify-between text-sm mb-1">
+                        <span className="font-bold text-[#A8C8C8] font-mono">
+                          {a.ticker} <span className="font-normal text-[#5B8A8A]">(x{fmtQty(a.quantity)})</span>
+                        </span>
+                        <span className="font-bold text-teal-400 font-mono">
+                          {viewCurrency === 'USD' ? fmtUSD(parseNum(entry.prices[a.ticker]) / parseNum(entry.usdRate || 1)) : fmtARS(entry.prices[a.ticker])}
+                        </span>
                       </div>
                     ))}
-                    
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#adb5bd', marginTop: '12px', marginBottom: '6px' }}>POSICIÓN VENDIDA (REF)</div>
+
+                    <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mt-3 mb-2">Posición Vendida (REF)</div>
                     {(event.soldAssets || []).map(a => (
-                      <div key={a.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 800, color: '#6c757d' }}>{a.ticker} <span style={{ fontWeight: 600, color: '#adb5bd' }}>(x{fmtQty(a.quantity)})</span></span>
-                        <span style={{ fontWeight: 800, color: '#6c757d' }}>{viewCurrency === 'USD' ? fmtUSD(parseNum(entry.soldPrices[a.ticker]) / parseNum(entry.usdRate || 1)) : fmtARS(entry.soldPrices[a.ticker])}</span>
+                      <div key={a.ticker} className="flex justify-between text-sm mb-1">
+                        <span className="font-bold text-[#5B8A8A] font-mono">
+                          {a.ticker} <span className="font-normal">(x{fmtQty(a.quantity)})</span>
+                        </span>
+                        <span className="font-bold text-[#5B8A8A] font-mono">
+                          {viewCurrency === 'USD' ? fmtUSD(parseNum(entry.soldPrices[a.ticker]) / parseNum(entry.usdRate || 1)) : fmtARS(entry.soldPrices[a.ticker])}
+                        </span>
                       </div>
                     ))}
                   </div>
