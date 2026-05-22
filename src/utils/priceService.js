@@ -80,18 +80,28 @@ export async function fetchAllPrices() {
   _mep   = (al30 && al30d) ? al30 / al30d : null;
   _cable = (al30 && al30c) ? al30 / al30c : null;
 
-  if (_mep)   console.log('[priceService] MEP:', _mep.toFixed(2));
-  else        console.warn('[priceService] MEP no disponible');
+  if (_mep)   console.log('[priceService] MEP (BYMA):', _mep.toFixed(2));
   if (_cable) console.log('[priceService] Cable (BYMA):', _cable.toFixed(2));
-  else {
-    console.warn('[priceService] Cable no disponible desde BYMA — intentando dolarapi.com...');
+
+  if (!_mep || !_cable) {
+    console.warn('[priceService] MEP/Cable incompletos desde BYMA — consultando dolarapi.com...');
     try {
-      const res = await fetch('https://dolarapi.com/v1/dolares/contadoconliqui');
-      const data = await res.json();
-      _cable = data.venta ?? data.compra ?? null;
-      if (_cable) console.log('[priceService] Cable (dolarapi):', _cable.toFixed(2));
+      const [resMep, resCable] = await Promise.all([
+        _mep   ? Promise.resolve(null) : fetch('https://dolarapi.com/v1/dolares/bolsa'),
+        _cable ? Promise.resolve(null) : fetch('https://dolarapi.com/v1/dolares/contadoconliqui'),
+      ]);
+      if (resMep) {
+        const d = await resMep.json();
+        _mep = d.venta ?? d.compra ?? null;
+        if (_mep) console.log('[priceService] MEP (dolarapi):', _mep.toFixed(2));
+      }
+      if (resCable) {
+        const d = await resCable.json();
+        _cable = d.venta ?? d.compra ?? null;
+        if (_cable) console.log('[priceService] Cable (dolarapi):', _cable.toFixed(2));
+      }
     } catch (e) {
-      console.warn('[priceService] Cable fallback también falló:', e.message);
+      console.warn('[priceService] Fallback dolarapi falló:', e.message);
     }
   }
 
