@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
@@ -6,20 +6,36 @@ import { db, auth } from '../firebase/config';
 import { fetchAllPrices, getMepRate, getCclRate, isBondTicker } from '../utils/priceService';
 import './Home.css';
 
+// ─── Configuración de auto-refresh ───────────────────────────────────────────
+const INTERVALO_MINUTOS = 10;
+const HORA_APERTURA     = 11;
+const HORA_CIERRE       = 17;
+
 const handleLogout = async () => {
   sessionStorage.removeItem('bioUnlocked');
   await signOut(auth);
 };
 
+function esMercadoAbierto() {
+  const ahora = new Date();
+  const dia   = ahora.getDay();
+  const hora  = ahora.getHours();
+  return dia >= 1 && dia <= 5 && hora >= HORA_APERTURA && hora < HORA_CIERRE;
+}
+
 export default function Home() {
   const [brokerData, setBrokerData] = useState({
-    jpm: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-    one: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-    latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null }
+    jpm:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+    one:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+    latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]               = useState(true);
   const [updatingPrices, setUpdatingPrices] = useState(false);
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
+  const [mep, setMep]     = useState(null);
+  const [cable, setCable] = useState(null);
+
+  const fetchBalancesRef = useRef(null);
 
   const parseNum = (val) => {
     if (!val) return 0;
@@ -27,96 +43,90 @@ export default function Home() {
     return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
   };
 
-  useEffect(() => {
-    const fetchBalances = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "brokerPositions"));
-        const newBrokerData = {
-          jpm: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-          one: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-          latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null }
+  const fetchBalances = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
+      const newBrokerData = {
+        jpm:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+        one:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+        latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
+      };
+      let latestTimestamp = 0;
+
+      querySnapshot.forEach((document) => {
+        const data = document.data();
+        const rate = document.id === 'jpm' ? 1 : (parseNum(data.usdRate) || 1);
+
+        const assetsTotal = (data.assets || []).reduce((sum, a) => {
+          const bond    = a.isBond || isBondTicker(a.ticker);
+          const divisor = bond ? 100 : 1;
+          return sum + (parseNum(a.quantity) * parseNum(a.price)) / divisor / rate;
+        }, 0);
+
+        const debt = parseNum(data.debt) || 0;
+        newBrokerData[document.id] = {
+          balance:     assetsTotal - debt,
+          assetsTotal: assetsTotal,
+          debt:        debt,
+          updated:     data.lastUpdated ? new Date(data.lastUpdated) : null,
         };
-        let latestTimestamp = 0;
 
-        querySnapshot.forEach((document) => {
-          const data = document.data();
-          const rate = (document.id === 'jpm') ? 1 : (parseNum(data.usdRate) || 1);
-
-          const assetsTotal = (data.assets || []).reduce((sum, a) => {
-            const isBond = a.isBond || isBondTicker(a.ticker);
-            const divisor = isBond ? 100 : 1;
-            return sum + ((parseNum(a.quantity) * parseNum(a.price)) / divisor / rate);
-          }, 0);
-
-          const debt = parseNum(data.debt) || 0;
-          const total = assetsTotal - debt;
-
-          newBrokerData[document.id] = {
-            balance: total,
-            assetsTotal: assetsTotal,
-            debt: debt,
-            updated: data.lastUpdated ? new Date(data.lastUpdated) : null
-          };
-
-          if (data.lastUpdated) {
-            const docDate = new Date(data.lastUpdated).getTime();
-            if (docDate > latestTimestamp) latestTimestamp = docDate;
-          }
-        });
-
-        setBrokerData(newBrokerData);
-
-        if (latestTimestamp > 0) {
-          const d = new Date(latestTimestamp);
-          setLatestGlobalUpdate(`Act: ${d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} hs`);
-        } else {
-          setLatestGlobalUpdate('Sin registros de actualización');
+        if (data.lastUpdated) {
+          const ts = new Date(data.lastUpdated).getTime();
+          if (ts > latestTimestamp) latestTimestamp = ts;
         }
-      } catch (e) {
-      } finally {
-        setLoading(false);
+      });
+
+      setBrokerData(newBrokerData);
+      setMep(getMepRate());
+      setCable(getCclRate());
+
+      if (latestTimestamp > 0) {
+        const d = new Date(latestTimestamp);
+        setLatestGlobalUpdate(
+          `Act: ${d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} hs`
+        );
+      } else {
+        setLatestGlobalUpdate('Sin registros de actualización');
       }
-    };
+    } catch (e) {
+      console.error('[fetchBalances]', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const init = async () => {
-      try { await fetchAllPrices(); } catch (e) {}
-      fetchBalances();
-    };
+  fetchBalancesRef.current = fetchBalances;
 
-    init();
-  }, []);
-
-  const handleUpdatePrices = async () => {
-    setUpdatingPrices(true);
+  const handleUpdatePrices = async (silencioso = false) => {
+    if (!silencioso) setUpdatingPrices(true);
     try {
       const priceMap = await fetchAllPrices();
-      const mepRate = getMepRate();
-      const querySnapshot = await getDocs(collection(db, "brokerPositions"));
+      const mepRate  = getMepRate();
+      const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
       const nowIso = new Date().toISOString();
 
       for (const document of querySnapshot.docs) {
-        const data = document.data();
+        const data  = document.data();
         const isJPM = document.id === 'jpm';
         const payload = {};
 
         const updatedAssets = (data.assets || []).map(a => {
           if (!a.ticker) return a;
-          const t = a.ticker.toUpperCase().trim();
+          const t      = a.ticker.toUpperCase().trim();
           let newPrice = priceMap[t];
-            if (newPrice !== undefined) console.log(`✅ ${document.id} | ${t}: ${a.price} → ${newPrice.toFixed(4)}`);
-  else console.warn(`❌ ${document.id} | ${t}: sin precio en BYMA`);
-          let isBond = isBondTicker(t);
-          if (!isBond && a.isBond) isBond = true;
+          let bond     = isBondTicker(t);
+          if (!bond && a.isBond) bond = true;
 
           if (newPrice !== undefined) {
             if (isJPM && mepRate > 0) newPrice = newPrice / mepRate;
-            if (Math.abs(parseNum(a.price) - newPrice) > 0.001 || a.isBond !== isBond) {
+            if (Math.abs(parseNum(a.price) - newPrice) > 0.001 || a.isBond !== bond) {
               payload.assets = true;
-              return { ...a, price: newPrice, isBond };
+              return { ...a, price: newPrice, isBond: bond };
             }
-          } else if (isBond !== a.isBond) {
+          } else if (bond !== a.isBond) {
             payload.assets = true;
-            return { ...a, isBond };
+            return { ...a, isBond: bond };
           }
           return a;
         });
@@ -128,37 +138,62 @@ export default function Home() {
 
         if (Object.keys(payload).length > 0) {
           payload.lastUpdated = nowIso;
-          await updateDoc(doc(db, "brokerPositions", document.id), payload);
+          await updateDoc(doc(db, 'brokerPositions', document.id), payload);
         }
       }
 
-      window.location.reload();
+      await fetchBalancesRef.current();
+
     } catch (error) {
-      alert(`Error al actualizar: ${error.message}`);
-      setUpdatingPrices(false);
+      if (!silencioso) alert(`Error al actualizar: ${error.message}`);
+      else console.error('[auto-refresh] Error:', error.message);
+    } finally {
+      if (!silencioso) setUpdatingPrices(false);
     }
   };
 
+  useEffect(() => {
+    const init = async () => {
+      try { await fetchAllPrices(); } catch (e) {}
+      fetchBalancesRef.current();
+    };
+    init();
+
+    const intervalo = setInterval(() => {
+      if (esMercadoAbierto()) {
+        console.log(`[auto-refresh] ${new Date().toLocaleTimeString('es-AR')} — actualizando...`);
+        handleUpdatePrices(true);
+      }
+    }, INTERVALO_MINUTOS * 60 * 1000);
+
+    return () => clearInterval(intervalo);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const formatSubDate = (date) => {
     if (!date) return 'Sin datos';
-    return date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-      + ' ' + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs';
+    return (
+      date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) +
+      ' ' +
+      date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) +
+      ' hs'
+    );
   };
 
   const brokers = [
-    { id: 'jpm',   name: 'J.P. Morgan',      ...brokerData.jpm,   logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/J_P_Morgan_Chase_Logo_2008_1.svg/512px-J_P_Morgan_Chase_Logo_2008_1.svg.png' },
-    { id: 'one',   name: 'One618',            ...brokerData.one,   logo: 'https://play-lh.googleusercontent.com/rmyAkju1LNJl3AEF4cN2ef4jGxzmiSfxga17vLkwPDc-nyDkkxP78TEoKj1cxF_xGtLHBs6BWb0ccR5WvhCj' },
-    { id: 'latin', name: 'Latin Securities',  ...brokerData.latin, logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png' }
+    { id: 'jpm',   name: 'J.P. Morgan',     ...brokerData.jpm,   logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/J_P_Morgan_Chase_Logo_2008_1.svg/512px-J_P_Morgan_Chase_Logo_2008_1.svg.png' },
+    { id: 'one',   name: 'One618',           ...brokerData.one,   logo: 'https://play-lh.googleusercontent.com/rmyAkju1LNJl3AEF4cN2ef4jGxzmiSfxga17vLkwPDc-nyDkkxP78TEoKj1cxF_xGtLHBs6BWb0ccR5WvhCj' },
+    { id: 'latin', name: 'Latin Securities', ...brokerData.latin, logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png' },
   ];
 
   const totalActivos = brokers.reduce((sum, b) => sum + (b.assetsTotal || 0), 0);
   const totalDeuda   = brokers.reduce((sum, b) => sum + (b.debt || 0), 0);
   const totalNeto    = brokers.reduce((sum, b) => sum + b.balance, 0);
 
-  if (loading) return <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>Cargando Portfolio...</div>;
-
-  const mepRate = getMepRate();
-  const cclRate = getCclRate();
+  if (loading) return (
+    <div style={{ padding: '50px', textAlign: 'center', fontWeight: 800, color: '#adb5bd' }}>
+      Cargando Portfolio...
+    </div>
+  );
 
   return (
     <div className="h-page">
@@ -176,7 +211,7 @@ export default function Home() {
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
-            onClick={handleUpdatePrices}
+            onClick={() => handleUpdatePrices(false)}
             disabled={updatingPrices}
             style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'white', border: '1px solid #eaecef', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', color: updatingPrices ? '#adb5bd' : '#0d6efd', boxShadow: '0 4px 10px rgba(0,0,0,0.02)', cursor: 'pointer' }}
           >
@@ -192,7 +227,6 @@ export default function Home() {
       <div className="h-summary-card" style={{ padding: '30px 25px', background: 'linear-gradient(135deg, #111418 0%, #2b3036 100%)', borderRadius: '32px', marginBottom: '35px', color: 'white', boxShadow: '0 15px 30px rgba(0,0,0,0.12)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '200px', height: '200px', background: 'radial-gradient(circle, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%' }} />
 
-        {/* Main section: label + number */}
         <div className="h-summary-main">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div className="h-summary-label" style={{ fontSize: '12px', fontWeight: 600, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>
@@ -211,7 +245,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Stats section */}
         <div className="h-summary-stats" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px', marginTop: '20px' }}>
           <div>
             <div className="h-summary-sub-label" style={{ fontSize: '10px', fontWeight: 600, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Total Activos</div>
@@ -225,6 +258,18 @@ export default function Home() {
               - US$ {totalDeuda.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </div>
           </div>
+          {mep && (
+            <div>
+              <div style={{ fontSize: '10px', fontWeight: 600, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Dólar MEP</div>
+              <div style={{ fontSize: '15px', fontWeight: 800 }}>$ {mep.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</div>
+            </div>
+          )}
+          {cable && (
+            <div>
+              <div style={{ fontSize: '10px', fontWeight: 600, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Dólar Cable</div>
+              <div style={{ fontSize: '15px', fontWeight: 800 }}>$ {cable.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -236,16 +281,14 @@ export default function Home() {
       <div className="h-broker-grid">
         {brokers.map(b => {
           const percentage = totalNeto > 0 ? ((b.balance / totalNeto) * 100).toFixed(1) : 0;
-          const balanceCCL = b.id === 'jpm' && mepRate > 0 && cclRate > 0
-            ? b.balance * mepRate / cclRate
+          const balanceCCL = b.id === 'jpm' && mep > 0 && cable > 0
+            ? b.balance * mep / cable
             : null;
 
           return (
             <Link key={b.id} to={`/broker/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
               <div className="h-broker-card" style={{ padding: '22px', backgroundColor: 'white', borderRadius: '24px', border: '1px solid #eaecef', boxShadow: '0 6px 16px rgba(0,0,0,0.02)', height: '100%', boxSizing: 'border-box' }}>
-
                 <div className="h-card-inner">
-                  {/* Logo + Name */}
                   <div className="h-card-left" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <div className="h-card-logo-wrap">
                       <img
@@ -264,7 +307,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Balance + CCL + % */}
                   <div className="h-card-right">
                     <div className="h-balance" style={{ fontSize: '18px', fontWeight: 900, color: '#1a1d21' }}>
                       US$ {b.balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
@@ -280,11 +322,9 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Progress bar */}
                 <div className="h-progress-track">
                   <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: '#1a1d21', borderRadius: '3px' }} />
                 </div>
-
               </div>
             </Link>
           );
