@@ -1,8 +1,5 @@
 {
   "rewrites": [
-    {
-      "source": "/api/byma/:path*",
-      "destination": "https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/:path*"
-    }
+    { "source": "/api/byma/:path*", "destination": "/api/byma" }
   ]
 }

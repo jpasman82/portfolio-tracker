@@ -1,21 +1,19 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api/mae': {
-        target: 'https://api.mae.com.ar',
+      // Todo lo que empiece con /api/byma se redirige a apigw.byma.com.ar
+      // /api/byma/oauth/token/          → https://apigw.byma.com.ar/oauth/token/
+      // /api/byma/snapshot/v1/equity    → https://apigw.byma.com.ar/snapshot/v1/equity
+      '/api/byma': {
+        target: 'https://apigw.byma.com.ar',
         changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api\/mae/, '/MarketData/v1'),
-        configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq) => {
-            proxyReq.setHeader('Origin', 'https://api.mae.com.ar');
-          });
-        }
-      }
-    }
-  }
-})
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api\/byma/, ''),
+      },
+    },
+  },
+});

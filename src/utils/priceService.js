@@ -1,113 +1,102 @@
-let cachedPriceMap = {};
-let cachedMepRate = null;
-let cachedCclRate = null;
-let cachedBonds = new Set();
+// src/utils/priceService.js
 
-const BASE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTsH6upQFn5HjXEQOD3Rcr4y_JFzuNCgoIGcxQb9CCPP0huMYV5W4NbdzLwA41JQGO2CvxDDrDbPPZq/pub";
+import { bymaGet } from './bymaService';
 
-const parsePrice = (val) => {
-  if (!val) return 0;
-  let clean = val.replace(/\$|US\$|USD/gi, '').trim();
-  // Argentine format: 9.340,00 → remove dots, replace comma with dot
-  if (clean.includes('.') && clean.includes(',') && clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
-    clean = clean.replace(/\./g, '').replace(',', '.');
-  } else if (clean.includes(',') && !clean.includes('.')) {
-    clean = clean.replace(',', '.');
-  } else if (clean.includes(',') && clean.includes('.') && clean.lastIndexOf('.') > clean.lastIndexOf(',')) {
-    clean = clean.replace(/,/g, '');
-  }
-  const num = parseFloat(clean);
-  return isNaN(num) ? 0 : num;
+// ─── Cache de módulo ──────────────────────────────────────────────────────────
+let _precios = {};
+let _mep     = null;
+let _cable   = null;
+
+// ─── Endpoints ────────────────────────────────────────────────────────────────
+const BASE = '/snapshot/v1';
+
+const EP = {
+  acciones:  `${BASE}/equity?group=ACCIONES&operativeForm=CONTADO&currency=ARS&settlPeriod=0001`,
+  cedears:   `${BASE}/equity?group=CEDEARS&operativeForm=CONTADO&currency=ARS&settlPeriod=0001`,
+  bonosARS:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=ARS`,
+  bonosUSD:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=USD`,
+  bonosEXT:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=EXT`,
 };
 
-export const fetchAllPrices = async () => {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function bestPrice(item) {
+  if (item.trade          > 0) return item.trade;
+  if (item.previous_close > 0) return item.previous_close;
+  if (item.best_purchase_price > 0) return item.best_purchase_price;
+  return 0;
+}
+
+function toMap(items = []) {
+  const map = {};
+  for (const item of items) {
+    const price = bestPrice(item);
+    if (item.symbol && price > 0) map[item.symbol] = price;
+  }
+  return map;
+}
+
+async function fetchMap(endpoint) {
   try {
-    const priceMap = {};
-    let mepRate = null;
-    let cclRate = null;
-    const newBonds = new Set();
-
-    const [lookupText, dolarText] = await Promise.all([
-      fetch(`${BASE_URL}?gid=1196344448&single=true&output=tsv`).then(r => r.text()),
-      fetch(`${BASE_URL}?gid=810811578&single=true&output=tsv`).then(r => r.text()),
-    ]);
-
-    // DOLAR sheet: extract MEP and CCL rates
-    dolarText.split(/\r?\n/).forEach(line => {
-      const cells = line.split('\t');
-      if (cells.length < 2) return;
-      const colA = cells[0].trim().toUpperCase();
-      const colB = cells[1].trim();
-      if (!colA || !colB) return;
-
-      if (colA.includes('MEP')) {
-        const v = parsePrice(colB);
-        if (v > 0) { mepRate = v; priceMap['MEP'] = v; }
-      } else if (colA.includes('CCL') || colA.includes('CABLE')) {
-        const v = parsePrice(colB);
-        if (v > 0) { cclRate = v; priceMap['CCL'] = v; }
-      }
-    });
-
-    // PRECIOS_LOOKUP sheet: prices for all instruments
-    // Bonds have plain ticker in col A (e.g. "AL30")
-    // Stocks/CEDEARs have "* TICKER *" format in col A, price is last token of col B
-    lookupText.split(/\r?\n/).forEach(line => {
-      const cells = line.split('\t');
-      if (cells.length < 2) return;
-      const colA_raw = cells[0].trim();
-      const colB_raw = cells[1].trim();
-      if (!colA_raw || !colB_raw) return;
-
-      let ticker = '';
-      let priceStr = '';
-      let isBond = false;
-
-      if (colA_raw.includes('*')) {
-        const parts = colA_raw.split('*');
-        if (parts.length >= 2) ticker = parts[1].trim().toUpperCase();
-        // Price is the last space-separated token in colB (after the description)
-        const tokens = colB_raw.trim().split(/\s+/);
-        priceStr = tokens[tokens.length - 1] || '';
-      } else {
-        ticker = colA_raw.toUpperCase();
-        priceStr = colB_raw;
-        isBond = true;
-      }
-
-      if (!ticker || ticker === 'TICKER') return;
-
-      const price = parsePrice(priceStr);
-      if (price > 0) {
-        priceMap[ticker] = price;
-        if (isBond) {
-          newBonds.add(ticker);
-          // Also register the D-suffixed variant with same price
-          if (!ticker.endsWith('D')) {
-            priceMap[ticker + 'D'] = price;
-            newBonds.add(ticker + 'D');
-          }
-        }
-      }
-    });
-
-    if (Object.keys(priceMap).length > 0) cachedPriceMap = priceMap;
-    if (mepRate > 0) cachedMepRate = mepRate;
-    if (cclRate > 0) cachedCclRate = cclRate;
-    if (newBonds.size > 0) cachedBonds = newBonds;
-
-    return priceMap;
-  } catch (error) {
-    throw new Error("No se pudo conectar con tu Google Sheet.");
+    const data = await bymaGet(endpoint);
+    return toMap(data?.result ?? []);
+  } catch (err) {
+    console.error(`[priceService] Error en ${endpoint}:`, err.message);
+    return {};
   }
-};
+}
 
-export const getMepRate = () => cachedMepRate;
-export const getCclRate = () => cachedCclRate;
+// ─── API pública ──────────────────────────────────────────────────────────────
 
-export const isBondTicker = (ticker) => {
+export async function fetchAllPrices() {
+  const [acciones, cedears, bonosARS, bonosUSD, bonosEXT] = await Promise.allSettled([
+    fetchMap(EP.acciones),
+    fetchMap(EP.cedears),
+    fetchMap(EP.bonosARS),
+    fetchMap(EP.bonosUSD),   // AL30D → precio en USD para MEP
+    fetchMap(EP.bonosEXT),   // AL30C → precio en USD exterior para Cable/CCL
+  ]);
+
+  const arsMap = bonosARS.status === 'fulfilled' ? bonosARS.value : {};
+  const usdMap = bonosUSD.status === 'fulfilled' ? bonosUSD.value : {};
+  const extMap = bonosEXT.status === 'fulfilled' ? bonosEXT.value : {};
+
+  _precios = {
+    ...(acciones.status === 'fulfilled' ? acciones.value : {}),
+    ...(cedears.status  === 'fulfilled' ? cedears.value  : {}),
+    ...arsMap,
+    ...usdMap,
+    ...extMap,
+  };
+
+  // MEP   = AL30(ARS) / AL30D(USD)  →  pesos por dólar MEP
+  // Cable = AL30(ARS) / AL30C(EXT)  →  pesos por dólar cable
+  const al30    = arsMap['AL30'];
+  const al30d   = usdMap['AL30D'] ?? usdMap['AL30'];
+  const al30c   = extMap['AL30C'] ?? extMap['AL30'];
+
+  console.log('[priceService] AL30:', al30, '| AL30D:', al30d, '| AL30C:', al30c);
+
+  _mep   = (al30 && al30d) ? al30 / al30d : null;
+  _cable = (al30 && al30c) ? al30 / al30c : null;
+
+  if (_mep)   console.log('[priceService] MEP:', _mep.toFixed(2));
+  else        console.warn('[priceService] MEP no disponible');
+  if (_cable) console.log('[priceService] Cable:', _cable.toFixed(2));
+  else        console.warn('[priceService] Cable no disponible — AL30C sin precio en EXT');
+
+  return _precios;
+}
+
+export function getMepRate()  { return _mep;   }
+export function getCclRate()  { return _cable;  }
+
+export function isBondTicker(ticker) {
   if (!ticker) return false;
-  return cachedBonds.has(ticker.toUpperCase().trim());
-};
+  return /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(ticker.trim());
+}
 
-export const diagnosticoSheet = async () => {};
+export async function fetchPreciosYDolares() {
+  const precios = await fetchAllPrices();
+  return { precios, mep: _mep, cable: _cable };
+}

@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:docs.google.com)",
-      "WebFetch(domain:doc-10-0o-sheets.googleusercontent.com)"
+      "WebFetch(domain:doc-10-0o-sheets.googleusercontent.com)",
+      "Bash(Get-ChildItem -Path \"e:\\\\portfolio-tracker\" -Force)",
+      "Bash(Select-Object Name, Mode)"
     ]
   }
 }

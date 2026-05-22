@@ -103,6 +103,8 @@ export default function Home() {
           if (!a.ticker) return a;
           const t = a.ticker.toUpperCase().trim();
           let newPrice = priceMap[t];
+            if (newPrice !== undefined) console.log(`✅ ${document.id} | ${t}: ${a.price} → ${newPrice.toFixed(4)}`);
+  else console.warn(`❌ ${document.id} | ${t}: sin precio en BYMA`);
           let isBond = isBondTicker(t);
           if (!isBond && a.isBond) isBond = true;
 
