@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { signOut } from 'firebase/auth';
+import { db, auth } from '../firebase/config';
 import { assetDictionary } from '../utils/dictionary';
 import { isBondTicker } from '../utils/priceService';
 import './Unified.css';
+
+const handleLogout = async () => {
+  sessionStorage.removeItem('bioUnlocked');
+  await signOut(auth);
+};
 
 export default function Unified() {
   const [groupedData, setGroupedData] = useState({});
@@ -373,6 +379,10 @@ export default function Unified() {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg>
           <span style={{ fontSize: '11px', fontWeight: 800 }}>Estrategias</span>
         </Link>
+        <button onClick={handleLogout} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1, cursor: 'pointer', padding: 0 }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Salir</span>
+        </button>
       </div>
 
     </div>

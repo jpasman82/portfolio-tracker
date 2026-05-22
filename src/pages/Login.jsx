@@ -15,6 +15,7 @@ export default function Login() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      sessionStorage.setItem('justLoggedIn', 'true');
     } catch (err) {
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
         setError('Datos incorrectos. Revisá tu email y clave.');

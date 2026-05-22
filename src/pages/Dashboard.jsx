@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { signOut } from 'firebase/auth';
+import { db, auth } from '../firebase/config';
 import { Link } from 'react-router-dom';
 // IMPORTANTE: Agregamos isBondTicker y la librería de Excel
 import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
 import * as XLSX from 'xlsx';
+
+const handleLogout = async () => {
+  sessionStorage.removeItem('bioUnlocked');
+  await signOut(auth);
+};
 
 export default function Dashboard() {
   const [events, setEvents] = useState([]);
@@ -308,6 +314,10 @@ export default function Dashboard() {
           <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"></rect><rect x="10" y="8" width="4" height="13"></rect><rect x="2" y="13" width="4" height="8"></rect></svg>
           <span style={{ fontSize: '11px', fontWeight: 800 }}>Estrategias</span>
         </Link>
+        <button onClick={handleLogout} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#adb5bd', flex: 1, cursor: 'pointer', padding: 0 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span style={{ fontSize: '11px', fontWeight: 800 }}>Salir</span>
+        </button>
       </div>
 
     </div>
