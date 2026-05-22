@@ -82,8 +82,18 @@ export async function fetchAllPrices() {
 
   if (_mep)   console.log('[priceService] MEP:', _mep.toFixed(2));
   else        console.warn('[priceService] MEP no disponible');
-  if (_cable) console.log('[priceService] Cable:', _cable.toFixed(2));
-  else        console.warn('[priceService] Cable no disponible — AL30C sin precio en EXT');
+  if (_cable) console.log('[priceService] Cable (BYMA):', _cable.toFixed(2));
+  else {
+    console.warn('[priceService] Cable no disponible desde BYMA — intentando dolarapi.com...');
+    try {
+      const res = await fetch('https://dolarapi.com/v1/dolares/contadoconliqui');
+      const data = await res.json();
+      _cable = data.venta ?? data.compra ?? null;
+      if (_cable) console.log('[priceService] Cable (dolarapi):', _cable.toFixed(2));
+    } catch (e) {
+      console.warn('[priceService] Cable fallback también falló:', e.message);
+    }
+  }
 
   return _precios;
 }
