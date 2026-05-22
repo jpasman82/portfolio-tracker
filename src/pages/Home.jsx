@@ -45,6 +45,11 @@ export default function Home() {
 
   const fetchBalances = async () => {
     try {
+      // Si todavía no tenemos precios, los buscamos antes de calcular
+      if (!getMepRate()) {
+        try { await fetchAllPrices(); } catch (e) {}
+      }
+
       const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
       const newBrokerData = {
         jpm:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
@@ -154,8 +159,8 @@ export default function Home() {
 
   useEffect(() => {
     const init = async () => {
-      try { await fetchAllPrices(); } catch (e) {}
-      fetchBalancesRef.current();
+  try { await fetchAllPrices(); } catch (e) {}
+  await fetchBalancesRef.current();
     };
     init();
 
