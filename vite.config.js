@@ -12,12 +12,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api/byma': {
-        target: 'https://apigw.byma.com.ar',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/api\/byma/, ''),
-      },
+      '/api': 'http://localhost:3000',
     },
   },
 });
