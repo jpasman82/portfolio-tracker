@@ -9,14 +9,26 @@ const BYMA_BASE = 'https://apigw.byma.com.ar';
 
 let _cache = { token: null, expiresAt: 0 };
 
+function getBymaCredentials() {
+  const clientId = process.env.BYMA_CLIENT_ID || process.env.VITE_BYMA_CLIENT_ID;
+  const clientSecret = process.env.BYMA_CLIENT_SECRET || process.env.VITE_BYMA_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Faltan BYMA_CLIENT_ID/BYMA_CLIENT_SECRET en el entorno de Vercel');
+  }
+
+  return { clientId, clientSecret };
+}
+
 async function getToken() {
   const now = Date.now();
   if (_cache.token && now < _cache.expiresAt - 60_000) return _cache.token;
 
+  const { clientId, clientSecret } = getBymaCredentials();
   const body = new URLSearchParams({
     grant_type:    'client_credentials',
-    client_id:     process.env.BYMA_CLIENT_ID,
-    client_secret: process.env.BYMA_CLIENT_SECRET,
+    client_id:     clientId,
+    client_secret: clientSecret,
     scope:         'snapshot.read',
   });
 
@@ -49,10 +61,11 @@ export default async function handler(req, res) {
 
     if (path.startsWith('oauth/token')) {
       // Token: lo resolvemos con las env vars del servidor
+      const { clientId, clientSecret } = getBymaCredentials();
       const body = new URLSearchParams({
         grant_type:    'client_credentials',
-        client_id:     process.env.BYMA_CLIENT_ID,
-        client_secret: process.env.BYMA_CLIENT_SECRET,
+        client_id:     clientId,
+        client_secret: clientSecret,
         scope:         'snapshot.read',
       });
       upstreamRes = await fetch(`${BYMA_BASE}/oauth/token/`, {

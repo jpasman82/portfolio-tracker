@@ -4,7 +4,12 @@
       "WebFetch(domain:docs.google.com)",
       "WebFetch(domain:doc-10-0o-sheets.googleusercontent.com)",
       "Bash(Get-ChildItem -Path \"e:\\\\portfolio-tracker\" -Force)",
-      "Bash(Select-Object Name, Mode)"
+      "Bash(Select-Object Name, Mode)",
+      "Bash(npm list *)",
+      "Bash(npm install *)",
+      "Bash(npm --version)",
+      "Bash(Get-Content \"C:\\\\Users\\\\JuanPabloPasman\\\\AppData\\\\Local\\\\npm-cache\\\\_logs\\\\2026-05-26T15_28_42_444Z-debug-0.log\" -Tail 40)",
+      "Bash(npm cache *)"
     ]
   }
 }
