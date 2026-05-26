@@ -73,6 +73,9 @@ export default async function handler(req, res) {
     }
 
     const body = await upstreamRes.text();
+    if (!upstreamRes.ok) {
+      console.error(`[byma] upstream ${upstreamRes.status} en ${upstreamPath}:`, body);
+    }
     res.status(upstreamRes.status)
        .setHeader('Content-Type', 'application/json')
        .setHeader('Cache-Control', 'no-store')
