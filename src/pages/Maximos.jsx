@@ -14,7 +14,7 @@ const handleLogout = async () => {
 };
 
 export default function Maximos() {
-  const [target, setTarget] = useState('historico');
+  const [target, setTarget] = useState('enero');
   const [rows, setRows] = useState([]);
   const [cable, setCable] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -70,11 +70,11 @@ export default function Maximos() {
   }, []);
 
   const sortedRows = useMemo(() => {
-    const distanceKey = target === 'historico' ? 'maxHistoricoDistance' : 'maxEneroDistance';
+    const returnKey = target === 'historico' ? 'maxHistoricoReturn' : 'maxEneroReturn';
     return [...rows].sort((a, b) => {
-      const av = a[distanceKey] ?? -Infinity;
-      const bv = b[distanceKey] ?? -Infinity;
-      return bv - av;
+      const av = a[returnKey] ?? Infinity;
+      const bv = b[returnKey] ?? Infinity;
+      return av - bv;
     });
   }, [rows, target]);
 
@@ -110,8 +110,8 @@ export default function Maximos() {
         <div className="m-title-row">
           <h2 className="m-title text-2xl font-bold tracking-tight text-[#F0FAFA] mt-1">Maximos</h2>
           <div className="m-switch">
-            <button className={target === 'historico' ? 'active' : ''} onClick={() => setTarget('historico')}>Historico</button>
-            <button className={target === 'enero' ? 'active' : ''} onClick={() => setTarget('enero')}>Ene 2025</button>
+          <button className={target === 'enero' ? 'active' : ''} onClick={() => setTarget('enero')}>Ene 2025</button>
+          <button className={target === 'historico' ? 'active' : ''} onClick={() => setTarget('historico')}>Historico</button>
           </div>
         </div>
         <p className="font-mono text-[13px] tracking-[0.15em] uppercase text-[#5B8A8A] mt-1.5">
@@ -129,7 +129,7 @@ export default function Maximos() {
           <strong>{summary.above}/{rows.length}</strong>
         </div>
         <div className="m-summary-card">
-          <span>Promedio para volver</span>
+          <span>Promedio a maximo</span>
           <strong className={summary.avgReturn <= 0 ? 'm-positive' : 'm-negative'}>{fmtPct(summary.avgReturn)}</strong>
         </div>
         <div className="m-summary-card">
@@ -141,17 +141,16 @@ export default function Maximos() {
       <div className="m-table-card relative z-10">
         <div className="m-row m-table-head">
           <span>Ticker</span>
-          <span>Local USD</span>
+          <span>Actual USD</span>
+          <span>Max local USD</span>
           <span>ADR equiv.</span>
-          <span>Max ref.</span>
-          <span>Dist.</span>
-          <span>Para volver</span>
+          <span>Max ADR</span>
+          <span>Falta a max.</span>
         </div>
 
         {sortedRows.map((row) => {
           const maxADR = target === 'historico' ? row.maxHistoricoADR : row.maxEnero2025ADR;
           const maxLocal = target === 'historico' ? row.maxHistoricoLocalUSD : row.maxEnero2025LocalUSD;
-          const distance = target === 'historico' ? row.maxHistoricoDistance : row.maxEneroDistance;
           const needed = target === 'historico' ? row.maxHistoricoReturn : row.maxEneroReturn;
           const isAbove = needed !== null && needed <= 0;
 
@@ -162,12 +161,9 @@ export default function Maximos() {
                 <span className="m-ratio">{row.ratioADR} local / ADR</span>
               </div>
               <span>{fmtUSD(row.localUSD, 2)}</span>
+              <span>{fmtUSD(maxLocal, 2)}</span>
               <span>{fmtUSD(row.adrEquiv, 2)}</span>
-              <span>
-                <strong>{fmtUSD(maxADR, 2)}</strong>
-                <small>{fmtUSD(maxLocal, 2)} local</small>
-              </span>
-              <span className={isAbove ? 'm-positive' : 'm-negative'}>{fmtPct(distance)}</span>
+              <span>{fmtUSD(maxADR, 2)}</span>
               <span className={isAbove ? 'm-positive' : 'm-negative'}>{fmtPct(needed)}</span>
             </div>
           );
