@@ -174,9 +174,9 @@ export default function Home() {
   };
 
   const brokers = [
-    { id: 'jpm',   name: 'J.P. Morgan',       ...brokerData.jpm,   mark: 'JPM',   tone: 'ink' },
-    { id: 'one',   name: 'One618',             ...brokerData.one,   mark: '1618',  tone: 'teal' },
-    { id: 'latin', name: 'Latin Securities',   ...brokerData.latin, mark: 'LS',    tone: 'blue' },
+    { id: 'jpm',   name: 'J.P. Morgan',       ...brokerData.jpm,   logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/J_P_Morgan_Chase_Logo_2008_1.svg/512px-J_P_Morgan_Chase_Logo_2008_1.svg.png' },
+    { id: 'one',   name: 'One618',             ...brokerData.one,   logo: 'https://play-lh.googleusercontent.com/rmyAkju1LNJl3AEF4cN2ef4jGxzmiSfxga17vLkwPDc-nyDkkxP78TEoKj1cxF_xGtLHBs6BWb0ccR5WvhCj' },
+    { id: 'latin', name: 'Latin Securities',   ...brokerData.latin, logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png' },
   ];
 
   const totalActivos = brokers.reduce((sum, b) => sum + (b.assetsTotal || 0), 0);
@@ -285,8 +285,16 @@ export default function Home() {
               <div className="h-broker-card bg-[#122329] border border-teal-400/10 hover:border-teal-400/25 rounded-2xl transition-colors">
                 <div className="h-card-inner">
                   <div className="h-card-left flex items-center gap-3">
-                    <div className={`h-card-logo-wrap h-logo-${b.tone} rounded-xl flex items-center justify-center shrink-0`}>
-                      <span className="h-logo-mark">{b.mark}</span>
+                    <div className="h-card-logo-wrap rounded-xl flex items-center justify-center shrink-0">
+                      <img
+                        src={b.logo}
+                        alt={`${b.name} logo`}
+                        className="h-broker-logo"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.parentNode.innerHTML = `<span style="font-weight:900;color:#122329;font-size:11px;">${b.name.substring(0, 3).toUpperCase()}</span>`;
+                        }}
+                      />
                     </div>
                     <div>
                       <div className="h-broker-name font-bold text-[#F0FAFA]">{b.name}</div>
