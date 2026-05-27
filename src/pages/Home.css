@@ -39,6 +39,30 @@
   padding: 6px;
   box-sizing: border-box;
   flex-shrink: 0;
+  border: 1px solid rgba(45, 212, 191, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.h-logo-mark {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.h-logo-ink {
+  background: #F0FAFA;
+  color: #080F12;
+}
+
+.h-logo-teal {
+  background: linear-gradient(135deg, rgba(45,212,191,0.2), rgba(52,211,153,0.08));
+  color: #2DD4BF;
+}
+
+.h-logo-blue {
+  background: linear-gradient(135deg, rgba(56,189,248,0.18), rgba(167,139,250,0.08));
+  color: #A8C8C8;
 }
 
 .h-progress-track {
