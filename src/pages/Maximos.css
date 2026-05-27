@@ -82,11 +82,36 @@
 
 .m-row {
   display: grid;
-  grid-template-columns: 1.1fr 1fr 1fr 1.1fr 0.8fr 0.9fr;
+  grid-template-columns: 1.1fr 1fr 1fr 1fr 1fr 1fr 0.9fr;
   gap: 12px;
   align-items: center;
   padding: 14px 16px;
   border-top: 1px solid rgba(45,212,191,0.06);
+}
+
+.m-rubro-group {
+  border-top: 1px solid rgba(45,212,191,0.08);
+}
+
+.m-rubro-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(45,212,191,0.06);
+  border-top: 1px solid rgba(45,212,191,0.08);
+}
+
+.m-rubro-head span {
+  color: #2DD4BF;
+  font: 800 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.m-rubro-head strong {
+  color: #F0FAFA;
+  font-size: 14px;
 }
 
 .m-table-head {
@@ -176,5 +201,9 @@
 
   .m-row > div {
     grid-column: 1 / -1;
+  }
+
+  .m-rubro-head {
+    border-radius: 8px;
   }
 }

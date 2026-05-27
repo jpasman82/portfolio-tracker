@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { collection, getDocs } from 'firebase/firestore';
+import { auth, db } from '../firebase/config';
 import { fetchAllPrices, getCclRate } from '../utils/priceService';
 import { preciosMaximosLocalesUSD } from '../utils/maximosData';
+import { assetDictionary } from '../utils/dictionary';
 import './Maximos.css';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
@@ -18,6 +20,12 @@ export default function Maximos() {
   const [rows, setRows] = useState([]);
   const [cable, setCable] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const parseNum = (val) => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
+  };
 
   const fmtUSD = (v, digits = 2) => {
     if (v === null || v === undefined || Number.isNaN(v)) return '-';
@@ -36,11 +44,26 @@ export default function Maximos() {
         const priceMap = await fetchAllPrices();
         const cableRate = getCclRate();
         setCable(cableRate);
+        const maxTickers = new Set(preciosMaximosLocalesUSD.map((item) => item.ticker));
+        const holdingsByTicker = {};
+
+        const positionsSnap = await getDocs(collection(db, "brokerPositions"));
+        positionsSnap.forEach((doc) => {
+          const data = doc.data();
+          (data.assets || []).forEach((asset) => {
+            const ticker = asset.ticker?.toUpperCase().trim();
+            if (!ticker || !maxTickers.has(ticker)) return;
+            holdingsByTicker[ticker] = (holdingsByTicker[ticker] || 0) + parseNum(asset.quantity);
+          });
+        });
 
         const nextRows = preciosMaximosLocalesUSD.map((item) => {
           const localARS = priceMap[item.ticker] ?? null;
           const localUSD = localARS && cableRate ? localARS / cableRate : null;
           const adrEquiv = localUSD !== null ? localUSD * item.ratioADR : null;
+          const holdingQty = holdingsByTicker[item.ticker] || 0;
+          const holdingUsd = localUSD !== null ? holdingQty * localUSD : 0;
+          const dictInfo = assetDictionary[item.ticker] || (item.ticker === 'VIST' ? { cat: 'Acciones', sub: 'Energia' } : null);
           const maxHistoricoDistance = adrEquiv !== null ? ((adrEquiv / item.maxHistoricoADR) - 1) * 100 : null;
           const maxHistoricoReturn = adrEquiv !== null ? ((item.maxHistoricoADR / adrEquiv) - 1) * 100 : null;
           const maxEneroDistance = adrEquiv !== null ? ((adrEquiv / item.maxEnero2025ADR) - 1) * 100 : null;
@@ -51,6 +74,9 @@ export default function Maximos() {
             localARS,
             localUSD,
             adrEquiv,
+            holdingQty,
+            holdingUsd,
+            rubro: dictInfo?.sub || 'Sin clasificar',
             maxHistoricoDistance,
             maxHistoricoReturn,
             maxEneroDistance,
@@ -70,13 +96,16 @@ export default function Maximos() {
   }, []);
 
   const sortedRows = useMemo(() => {
-    const returnKey = target === 'historico' ? 'maxHistoricoReturn' : 'maxEneroReturn';
-    return [...rows].sort((a, b) => {
-      const av = a[returnKey] ?? Infinity;
-      const bv = b[returnKey] ?? Infinity;
-      return av - bv;
-    });
-  }, [rows, target]);
+    return [...rows].sort((a, b) => (b.holdingUsd || 0) - (a.holdingUsd || 0));
+  }, [rows]);
+
+  const groupedRows = useMemo(() => {
+    return sortedRows.reduce((groups, row) => {
+      if (!groups[row.rubro]) groups[row.rubro] = [];
+      groups[row.rubro].push(row);
+      return groups;
+    }, {});
+  }, [sortedRows]);
 
   const summary = useMemo(() => {
     const returnKey = target === 'historico' ? 'maxHistoricoReturn' : 'maxEneroReturn';
@@ -141,6 +170,7 @@ export default function Maximos() {
       <div className="m-table-card relative z-10">
         <div className="m-row m-table-head">
           <span>Ticker</span>
+          <span>Tenencia USD</span>
           <span>Actual USD</span>
           <span>Max local USD</span>
           <span>ADR equiv.</span>
@@ -148,26 +178,35 @@ export default function Maximos() {
           <span>Falta a max.</span>
         </div>
 
-        {sortedRows.map((row) => {
-          const maxADR = target === 'historico' ? row.maxHistoricoADR : row.maxEnero2025ADR;
-          const maxLocal = target === 'historico' ? row.maxHistoricoLocalUSD : row.maxEnero2025LocalUSD;
-          const needed = target === 'historico' ? row.maxHistoricoReturn : row.maxEneroReturn;
-          const isAbove = needed !== null && needed <= 0;
-
-          return (
-            <div key={row.ticker} className="m-row">
-              <div>
-                <strong className="m-ticker">{row.ticker}</strong>
-                <span className="m-ratio">{row.ratioADR} local / ADR</span>
-              </div>
-              <span>{fmtUSD(row.localUSD, 2)}</span>
-              <span>{fmtUSD(maxLocal, 2)}</span>
-              <span>{fmtUSD(row.adrEquiv, 2)}</span>
-              <span>{fmtUSD(maxADR, 2)}</span>
-              <span className={isAbove ? 'm-positive' : 'm-negative'}>{fmtPct(needed)}</span>
+        {Object.entries(groupedRows).map(([rubro, rubroRows]) => (
+          <div key={rubro} className="m-rubro-group">
+            <div className="m-rubro-head">
+              <span>{rubro}</span>
+              <strong>{fmtUSD(rubroRows.reduce((sum, row) => sum + (row.holdingUsd || 0), 0), 0)}</strong>
             </div>
-          );
-        })}
+            {rubroRows.map((row) => {
+              const maxADR = target === 'historico' ? row.maxHistoricoADR : row.maxEnero2025ADR;
+              const maxLocal = target === 'historico' ? row.maxHistoricoLocalUSD : row.maxEnero2025LocalUSD;
+              const needed = target === 'historico' ? row.maxHistoricoReturn : row.maxEneroReturn;
+              const isAbove = needed !== null && needed <= 0;
+
+              return (
+                <div key={row.ticker} className="m-row">
+                  <div>
+                    <strong className="m-ticker">{row.ticker}</strong>
+                    <span className="m-ratio">{row.ratioADR} local / ADR</span>
+                  </div>
+                  <span>{fmtUSD(row.holdingUsd, 0)}</span>
+                  <span>{fmtUSD(row.localUSD, 2)}</span>
+                  <span>{fmtUSD(maxLocal, 2)}</span>
+                  <span>{fmtUSD(row.adrEquiv, 2)}</span>
+                  <span>{fmtUSD(maxADR, 2)}</span>
+                  <span className={isAbove ? 'm-positive' : 'm-negative'}>{fmtPct(needed)}</span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       <div className="m-bottomnav bg-[#0C1518] border-t border-teal-400/10">
