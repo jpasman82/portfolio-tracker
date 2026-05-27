@@ -4,7 +4,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { assetDictionary } from '../utils/dictionary';
-import { isBondTicker } from '../utils/priceService';
+import { fetchAllPrices, getMepRate, getPriceMeta, isBondTicker } from '../utils/priceService';
 import './Unified.css';
 
 const handleLogout = async () => {
@@ -32,17 +32,25 @@ export default function Unified() {
 
   const fmtUSD = (v) => 'US$ ' + parseNum(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
   const fmtQty = (v) => parseNum(v).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const fmtChangePct = (v) => {
+    const n = parseNum(v);
+    return `${n > 0 ? '+' : ''}${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  };
 
   useEffect(() => {
     const fetchAndGroup = async () => {
       try {
+        const priceMap = await fetchAllPrices();
+        const mepRate = getMepRate();
+        const priceMeta = getPriceMeta();
         const querySnapshot = await getDocs(collection(db, "brokerPositions"));
         const unified = {};
         let total = 0;
 
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          const rate = (doc.id === 'jpm') ? 1 : (parseNum(data.usdRate) || 1);
+          const isJPM = doc.id === 'jpm';
+          const rate = isJPM ? 1 : (mepRate || parseNum(data.usdRate) || 1);
 
           const debt = parseNum(data.debt);
           if (debt > 0) {
@@ -58,13 +66,17 @@ export default function Unified() {
             const qty = parseNum(a.quantity);
             const isBond = a.isBond || isBondTicker(t);
             const bondDivisor = isBond ? 100 : 1;
-            const priceUsd = parseNum(a.price) / rate / bondDivisor;
+            let assetPrice = priceMap[t] ?? parseNum(a.price);
+            if (isJPM && priceMap[t] !== undefined && mepRate > 0) assetPrice = assetPrice / mepRate;
+            const priceUsd = assetPrice / rate / bondDivisor;
             const valueUsd = qty * priceUsd;
+            const changePercent = priceMeta[t]?.changePercent ?? null;
 
             if (valueUsd !== 0) {
-              if (!unified[t]) unified[t] = { ticker: t, quantity: 0, valueUsd: 0 };
+              if (!unified[t]) unified[t] = { ticker: t, quantity: 0, valueUsd: 0, changePercent };
               unified[t].quantity += qty;
               unified[t].valueUsd += valueUsd;
+              if (changePercent !== null) unified[t].changePercent = changePercent;
               total += valueUsd;
             }
           });
@@ -268,6 +280,14 @@ export default function Unified() {
                                 <div className="u-asset-val font-bold" style={{ color: isDebt ? '#F87171' : '#2DD4BF' }}>
                                   {fmtUSD(asset.valueUsd)}
                                 </div>
+                                {!isDebt && asset.changePercent !== null && asset.changePercent !== undefined && (
+                                  <div
+                                    className="font-mono text-[12px] font-bold"
+                                    style={{ color: asset.changePercent > 0 ? '#34D399' : asset.changePercent < 0 ? '#F87171' : '#5B8A8A' }}
+                                  >
+                                    {fmtChangePct(asset.changePercent)}
+                                  </div>
+                                )}
                                 <div className="u-mobile-pct font-mono text-[12px] text-[#5B8A8A]">
                                   {pct.toFixed(1)}% cartera
                                 </div>

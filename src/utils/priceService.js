@@ -4,6 +4,7 @@ import { bymaGet } from './bymaService';
 
 // ─── Cache de módulo ──────────────────────────────────────────────────────────
 let _precios = {};
+let _priceMeta = {};
 let _mep     = null;
 let _cable   = null;
 
@@ -20,7 +21,8 @@ const EP = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function bestPrice(item) {
+function closePrice(item) {
+  if (item.closing_price  > 0) return item.closing_price;
   if (item.trade          > 0) return item.trade;
   if (item.previous_close > 0) return item.previous_close;
   if (item.best_purchase_price > 0) return item.best_purchase_price;
@@ -30,8 +32,25 @@ function bestPrice(item) {
 function toMap(items = []) {
   const map = {};
   for (const item of items) {
-    const price = bestPrice(item);
+    const price = closePrice(item);
     if (item.symbol && price > 0) map[item.symbol] = price;
+  }
+  return map;
+}
+
+function toMetaMap(items = []) {
+  const map = {};
+  for (const item of items) {
+    const price = closePrice(item);
+    const previousClose = item.previous_close > 0 ? item.previous_close : 0;
+    if (!item.symbol || price <= 0) continue;
+
+    map[item.symbol] = {
+      price,
+      previousClose,
+      change: previousClose > 0 ? price - previousClose : null,
+      changePercent: previousClose > 0 ? ((price - previousClose) / previousClose) * 100 : null,
+    };
   }
   return map;
 }
@@ -39,10 +58,11 @@ function toMap(items = []) {
 async function fetchMap(endpoint) {
   try {
     const data = await bymaGet(endpoint);
-    return toMap(data?.result ?? []);
+    const items = data?.result ?? [];
+    return { prices: toMap(items), meta: toMetaMap(items) };
   } catch (err) {
     console.error(`[priceService] Error en ${endpoint}:`, err.message);
-    return {};
+    return { prices: {}, meta: {} };
   }
 }
 
@@ -57,16 +77,30 @@ export async function fetchAllPrices() {
     fetchMap(EP.bonosEXT),   // AL30C → precio en USD exterior para Cable/CCL
   ]);
 
-  const arsMap = bonosARS.status === 'fulfilled' ? bonosARS.value : {};
-  const usdMap = bonosUSD.status === 'fulfilled' ? bonosUSD.value : {};
-  const extMap = bonosEXT.status === 'fulfilled' ? bonosEXT.value : {};
+  const accionesData = acciones.status === 'fulfilled' ? acciones.value : { prices: {}, meta: {} };
+  const cedearsData  = cedears.status  === 'fulfilled' ? cedears.value  : { prices: {}, meta: {} };
+  const bonosARSData = bonosARS.status === 'fulfilled' ? bonosARS.value : { prices: {}, meta: {} };
+  const bonosUSDData = bonosUSD.status === 'fulfilled' ? bonosUSD.value : { prices: {}, meta: {} };
+  const bonosEXTData = bonosEXT.status === 'fulfilled' ? bonosEXT.value : { prices: {}, meta: {} };
+
+  const arsMap = bonosARSData.prices;
+  const usdMap = bonosUSDData.prices;
+  const extMap = bonosEXTData.prices;
 
   _precios = {
-    ...(acciones.status === 'fulfilled' ? acciones.value : {}),
-    ...(cedears.status  === 'fulfilled' ? cedears.value  : {}),
+    ...accionesData.prices,
+    ...cedearsData.prices,
     ...arsMap,
     ...usdMap,
     ...extMap,
+  };
+
+  _priceMeta = {
+    ...accionesData.meta,
+    ...cedearsData.meta,
+    ...bonosARSData.meta,
+    ...bonosUSDData.meta,
+    ...bonosEXTData.meta,
   };
 
   // MEP   = AL30(ARS) / AL30D(USD)  →  pesos por dólar MEP
@@ -110,6 +144,7 @@ export async function fetchAllPrices() {
 
 export function getMepRate()  { return _mep;   }
 export function getCclRate()  { return _cable;  }
+export function getPriceMeta() { return _priceMeta; }
 
 export function isBondTicker(ticker) {
   if (!ticker) return false;
