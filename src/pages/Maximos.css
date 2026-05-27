@@ -179,6 +179,10 @@
     grid-template-columns: 1fr;
   }
 
+  .m-summary-card:not(.m-cable-card) {
+    display: none;
+  }
+
   .m-table-card {
     display: flex;
     flex-direction: column;
@@ -197,10 +201,38 @@
     border: 1px solid rgba(45,212,191,0.12);
     border-radius: 8px;
     background: #122329;
+    gap: 14px 10px;
   }
 
   .m-row > div {
     grid-column: 1 / -1;
+  }
+
+  .m-row span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 14px;
+  }
+
+  .m-row span small {
+    display: block;
+    color: #5B8A8A !important;
+    font-size: 10px !important;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  .m-adr-equiv,
+  .m-max-adr {
+    display: none !important;
+  }
+
+  .m-needed {
+    align-items: flex-end;
+    font-size: 18px !important;
+    font-weight: 900;
   }
 
   .m-rubro-head {

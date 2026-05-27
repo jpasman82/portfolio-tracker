@@ -149,7 +149,7 @@ export default function Maximos() {
       </div>
 
       <div className="m-summary-grid relative z-10">
-        <div className="m-summary-card">
+        <div className="m-summary-card m-cable-card">
           <span>Cable usado</span>
           <strong>{cable ? '$ ' + cable.toLocaleString('es-AR', { maximumFractionDigits: 0 }) : '-'}</strong>
         </div>
@@ -196,12 +196,12 @@ export default function Maximos() {
                     <strong className="m-ticker">{row.ticker}</strong>
                     <span className="m-ratio">{row.ratioADR} local / ADR</span>
                   </div>
-                  <span>{fmtUSD(row.holdingUsd, 0)}</span>
-                  <span>{fmtUSD(row.localUSD, 2)}</span>
-                  <span>{fmtUSD(maxLocal, 2)}</span>
-                  <span>{fmtUSD(row.adrEquiv, 2)}</span>
-                  <span>{fmtUSD(maxADR, 2)}</span>
-                  <span className={isAbove ? 'm-positive' : 'm-negative'}>{fmtPct(needed)}</span>
+                  <span className="m-holding-usd"><small>Tenencia</small>{fmtUSD(row.holdingUsd, 0)}</span>
+                  <span className="m-current-local"><small>Actual local</small>{fmtUSD(row.localUSD, 2)}</span>
+                  <span className="m-max-local"><small>Max local</small>{fmtUSD(maxLocal, 2)}</span>
+                  <span className="m-adr-equiv"><small>ADR equiv.</small>{fmtUSD(row.adrEquiv, 2)}</span>
+                  <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
+                  <span className={`m-needed ${isAbove ? 'm-positive' : 'm-negative'}`}><small>Falta a max.</small>{fmtPct(needed)}</span>
                 </div>
               );
             })}
