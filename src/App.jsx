@@ -14,6 +14,8 @@ import {
   isBiometricEnabled,
   registerBiometric,
   authenticateWithBiometric,
+  isBiometricTrustValid,
+  markBiometricTrusted,
   clearBiometric
 } from './utils/biometricAuth';
 
@@ -28,6 +30,7 @@ function BiometricLockScreen({ onUnlock }) {
     setErrorMsg('');
     try {
       await authenticateWithBiometric();
+      markBiometricTrusted();
       onUnlock();
     } catch (err) {
       setErrorMsg(
@@ -110,6 +113,7 @@ function BiometricSetupModal({ user, onDone }) {
     setErrorMsg('');
     try {
       await registerBiometric(user.uid, user.email);
+      markBiometricTrusted();
       setStatus('success');
       setTimeout(() => onDone(), 1800);
     } catch (err) {
@@ -191,16 +195,18 @@ export default function App() {
       if (currentUser) {
         const bioEnabled = isBiometricEnabled();
         const sessionUnlocked = sessionStorage.getItem('bioUnlocked') === 'true';
+        const trustedDevice = isBiometricTrustValid();
         const justLoggedIn = sessionStorage.getItem('justLoggedIn') === 'true';
 
         if (justLoggedIn) {
           sessionStorage.removeItem('justLoggedIn');
           sessionStorage.setItem('bioUnlocked', 'true');
+          markBiometricTrusted();
           if (!bioEnabled) {
             const available = await isPlatformAuthenticatorAvailable();
             if (available) setShowSetup(true);
           }
-        } else if (bioEnabled && !sessionUnlocked) {
+        } else if (bioEnabled && !sessionUnlocked && !trustedDevice) {
           setBiometricLocked(true);
         }
         setUser(currentUser);
@@ -232,6 +238,7 @@ export default function App() {
       <BiometricLockScreen
         onUnlock={() => {
           sessionStorage.setItem('bioUnlocked', 'true');
+          markBiometricTrusted();
           setBiometricLocked(false);
         }}
       />

@@ -1,5 +1,7 @@
 const CREDENTIAL_KEY = 'bio_cred_id';
 const BIOMETRIC_ENABLED_KEY = 'bio_enabled';
+const BIOMETRIC_TRUSTED_UNTIL_KEY = 'bio_trusted_until';
+const TRUST_DAYS = 14;
 
 export function isBiometricSupported() {
   return !!(window.PublicKeyCredential && navigator.credentials);
@@ -74,7 +76,18 @@ export function isBiometricEnabled() {
   return localStorage.getItem(BIOMETRIC_ENABLED_KEY) === 'true';
 }
 
+export function markBiometricTrusted() {
+  const trustedUntil = Date.now() + TRUST_DAYS * 24 * 60 * 60 * 1000;
+  localStorage.setItem(BIOMETRIC_TRUSTED_UNTIL_KEY, String(trustedUntil));
+}
+
+export function isBiometricTrustValid() {
+  const trustedUntil = Number(localStorage.getItem(BIOMETRIC_TRUSTED_UNTIL_KEY));
+  return Number.isFinite(trustedUntil) && Date.now() < trustedUntil;
+}
+
 export function clearBiometric() {
   localStorage.removeItem(CREDENTIAL_KEY);
   localStorage.removeItem(BIOMETRIC_ENABLED_KEY);
+  localStorage.removeItem(BIOMETRIC_TRUSTED_UNTIL_KEY);
 }
