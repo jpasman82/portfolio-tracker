@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
-import { fetchAllPrices, getMepRate, getCclRate, isBondTicker } from '../utils/priceService';
+import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
 import './Home.css';
 
 const INTERVALO_MINUTOS = 10;
@@ -35,6 +35,7 @@ export default function Home() {
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
   const [mep, setMep] = useState(null);
   const [cable, setCable] = useState(null);
+  const [tickerTape, setTickerTape] = useState([]);
 
   const fetchBalancesRef = useRef(null);
 
@@ -56,6 +57,7 @@ export default function Home() {
         latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
       };
       let latestTimestamp = 0;
+      const heldTickers = new Set();
 
       querySnapshot.forEach((document) => {
         const data = document.data();
@@ -65,6 +67,10 @@ export default function Home() {
           const divisor = bond ? 100 : 1;
           return sum + (parseNum(a.quantity) * parseNum(a.price)) / divisor / rate;
         }, 0);
+        (data.assets || []).forEach((asset) => {
+          const ticker = asset.ticker?.toUpperCase().trim();
+          if (ticker && !isBondTicker(ticker)) heldTickers.add(ticker);
+        });
         const debt = parseNum(data.debt) || 0;
         newBrokerData[document.id] = {
           balance: assetsTotal - debt,
@@ -81,6 +87,13 @@ export default function Home() {
       setBrokerData(newBrokerData);
       setMep(getMepRate());
       setCable(getCclRate());
+      const priceMeta = getPriceMeta();
+      setTickerTape(
+        [...heldTickers]
+          .map((ticker) => ({ ticker, changePercent: priceMeta[ticker]?.changePercent }))
+          .filter((item) => item.changePercent !== null && item.changePercent !== undefined)
+          .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+      );
 
       if (latestTimestamp > 0) {
         const d = new Date(latestTimestamp);
@@ -179,6 +192,8 @@ export default function Home() {
     { id: 'latin', name: 'Latin Securities',   ...brokerData.latin, logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png' },
   ];
 
+  const tickerTapeItems = tickerTape.length > 0 ? [...tickerTape, ...tickerTape] : [];
+
   const totalActivos = brokers.reduce((sum, b) => sum + (b.assetsTotal || 0), 0);
   const totalDeuda   = brokers.reduce((sum, b) => sum + (b.debt || 0), 0);
   const totalNeto    = brokers.reduce((sum, b) => sum + b.balance, 0);
@@ -266,6 +281,28 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {tickerTapeItems.length > 0 && (
+        <div className="h-ticker-tape relative z-10">
+          <div className="h-ticker-label">Mercado</div>
+          <div className="h-ticker-viewport">
+            <div className="h-ticker-track">
+              {tickerTapeItems.map((item, index) => {
+                const positive = item.changePercent > 0;
+                const neutral = item.changePercent === 0;
+                return (
+                  <div key={`${item.ticker}-${index}`} className="h-ticker-item">
+                    <span className="h-ticker-symbol">{item.ticker}</span>
+                    <span className={positive ? 'h-ticker-up' : neutral ? 'h-ticker-flat' : 'h-ticker-down'}>
+                      {positive ? '+' : ''}{item.changePercent.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Brokers section */}
       <p className={`${KICKER} mb-3`}>
