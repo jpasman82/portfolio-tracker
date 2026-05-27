@@ -98,6 +98,21 @@
   font-size: 15px;
 }
 
+.u-asset-value-cell {
+  text-align: right;
+}
+
+.u-asset-change-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 58px;
+}
+
+.u-asset-change {
+  font-size: 12px;
+}
+
 .u-bottomnav {
   position: fixed;
   bottom: 0;
@@ -162,10 +177,10 @@
     height: 220px;
   }
 
-  /* Asset row → 4-column table */
+  /* Asset row → 5-column table */
   .u-asset-row {
     display: grid;
-    grid-template-columns: 90px 1fr 150px 100px;
+    grid-template-columns: 90px 1fr 150px 74px 100px;
     align-items: center;
     gap: 12px;
   }

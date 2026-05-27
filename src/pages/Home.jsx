@@ -224,20 +224,18 @@ export default function Home() {
         <div className="pointer-events-none absolute top-[-60px] right-[-60px] w-[250px] h-[250px] rounded-full bg-teal-400/[0.06] blur-[60px]" />
 
         <div className="h-summary-main p-5 relative z-10">
-          <div className="flex justify-between items-start mb-3">
-            <p className={KICKER}>
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
-              Balance Neto Consolidado
-            </p>
-            <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[#5B8A8A] bg-[#0C1518] border border-teal-400/10 px-2 py-1 rounded-lg shrink-0 ml-2">
-              {latestGlobalUpdate}
-            </span>
-          </div>
+          <p className={`${KICKER} mb-3`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
+            Balance Neto Consolidado
+          </p>
           <div className="flex items-baseline gap-2">
             <span className="h-total-amount-prefix text-lg text-[#A8C8C8] font-mono">US$</span>
             <span className="h-total-amount font-black tracking-tight text-[#F0FAFA]">
               {totalNeto.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </span>
+          </div>
+          <div className="h-last-update font-mono text-[12px] tracking-[0.12em] uppercase text-[#A8C8C8] mt-2">
+            {latestGlobalUpdate}
           </div>
         </div>
 

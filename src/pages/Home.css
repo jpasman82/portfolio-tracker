@@ -50,6 +50,10 @@
   font-size: 46px;
 }
 
+.h-last-update {
+  color: #A8C8C8;
+}
+
 .h-summary-sub-amount {
   font-size: 19px;
 }
@@ -130,6 +134,11 @@
   .h-total-amount {
     font-size: 52px !important;
     letter-spacing: -1.5px;
+  }
+
+  .h-last-update {
+    font-size: 13px !important;
+    margin-top: 4px !important;
   }
 
   .h-summary-stats {
