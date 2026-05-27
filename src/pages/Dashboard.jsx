@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { Link } from 'react-router-dom';
@@ -16,7 +16,6 @@ const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 
 export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [updatingPrices, setUpdatingPrices] = useState(false);
 
   const parseNum = (val) => {
     if (!val) return 0;
@@ -26,8 +25,32 @@ export default function Dashboard() {
 
   const fetchEvents = async () => {
     try {
+      const priceMap = await fetchAllPrices();
+      const mepRate = getMepRate();
       const querySnapshot = await getDocs(collection(db, "rotations"));
-      let data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let data = querySnapshot.docs.map(doc => {
+        const rotation = { id: doc.id, ...doc.data() };
+        if (rotation.isClosed) return rotation;
+
+        const currentPricesFromByma = { ...(rotation.currentPricesFromDb || {}) };
+        const soldCurrentPricesFromByma = { ...(rotation.soldCurrentPricesFromDb || {}) };
+
+        (rotation.boughtAssetsFromDb || rotation.boughtAssets || []).forEach(a => {
+          const t = a.ticker?.toUpperCase().trim();
+          if (t && priceMap[t] !== undefined) currentPricesFromByma[t] = priceMap[t];
+        });
+        (rotation.soldAssets || []).forEach(a => {
+          const t = a.ticker?.toUpperCase().trim();
+          if (t && priceMap[t] !== undefined) soldCurrentPricesFromByma[t] = priceMap[t];
+        });
+
+        return {
+          ...rotation,
+          currentPricesFromByma,
+          soldCurrentPricesFromByma,
+          currentUsdRateFromByma: mepRate || rotation.currentUsdRateFromDb || rotation.initialUsdRate || 1,
+        };
+      });
       data.sort((a, b) => {
         if (a.isClosed === b.isClosed) return new Date(b.tradeDate) - new Date(a.tradeDate);
         return a.isClosed ? 1 : -1;
@@ -45,73 +68,6 @@ export default function Dashboard() {
         await deleteDoc(doc(db, "rotations", id));
         setEvents(events.filter(ev => ev.id !== id));
       } catch (err) { alert("Error al borrar."); }
-    }
-  };
-
-  const handleUpdatePrices = async () => {
-    setUpdatingPrices(true);
-    try {
-      const priceMap = await fetchAllPrices();
-      const nowIso = new Date().toISOString();
-      const timeStr = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-
-      const rotSnap = await getDocs(collection(db, "rotations"));
-      for (const d of rotSnap.docs) {
-        const data = d.data();
-        if (data.isClosed) continue;
-        let changed = false;
-        const curP = { ...(data.currentPricesFromDb || {}) };
-        const soldP = { ...(data.soldCurrentPricesFromDb || {}) };
-
-        ;(data.boughtAssetsFromDb || data.boughtAssets || []).forEach(a => {
-          const t = a.ticker?.toUpperCase().trim();
-          if (t && priceMap[t]) { curP[t] = priceMap[t]; changed = true; }
-        });
-        ;(data.soldAssets || []).forEach(a => {
-          const t = a.ticker?.toUpperCase().trim();
-          if (t && priceMap[t]) { soldP[t] = priceMap[t]; changed = true; }
-        });
-
-        if (changed) await updateDoc(doc(db, "rotations", d.id), { currentPricesFromDb: curP, soldCurrentPricesFromDb: soldP, lastUpdated: timeStr });
-      }
-
-      const brokSnap = await getDocs(collection(db, "brokerPositions"));
-      for (const d of brokSnap.docs) {
-        const data = d.data();
-        const updatedAssets = (data.assets || []).map(a => {
-          const t = a.ticker?.toUpperCase().trim();
-          if (t && priceMap[t]) return { ...a, price: priceMap[t] };
-          return a;
-        });
-        await updateDoc(doc(db, "brokerPositions", d.id), { assets: updatedAssets, lastUpdated: nowIso });
-      }
-
-      alert("Sincronización completada.");
-      window.location.reload();
-    } catch (error) {
-      alert("Error: " + error.message);
-    } finally {
-      setUpdatingPrices(false);
-    }
-  };
-
-  const exportMaeData = async () => {
-    try {
-      const maeRes = await fetch('/api/mae/mercado/cotizaciones/rentafija', {
-        headers: { 'x-api-key': import.meta.env.VITE_MAE_API_KEY }
-      });
-      const json = await maeRes.json();
-      const lista = json.data || json;
-      let csv = "Ticker;Precio Ultimo;Precio Cierre;Variacion;Volumen;Segmento;Descripcion\n";
-      lista.forEach(i => {
-        csv += `${i.ticker};${i.precioUltimo};${i.precioCierre};${i.variacion};${i.volumenAcumulado};${i.segmento};${i.descripcion}\n`;
-      });
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'data_mae_completa.csv'; a.click();
-    } catch (error) {
-      alert("Error al descargar datos: " + error.message);
     }
   };
 
@@ -181,21 +137,6 @@ export default function Dashboard() {
             >
               Excel
             </button>
-            <button
-              onClick={exportMaeData}
-              className="font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 text-[#A8C8C8] rounded-lg transition-colors"
-            >
-              MAE
-            </button>
-            <button
-              onClick={handleUpdatePrices}
-              disabled={updatingPrices}
-              className="w-8 h-8 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 flex items-center justify-center text-teal-400 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={updatingPrices ? 'animate-spin' : ''}>
-                <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>
-              </svg>
-            </button>
           </div>
         </div>
       </div>
@@ -205,10 +146,10 @@ export default function Dashboard() {
         {events.map(event => {
           const soldAssets = event.soldAssets || [];
           const boughtAssets = event.boughtAssetsFromDb || event.boughtAssets || [];
-          const currentPrices = event.currentPricesFromDb || {};
-          const soldCurrentPrices = event.soldCurrentPricesFromDb || {};
+          const currentPrices = event.currentPricesFromByma || event.currentPricesFromDb || {};
+          const soldCurrentPrices = event.soldCurrentPricesFromByma || event.soldCurrentPricesFromDb || {};
           const initialUsdRate = event.initialUsdRate || 1;
-          const currentUsdRate = event.currentUsdRateFromDb || initialUsdRate;
+          const currentUsdRate = event.currentUsdRateFromByma || event.currentUsdRateFromDb || initialUsdRate;
 
           const totalARS_Init = soldAssets.reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(a.priceAtTrade)), 0);
           const totalUSD_Init = totalARS_Init / initialUsdRate;

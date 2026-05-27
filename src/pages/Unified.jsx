@@ -13,11 +13,16 @@ const handleLogout = async () => {
 };
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
+const LIVE_DURATION_MS = 5 * 60 * 1000;
+const LIVE_REFRESH_MS = 60 * 1000;
 
 export default function Unified() {
   const [groupedData, setGroupedData] = useState({});
   const [totalUsd, setTotalUsd] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [liveUntil, setLiveUntil] = useState(null);
+  const [liveSecondsLeft, setLiveSecondsLeft] = useState(0);
   const [pieMode, setPieMode] = useState('cat');
   const [hoverData, setHoverData] = useState(null);
   const animatedRef = useRef(false);
@@ -36,9 +41,15 @@ export default function Unified() {
     const n = parseNum(v);
     return `${n > 0 ? '+' : ''}${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
   };
+  const fmtLiveTime = (seconds) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
 
-  useEffect(() => {
-    const fetchAndGroup = async () => {
+  const fetchAndGroup = async ({ showLoading = false } = {}) => {
+    if (showLoading) setLoading(true);
+    setRefreshing(true);
       try {
         const priceMap = await fetchAllPrices();
         const mepRate = getMepRate();
@@ -100,11 +111,52 @@ export default function Unified() {
 
         setGroupedData(grouped);
         setTotalUsd(total);
-      } catch (e) {}
-      finally { setLoading(false); }
+      } catch (e) {
+        console.error('[Unified] BYMA refresh:', e.message);
+      }
+      finally {
+        if (showLoading) setLoading(false);
+        setRefreshing(false);
+      }
+  };
+
+  useEffect(() => {
+    fetchAndGroup({ showLoading: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!liveUntil) return undefined;
+
+    const updateCountdown = () => {
+      const remaining = liveUntil - Date.now();
+      setLiveSecondsLeft(Math.max(0, Math.ceil(remaining / 1000)));
+      if (remaining <= 0) setLiveUntil(null);
     };
+
+    updateCountdown();
+    const countdownId = window.setInterval(updateCountdown, 1000);
+    const refreshId = window.setInterval(() => {
+      if (Date.now() < liveUntil) fetchAndGroup();
+    }, LIVE_REFRESH_MS);
+
+    return () => {
+      window.clearInterval(countdownId);
+      window.clearInterval(refreshId);
+    };
+  }, [liveUntil]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleLiveMode = () => {
+    if (liveUntil) {
+      setLiveUntil(null);
+      setLiveSecondsLeft(0);
+      return;
+    }
+
+    const until = Date.now() + LIVE_DURATION_MS;
+    setLiveUntil(until);
+    setLiveSecondsLeft(Math.ceil(LIVE_DURATION_MS / 1000));
     fetchAndGroup();
-  }, []);
+  };
 
   useEffect(() => {
     if (loading || animatedRef.current) return;
@@ -188,7 +240,21 @@ export default function Unified() {
           <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
           Vista Consolidada
         </p>
-        <h2 className="u-title text-2xl font-bold tracking-tight text-[#F0FAFA] mt-1">Cartera Unificada</h2>
+        <div className="u-header-main">
+          <h2 className="u-title text-2xl font-bold tracking-tight text-[#F0FAFA] mt-1">Cartera Unificada</h2>
+          <button
+            type="button"
+            onClick={toggleLiveMode}
+            className={`u-live-btn ${liveUntil ? 'is-live' : ''}`}
+            aria-pressed={Boolean(liveUntil)}
+            title={liveUntil ? 'Detener actualizacion temporal' : 'Activar actualizacion temporal'}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'animate-spin' : ''}>
+              <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            </svg>
+            <span>{liveUntil ? fmtLiveTime(liveSecondsLeft) : 'Vivo'}</span>
+          </button>
+        </div>
         <p className="font-mono text-[13px] tracking-[0.15em] uppercase text-[#5B8A8A] mt-1.5">Posición consolidada por sectores</p>
       </div>
 
@@ -258,6 +324,7 @@ export default function Unified() {
                           <span>Ticker</span>
                           <span>Nominales</span>
                           <span style={{ textAlign: 'right' }}>Valor USD</span>
+                          <span style={{ textAlign: 'right' }}>Var.</span>
                           <span className="u-asset-pct-bar">% Cartera</span>
                         </div>
 
@@ -276,21 +343,23 @@ export default function Unified() {
                               <div className="font-mono text-[12px] text-[#5B8A8A]">
                                 {asset.ticker === 'DEUDA CAUCIÓN' ? 'Pasivo' : `${fmtQty(asset.quantity)} nom.`}
                               </div>
-                              <div style={{ textAlign: 'right' }}>
+                              <div className="u-asset-value-cell">
                                 <div className="u-asset-val font-bold" style={{ color: isDebt ? '#F87171' : '#2DD4BF' }}>
                                   {fmtUSD(asset.valueUsd)}
                                 </div>
-                                {!isDebt && asset.changePercent !== null && asset.changePercent !== undefined && (
-                                  <div
-                                    className="font-mono text-[12px] font-bold"
-                                    style={{ color: asset.changePercent > 0 ? '#34D399' : asset.changePercent < 0 ? '#F87171' : '#5B8A8A' }}
-                                  >
-                                    {fmtChangePct(asset.changePercent)}
-                                  </div>
-                                )}
                                 <div className="u-mobile-pct font-mono text-[12px] text-[#5B8A8A]">
                                   {pct.toFixed(1)}% cartera
                                 </div>
+                              </div>
+                              <div className="u-asset-change-cell">
+                                {!isDebt && asset.changePercent !== null && asset.changePercent !== undefined && (
+                                  <span
+                                    className="u-asset-change font-mono font-bold"
+                                    style={{ color: asset.changePercent > 0 ? '#34D399' : asset.changePercent < 0 ? '#F87171' : '#5B8A8A' }}
+                                  >
+                                    {fmtChangePct(asset.changePercent)}
+                                  </span>
+                                )}
                               </div>
                               <div className="u-asset-pct-bar">
                                 <div className="flex justify-between items-baseline">

@@ -25,7 +25,6 @@ export default function EventDetail() {
   const [eventName, setEventName] = useState('');
   const [saving, setSaving] = useState(false);
   const [viewCurrency, setViewCurrency] = useState('ARS');
-  const [updatingPrices, setUpdatingPrices] = useState(false);
 
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
@@ -55,9 +54,19 @@ export default function EventDetail() {
         const docSnap = await getDoc(doc(db, "rotations", id));
         if (docSnap.exists()) {
           const data = docSnap.data();
+          let priceMap = {};
+          let mepRate = null;
+          if (!data.isClosed) {
+            try {
+              priceMap = await fetchAllPrices();
+              mepRate = getMepRate();
+            } catch (e) {
+              console.error('[EventDetail] BYMA prices:', e.message);
+            }
+          }
           setEvent(data);
           setEventName(data.eventName);
-          const initUsd = data.currentUsdRateFromDb || data.initialUsdRate || 1;
+          const initUsd = mepRate || data.currentUsdRateFromDb || data.initialUsdRate || 1;
           setCurrentUsdRate(formatDecimals(initUsd));
           const assets = data.boughtAssetsFromDb || data.boughtAssets || [];
           const formattedAssets = assets.map(a => ({
@@ -68,10 +77,16 @@ export default function EventDetail() {
           }));
           setCurrentAssets(formattedAssets);
           const pB = {};
-          formattedAssets.forEach(a => pB[a.ticker] = formatDecimals(data.currentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0));
+          formattedAssets.forEach(a => {
+            const t = a.ticker?.toUpperCase().trim();
+            pB[a.ticker] = formatDecimals(priceMap[t] ?? data.currentPricesFromDb?.[a.ticker] ?? a.priceAtTrade ?? 0);
+          });
           setCurrentPrices(pB);
           const pS = {};
-          (data.soldAssets || []).forEach(a => pS[a.ticker] = formatDecimals(data.soldCurrentPricesFromDb?.[a.ticker] || a.priceAtTrade || 0));
+          (data.soldAssets || []).forEach(a => {
+            const t = a.ticker?.toUpperCase().trim();
+            pS[a.ticker] = formatDecimals(priceMap[t] ?? data.soldCurrentPricesFromDb?.[a.ticker] ?? a.priceAtTrade ?? 0);
+          });
           setSoldCurrentPrices(pS);
         }
       } catch (e) {}
@@ -79,30 +94,6 @@ export default function EventDetail() {
     };
     fetchData();
   }, [id]);
-
-  const handleUpdatePrices = async () => {
-    setUpdatingPrices(true);
-    try {
-      const priceMap = await fetchAllPrices();
-      const mepRate = getMepRate();
-      let changed = false;
-      const newCurrentPrices = { ...currentPrices };
-      const newSoldCurrentPrices = { ...soldCurrentPrices };
-      currentAssets.forEach(a => {
-        if (priceMap[a.ticker] !== undefined) { newCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]); changed = true; }
-      });
-      ;(event.soldAssets || []).forEach(a => {
-        if (priceMap[a.ticker] !== undefined) { newSoldCurrentPrices[a.ticker] = formatDecimals(priceMap[a.ticker]); changed = true; }
-      });
-      if (changed) { setCurrentPrices(newCurrentPrices); setSoldCurrentPrices(newSoldCurrentPrices); }
-      else alert("No se encontraron cotizaciones para los tickers de esta estrategia.");
-      if (mepRate !== null) setCurrentUsdRate(formatDecimals(mepRate));
-    } catch (error) {
-      alert(`Error al buscar precios: ${error.message}`);
-    } finally {
-      setUpdatingPrices(false);
-    }
-  };
 
   const handleAddAsset = () => {
     setCurrentAssets([...currentAssets, { ticker: '', quantity: '', priceAtTrade: '', usdRateAtTrade: currentUsdRate }]);
@@ -197,17 +188,6 @@ export default function EventDetail() {
               <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-[#5B8A8A] bg-[#0C1518] border border-teal-400/10 px-2 py-1 rounded-lg">
                 Act: {event.lastUpdated}hs
               </span>
-            )}
-            {!event.isClosed && (
-              <button
-                onClick={handleUpdatePrices}
-                disabled={updatingPrices}
-                className="w-7 h-7 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 flex items-center justify-center text-teal-400 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={updatingPrices ? 'animate-spin' : ''}>
-                  <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>
-                </svg>
-              </button>
             )}
           </div>
         </div>
