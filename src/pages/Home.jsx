@@ -118,6 +118,7 @@ export default function Home() {
     try {
       const priceMap = await fetchAllPrices();
       const mepRate = getMepRate();
+      const refreshHasMarketData = Object.keys(priceMap).length > 0 || mepRate !== null;
       const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
       const nowIso = new Date().toISOString();
 
@@ -151,7 +152,7 @@ export default function Home() {
 
         if (!isJPM && mepRate !== null) payload.usdRate = mepRate;
 
-        if (Object.keys(payload).length > 0) {
+        if (Object.keys(payload).length > 0 || refreshHasMarketData) {
           payload.lastUpdated = nowIso;
           await updateDoc(doc(db, 'brokerPositions', document.id), payload);
         }
@@ -167,8 +168,14 @@ export default function Home() {
 
   useEffect(() => {
     const init = async () => {
-      try { await fetchAllPrices(); } catch (e) {}
-      await fetchBalancesRef.current();
+      const abierto = esMercadoAbierto();
+      setMercadoAbierto(abierto);
+      if (abierto) {
+        await handleUpdatePrices(true);
+      } else {
+        try { await fetchAllPrices(); } catch (e) {}
+        await fetchBalancesRef.current();
+      }
     };
     init();
     const estadoMercado = setInterval(() => {
