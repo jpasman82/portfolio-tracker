@@ -27,10 +27,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-.u-live-btn {
-  min-width: 116px;
+.u-market-status {
+  min-width: 136px;
   height: 44px;
   display: inline-flex;
   align-items: center;
@@ -41,37 +42,45 @@
   background: #0C1518;
   color: #A8C8C8;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  cursor: pointer;
   transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
   flex-shrink: 0;
 }
 
-.u-live-btn:hover,
-.u-live-btn.is-live {
+.u-market-status.is-live {
   border-color: rgba(45, 212, 191, 0.45);
   background: rgba(45, 212, 191, 0.1);
   color: #2DD4BF;
 }
 
-.u-live-dot {
+.u-market-status.is-closed {
+  border-color: rgba(91, 138, 138, 0.18);
+  color: #5B8A8A;
+}
+
+.u-market-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
   background: #5B8A8A;
   box-shadow: none;
+  flex-shrink: 0;
 }
 
-.u-live-btn.is-live .u-live-dot {
+.u-market-status.is-live .u-market-dot {
   background: #2DD4BF;
   box-shadow: 0 0 14px rgba(45, 212, 191, 0.85);
-  animation: u-live-pulse 1s ease-in-out infinite;
+  animation: u-market-pulse 1s ease-in-out infinite;
 }
 
-@keyframes u-live-pulse {
+.u-market-status.is-closed .u-market-dot {
+  background: #33494d;
+}
+
+@keyframes u-market-pulse {
   0%, 100% {
     opacity: 0.35;
     transform: scale(0.82);

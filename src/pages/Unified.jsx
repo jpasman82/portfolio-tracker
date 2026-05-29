@@ -13,16 +13,23 @@ const handleLogout = async () => {
 };
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
-const LIVE_DURATION_MS = 5 * 60 * 1000;
-const LIVE_REFRESH_MS = 60 * 1000;
+const REFRESH_MS = 60 * 1000;
+const APERTURA_MINUTOS = 10 * 60 + 30;
+const CIERRE_MINUTOS = 17 * 60;
+
+function esMercadoAbierto() {
+  const ahora = new Date();
+  const dia = ahora.getDay();
+  const minutos = ahora.getHours() * 60 + ahora.getMinutes();
+  return dia >= 1 && dia <= 5 && minutos >= APERTURA_MINUTOS && minutos < CIERRE_MINUTOS;
+}
 
 export default function Unified() {
   const [groupedData, setGroupedData] = useState({});
   const [totalUsd, setTotalUsd] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [liveUntil, setLiveUntil] = useState(null);
-  const [liveSecondsLeft, setLiveSecondsLeft] = useState(0);
+  const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const [pieMode, setPieMode] = useState('cat');
   const [hoverData, setHoverData] = useState(null);
   const animatedRef = useRef(false);
@@ -41,12 +48,6 @@ export default function Unified() {
     const n = parseNum(v);
     return `${n > 0 ? '+' : ''}${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
   };
-  const fmtLiveTime = (seconds) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-  };
-
   const fetchAndGroup = async ({ showLoading = false } = {}) => {
     if (showLoading) setLoading(true);
     setRefreshing(true);
@@ -125,38 +126,21 @@ export default function Unified() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!liveUntil) return undefined;
-
-    const updateCountdown = () => {
-      const remaining = liveUntil - Date.now();
-      setLiveSecondsLeft(Math.max(0, Math.ceil(remaining / 1000)));
-      if (remaining <= 0) setLiveUntil(null);
+    const updateMarketState = () => {
+      setMercadoAbierto(esMercadoAbierto());
     };
-
-    updateCountdown();
-    const countdownId = window.setInterval(updateCountdown, 1000);
     const refreshId = window.setInterval(() => {
-      if (Date.now() < liveUntil) fetchAndGroup();
-    }, LIVE_REFRESH_MS);
+      const abierto = esMercadoAbierto();
+      setMercadoAbierto(abierto);
+      if (abierto) fetchAndGroup();
+    }, REFRESH_MS);
+    const statusId = window.setInterval(updateMarketState, 30 * 1000);
 
     return () => {
-      window.clearInterval(countdownId);
       window.clearInterval(refreshId);
+      window.clearInterval(statusId);
     };
-  }, [liveUntil]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const toggleLiveMode = () => {
-    if (liveUntil) {
-      setLiveUntil(null);
-      setLiveSecondsLeft(0);
-      return;
-    }
-
-    const until = Date.now() + LIVE_DURATION_MS;
-    setLiveUntil(until);
-    setLiveSecondsLeft(Math.ceil(LIVE_DURATION_MS / 1000));
-    fetchAndGroup();
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (loading || animatedRef.current) return;
@@ -242,19 +226,13 @@ export default function Unified() {
         </p>
         <div className="u-header-main">
           <h2 className="u-title text-2xl font-bold tracking-tight text-[#F0FAFA] mt-1">Cartera Unificada</h2>
-          <button
-            type="button"
-            onClick={toggleLiveMode}
-            className={`u-live-btn ${liveUntil ? 'is-live' : ''}`}
-            aria-pressed={Boolean(liveUntil)}
-            title={liveUntil ? 'Detener actualizacion temporal' : 'Activar actualizacion temporal'}
-          >
-            <span className="u-live-dot" />
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'animate-spin' : ''}>
+          <div className={`u-market-status ${mercadoAbierto ? 'is-live' : 'is-closed'}`}>
+            <span className="u-market-dot" />
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'animate-spin' : ''} aria-hidden="true">
               <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>
             </svg>
-            <span>{liveUntil ? fmtLiveTime(liveSecondsLeft) : 'Vivo'}</span>
-          </button>
+            <span>{mercadoAbierto ? 'En vivo' : 'Mercado cerrado'}</span>
+          </div>
         </div>
         <p className="font-mono text-[13px] tracking-[0.15em] uppercase text-[#5B8A8A] mt-1.5">Posición consolidada por sectores</p>
       </div>

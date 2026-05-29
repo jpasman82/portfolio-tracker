@@ -6,9 +6,9 @@ import { db, auth } from '../firebase/config';
 import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
 import './Home.css';
 
-const INTERVALO_MINUTOS = 10;
-const HORA_APERTURA = 11;
-const HORA_CIERRE = 17;
+const INTERVALO_MINUTOS = 1;
+const APERTURA_MINUTOS = 10 * 60 + 30;
+const CIERRE_MINUTOS = 17 * 60;
 
 const handleLogout = async () => {
   sessionStorage.removeItem('bioUnlocked');
@@ -18,8 +18,8 @@ const handleLogout = async () => {
 function esMercadoAbierto() {
   const ahora = new Date();
   const dia = ahora.getDay();
-  const hora = ahora.getHours();
-  return dia >= 1 && dia <= 5 && hora >= HORA_APERTURA && hora < HORA_CIERRE;
+  const minutos = ahora.getHours() * 60 + ahora.getMinutes();
+  return dia >= 1 && dia <= 5 && minutos >= APERTURA_MINUTOS && minutos < CIERRE_MINUTOS;
 }
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
@@ -36,6 +36,7 @@ export default function Home() {
   const [mep, setMep] = useState(null);
   const [cable, setCable] = useState(null);
   const [tickerTape, setTickerTape] = useState([]);
+  const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
 
   const fetchBalancesRef = useRef(null);
 
@@ -170,10 +171,18 @@ export default function Home() {
       await fetchBalancesRef.current();
     };
     init();
+    const estadoMercado = setInterval(() => {
+      setMercadoAbierto(esMercadoAbierto());
+    }, 30 * 1000);
     const intervalo = setInterval(() => {
-      if (esMercadoAbierto()) handleUpdatePrices(true);
+      const abierto = esMercadoAbierto();
+      setMercadoAbierto(abierto);
+      if (abierto) handleUpdatePrices(true);
     }, INTERVALO_MINUTOS * 60 * 1000);
-    return () => clearInterval(intervalo);
+    return () => {
+      clearInterval(estadoMercado);
+      clearInterval(intervalo);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatSubDate = (date) => {
@@ -220,7 +229,11 @@ export default function Home() {
           </p>
           <h2 className="h-page-name text-3xl font-black tracking-tight text-[#F0FAFA] mt-0.5">Marcos</h2>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <div className={`h-market-status ${mercadoAbierto ? 'is-live' : 'is-closed'}`}>
+            <span className="h-market-dot" />
+            <span>{mercadoAbierto ? 'En vivo' : 'Mercado cerrado'}</span>
+          </div>
           <button
             onClick={() => handleUpdatePrices(false)}
             disabled={updatingPrices}
