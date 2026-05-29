@@ -250,6 +250,35 @@
     flex-shrink: 0;
   }
 
+  .h-ticker-tape {
+    height: 48px;
+    margin: 0 0 22px;
+    gap: 14px;
+  }
+
+  .h-ticker-label {
+    padding: 0 16px;
+    font-size: 12px;
+  }
+
+  .h-ticker-track {
+    gap: 30px;
+  }
+
+  .h-ticker-item {
+    gap: 9px;
+  }
+
+  .h-ticker-symbol {
+    font-size: 16px;
+  }
+
+  .h-ticker-up,
+  .h-ticker-flat,
+  .h-ticker-down {
+    font-size: 15px;
+  }
+
   .h-page-name {
     font-size: 41px !important;
   }

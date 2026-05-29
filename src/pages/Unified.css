@@ -187,8 +187,8 @@
 
   .u-grid {
     display: grid;
-    grid-template-columns: 1fr 360px;
-    gap: 36px;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: 40px;
     align-items: start;
   }
 
@@ -207,16 +207,16 @@
   }
 
   .pie-wrap {
-    width: 220px;
-    height: 220px;
+    width: 240px;
+    height: 240px;
   }
 
   /* Asset row → 5-column table */
   .u-asset-row {
     display: grid;
-    grid-template-columns: 90px 1fr 150px 74px 100px;
+    grid-template-columns: 110px 1fr 170px 86px 120px;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
   }
 
   .u-asset-pct-bar {
@@ -244,7 +244,7 @@
   }
 
   .u-sub-card {
-    padding: 16px 20px !important;
+    padding: 20px 24px !important;
   }
 
   .u-mobile-pct {
@@ -257,52 +257,68 @@
 
   /* Larger fonts */
   .u-title {
-    font-size: 38px !important;
+    font-size: 42px !important;
   }
 
   .u-total-amount {
-    font-size: 47px !important;
+    font-size: 54px !important;
     letter-spacing: -1.5px;
   }
 
   .u-total-label {
-    font-size: 12px !important;
+    font-size: 13px !important;
   }
 
   .u-cat-title {
-    font-size: 28px !important;
+    font-size: 32px !important;
   }
 
   .u-cat-pct {
-    font-size: 18px !important;
-  }
-
-  .u-sub-title {
     font-size: 20px !important;
   }
 
+  .u-sub-title {
+    font-size: 23px !important;
+  }
+
   .u-sub-amount {
-    font-size: 15px !important;
-  }
-
-  .u-asset-ticker-text {
-    font-size: 18px !important;
-  }
-
-  .u-asset-val {
     font-size: 17px !important;
   }
 
-  .u-legend-name {
+  .u-asset-ticker-text {
+    font-size: 21px !important;
+  }
+
+  .u-asset-val {
+    font-size: 20px !important;
+  }
+
+  .u-table-header {
+    font-size: 12px !important;
+  }
+
+  .u-asset-row > div:nth-child(2) {
     font-size: 15px !important;
+  }
+
+  .u-legend-name {
+    font-size: 16px !important;
   }
 
   .u-legend-pct {
-    font-size: 15px !important;
+    font-size: 17px !important;
   }
 
   .u-legend-val {
-    font-size: 13px !important;
+    font-size: 15px !important;
+  }
+
+  .u-asset-change {
+    font-size: 15px !important;
+  }
+
+  .u-asset-pct-bar span {
+    font-size: 14px !important;
   }
 
   .u-bottomnav {
