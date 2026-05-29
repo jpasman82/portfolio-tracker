@@ -14,6 +14,25 @@ const YAHOO_SYMBOLS = {
   YPFD: 'YPF',
   TECO2: 'TEO',
 };
+const TRADING_VIEW_SYMBOLS = {
+  BBAR: 'NYSE:BBAR',
+  BMA: 'NYSE:BMA',
+  TGS: 'NYSE:TGS',
+  YPF: 'NYSE:YPF',
+  TEO: 'NYSE:TEO',
+  PAMP: 'NYSE:PAM',
+  CEPU: 'NYSE:CEPU',
+  GGAL: 'NASDAQ:GGAL',
+  SUPV: 'NYSE:SUPV',
+  EDN: 'NYSE:EDN',
+  GLOB: 'NYSE:GLOB',
+  VIST: 'NYSE:VIST',
+};
+
+const tradingViewUrl = (symbol) => {
+  const tvSymbol = TRADING_VIEW_SYMBOLS[symbol] || symbol;
+  return `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}&interval=W&range=60M&theme=dark&style=2&timezone=America%2FArgentina%2FBuenos_Aires&hide_top_toolbar=1&hide_side_toolbar=1&allow_symbol_change=0&save_image=0`;
+};
 
 const handleLogout = async () => {
   sessionStorage.removeItem('bioUnlocked');
@@ -197,23 +216,31 @@ export default function Maximos() {
               const isAbove = needed !== null && needed <= 0;
 
               return (
-                <Link
-                  key={row.ticker}
-                  to={`/yahoo/${encodeURIComponent(row.yahooSymbol)}`}
-                  className="m-row m-row-link"
-                  aria-label={`Abrir grafico historico de ${row.yahooSymbol} en Yahoo Finance`}
-                >
-                  <div>
-                    <strong className="m-ticker">{row.ticker}</strong>
-                    <span className="m-ratio">{row.ratioADR} local / ADR · Yahoo {row.yahooSymbol}</span>
+                <div key={row.ticker} className="m-row-card">
+                  <Link
+                    to={`/yahoo/${encodeURIComponent(row.yahooSymbol)}`}
+                    className="m-row m-row-link"
+                    aria-label={`Abrir grafico historico de ${row.yahooSymbol}`}
+                  >
+                    <div>
+                      <strong className="m-ticker">{row.ticker}</strong>
+                      <span className="m-ratio">{row.ratioADR} local / ADR · {row.yahooSymbol}</span>
+                    </div>
+                    <span className="m-holding-usd"><small>Tenencia</small>{fmtUSD(row.holdingUsd, 0)}</span>
+                    <span className="m-current-local"><small>Actual local</small>{fmtUSD(row.localUSD, 2)}</span>
+                    <span className="m-max-local"><small>Max local</small>{fmtUSD(maxLocal, 2)}</span>
+                    <span className="m-adr-equiv"><small>ADR actual</small>{fmtUSD(row.adrEquiv, 2)}</span>
+                    <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
+                    <span className={`m-needed ${isAbove ? 'm-positive' : 'm-negative'}`}><small>Falta a max.</small>{fmtPct(needed)}</span>
+                  </Link>
+                  <div className="m-mobile-chart" aria-label={`Evolucion 5 anos de ${row.yahooSymbol}`}>
+                    <iframe
+                      title={`Grafico 5 anos ${row.yahooSymbol}`}
+                      src={tradingViewUrl(row.yahooSymbol)}
+                      loading="lazy"
+                    />
                   </div>
-                  <span className="m-holding-usd"><small>Tenencia</small>{fmtUSD(row.holdingUsd, 0)}</span>
-                  <span className="m-current-local"><small>Actual local</small>{fmtUSD(row.localUSD, 2)}</span>
-                  <span className="m-max-local"><small>Max local</small>{fmtUSD(maxLocal, 2)}</span>
-                  <span className="m-adr-equiv"><small>ADR actual</small>{fmtUSD(row.adrEquiv, 2)}</span>
-                  <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
-                  <span className={`m-needed ${isAbove ? 'm-positive' : 'm-negative'}`}><small>Falta a max.</small>{fmtPct(needed)}</span>
-                </Link>
+                </div>
               );
             })}
           </div>
