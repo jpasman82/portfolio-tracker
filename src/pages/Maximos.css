@@ -44,36 +44,10 @@
   box-shadow: inset 0 0 0 1px rgba(45,212,191,0.24);
 }
 
-.m-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.m-summary-card,
 .m-table-card {
   background: #122329;
   border: 1px solid rgba(45,212,191,0.12);
   border-radius: 8px;
-}
-
-.m-summary-card {
-  padding: 14px;
-}
-
-.m-summary-card span {
-  display: block;
-  color: #5B8A8A;
-  font: 700 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  margin-bottom: 5px;
-}
-
-.m-summary-card strong {
-  color: #F0FAFA;
-  font-size: 20px;
 }
 
 .m-table-card {
@@ -181,10 +155,6 @@
   .m-title-row {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .m-summary-grid {
-    grid-template-columns: 1fr;
   }
 
   .m-table-card {

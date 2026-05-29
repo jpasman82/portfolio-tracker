@@ -31,7 +31,7 @@ const TRADING_VIEW_SYMBOLS = {
 
 const tradingViewUrl = (symbol) => {
   const tvSymbol = TRADING_VIEW_SYMBOLS[symbol] || symbol;
-  return `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}&interval=W&range=60M&theme=dark&style=2&timezone=America%2FArgentina%2FBuenos_Aires&hide_top_toolbar=1&hide_side_toolbar=1&allow_symbol_change=0&save_image=0`;
+  return `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}&interval=W&range=60M&theme=dark&style=2&timezone=America%2FArgentina%2FBuenos_Aires&hide_top_toolbar=1&hide_side_toolbar=1&hide_legend=1&allow_symbol_change=0&save_image=0`;
 };
 
 const handleLogout = async () => {
@@ -130,17 +130,6 @@ export default function Maximos() {
     }, {});
   }, [sortedRows]);
 
-  const summary = useMemo(() => {
-    const returnKey = target === 'historico' ? 'maxHistoricoReturn' : 'maxEneroReturn';
-    const valid = sortedRows.filter((r) => r[returnKey] !== null && r[returnKey] !== undefined);
-    if (!valid.length) return { above: 0, avgReturn: null, closest: null };
-
-    const above = valid.filter((r) => r[returnKey] <= 0).length;
-    const avgReturn = valid.reduce((sum, r) => sum + r[returnKey], 0) / valid.length;
-    const closest = [...valid].sort((a, b) => Math.abs(a[returnKey]) - Math.abs(b[returnKey]))[0];
-    return { above, avgReturn, closest };
-  }, [sortedRows, target]);
-
   if (loading) return (
     <div className="m-page flex justify-center items-center">
       <div className="flex flex-col items-center gap-4">
@@ -165,21 +154,6 @@ export default function Maximos() {
           <button className={target === 'enero' ? 'active' : ''} onClick={() => setTarget('enero')}>Ene 2025</button>
           <button className={target === 'historico' ? 'active' : ''} onClick={() => setTarget('historico')}>Historico</button>
           </div>
-        </div>
-      </div>
-
-      <div className="m-summary-grid relative z-10">
-        <div className="m-summary-card">
-          <span>Arriba del maximo</span>
-          <strong>{summary.above}/{rows.length}</strong>
-        </div>
-        <div className="m-summary-card">
-          <span>Promedio a maximo</span>
-          <strong className={summary.avgReturn <= 0 ? 'm-positive' : 'm-negative'}>{fmtPct(summary.avgReturn)}</strong>
-        </div>
-        <div className="m-summary-card">
-          <span>Mas cerca</span>
-          <strong>{summary.closest?.ticker ?? '-'}</strong>
         </div>
       </div>
 

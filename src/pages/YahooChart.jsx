@@ -22,7 +22,7 @@ export default function YahooChart() {
   const cleanSymbol = symbol.toUpperCase().replace(/[^A-Z0-9.-]/g, '');
   const yahooUrl = `https://finance.yahoo.com/chart/${encodeURIComponent(cleanSymbol)}`;
   const tradingViewSymbol = TRADING_VIEW_SYMBOLS[cleanSymbol] || cleanSymbol;
-  const tradingViewUrl = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tradingViewSymbol)}&interval=D&theme=dark&style=1&timezone=America%2FArgentina%2FBuenos_Aires&withdateranges=1&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`;
+  const tradingViewUrl = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tradingViewSymbol)}&interval=D&theme=dark&style=1&timezone=America%2FArgentina%2FBuenos_Aires&withdateranges=1&hide_side_toolbar=0&hide_legend=1&allow_symbol_change=1&save_image=0`;
 
   return (
     <div className="yc-page">
