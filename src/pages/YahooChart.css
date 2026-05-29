@@ -21,6 +21,14 @@
   line-height: 1;
 }
 
+.yc-subtitle {
+  margin: 8px 0 0;
+  color: #5B8A8A;
+  font: 700 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .yc-actions {
   display: flex;
   gap: 10px;
