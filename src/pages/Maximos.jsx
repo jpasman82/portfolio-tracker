@@ -29,9 +29,9 @@ const TRADING_VIEW_SYMBOLS = {
   VIST: 'NYSE:VIST',
 };
 
-const tradingViewUrl = (symbol) => {
+const tradingViewUrl = (symbol, range) => {
   const tvSymbol = TRADING_VIEW_SYMBOLS[symbol] || symbol;
-  return `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}&interval=W&range=60M&theme=dark&style=2&timezone=America%2FArgentina%2FBuenos_Aires&hide_top_toolbar=1&hide_side_toolbar=1&hide_legend=1&allow_symbol_change=0&save_image=0`;
+  return `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}&interval=W&range=${range}&theme=dark&style=2&timezone=America%2FArgentina%2FBuenos_Aires&hide_top_toolbar=1&hide_side_toolbar=1&hide_legend=1&allow_symbol_change=0&save_image=0`;
 };
 
 const handleLogout = async () => {
@@ -179,6 +179,7 @@ export default function Maximos() {
               const maxLocal = target === 'historico' ? row.maxHistoricoLocalUSD : row.maxEnero2025LocalUSD;
               const needed = target === 'historico' ? row.maxHistoricoReturn : row.maxEneroReturn;
               const isAbove = needed !== null && needed <= 0;
+              const chartRange = target === 'historico' ? 'ALL' : '60M';
 
               return (
                 <div key={row.ticker} className="m-row-card">
@@ -196,8 +197,8 @@ export default function Maximos() {
                   </div>
                   <div className="m-mobile-chart" aria-label={`Evolucion 5 anos de ${row.yahooSymbol}`}>
                     <iframe
-                      title={`Grafico 5 anos ${row.yahooSymbol}`}
-                      src={tradingViewUrl(row.yahooSymbol)}
+                      title={`Grafico ${target === 'historico' ? 'historico' : '5 anos'} ${row.yahooSymbol}`}
+                      src={tradingViewUrl(row.yahooSymbol, chartRange)}
                       loading="lazy"
                     />
                   </div>
