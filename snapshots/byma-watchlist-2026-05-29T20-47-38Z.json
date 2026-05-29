@@ -1,0 +1,309 @@
+﻿{
+    "timestamp":  "2026-05-29T20:47:38.6532683Z",
+    "selected":  [
+                     {
+                         "ticker":  "AL30",
+                         "endpoint":  "bonos_ars",
+                         "trade":  91720,
+                         "closing_price":  91720,
+                         "previous_close":  91900,
+                         "change_pct":  -0.19586507072905332
+                     },
+                     {
+                         "ticker":  "AL30D",
+                         "endpoint":  "bonos_usd",
+                         "trade":  63.97,
+                         "closing_price":  63.97,
+                         "previous_close":  64.12,
+                         "change_pct":  -0.23393636930754835
+                     },
+                     {
+                         "ticker":  "AL30C",
+                         "endpoint":  "bonos_ext",
+                         "trade":  61.9,
+                         "closing_price":  61.9,
+                         "previous_close":  62,
+                         "change_pct":  -0.16129032258064518
+                     },
+                     {
+                         "ticker":  "BBAR",
+                         "endpoint":  "acciones_0002",
+                         "trade":  9030,
+                         "closing_price":  9065,
+                         "previous_close":  8740,
+                         "change_pct":  3.7185354691075516
+                     },
+                     {
+                         "ticker":  "BMA",
+                         "endpoint":  "acciones_0002",
+                         "trade":  13440,
+                         "closing_price":  13490,
+                         "previous_close":  13050,
+                         "change_pct":  3.3716475095785441
+                     },
+                     {
+                         "ticker":  "TGSU2",
+                         "endpoint":  "acciones_0002",
+                         "trade":  9195,
+                         "closing_price":  9135,
+                         "previous_close":  9130,
+                         "change_pct":  0.0547645125958379
+                     },
+                     {
+                         "ticker":  "YPFD",
+                         "endpoint":  "acciones_0002",
+                         "trade":  78625,
+                         "closing_price":  78350,
+                         "previous_close":  77075,
+                         "change_pct":  1.6542328900421668
+                     },
+                     {
+                         "ticker":  "TECO2",
+                         "endpoint":  "acciones_0002",
+                         "trade":  4360,
+                         "closing_price":  4327.5,
+                         "previous_close":  4100,
+                         "change_pct":  5.5487804878048781
+                     },
+                     {
+                         "ticker":  "PAMP",
+                         "endpoint":  "acciones_0002",
+                         "trade":  5080,
+                         "closing_price":  5080,
+                         "previous_close":  4987.5,
+                         "change_pct":  1.8546365914786969
+                     },
+                     {
+                         "ticker":  "CEPU",
+                         "endpoint":  "acciones_0002",
+                         "trade":  2359,
+                         "closing_price":  2356,
+                         "previous_close":  2256,
+                         "change_pct":  4.4326241134751774
+                     },
+                     {
+                         "ticker":  "GGAL",
+                         "endpoint":  "acciones_0002",
+                         "trade":  7515,
+                         "closing_price":  7495,
+                         "previous_close":  7235,
+                         "change_pct":  3.59364201796821
+                     },
+                     {
+                         "ticker":  "SUPV",
+                         "endpoint":  "acciones_0002",
+                         "trade":  2885,
+                         "closing_price":  2880,
+                         "previous_close":  2762.5,
+                         "change_pct":  4.253393665158371
+                     },
+                     {
+                         "ticker":  "EDN",
+                         "endpoint":  "acciones_0002",
+                         "trade":  2060,
+                         "closing_price":  2062,
+                         "previous_close":  1977,
+                         "change_pct":  4.2994436014162867
+                     },
+                     {
+                         "ticker":  "GLOB",
+                         "endpoint":  "cedears_0002",
+                         "trade":  3332.5,
+                         "closing_price":  3327.5,
+                         "previous_close":  3295,
+                         "change_pct":  0.98634294385432464
+                     },
+                     {
+                         "ticker":  "VIST",
+                         "endpoint":  "cedears_0002",
+                         "trade":  36800,
+                         "closing_price":  36700,
+                         "previous_close":  36180,
+                         "change_pct":  1.4372581536760642
+                     }
+                 ],
+    "raw":  [
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "TECO2",
+                    "trade":  4360.0,
+                    "closing_price":  4327.5,
+                    "previous_close":  4100.0,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  0.0,
+                    "opening_price":  4250.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "PAMP",
+                    "trade":  5080.0,
+                    "closing_price":  5080.0,
+                    "previous_close":  4987.5,
+                    "best_purchase_price":  5065.0,
+                    "best_selling_price":  0.0,
+                    "opening_price":  4965.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "SUPV",
+                    "trade":  2885.0,
+                    "closing_price":  2880.0,
+                    "previous_close":  2762.5,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  2885.0,
+                    "opening_price":  2765.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "BBAR",
+                    "trade":  9030.0,
+                    "closing_price":  9065.0,
+                    "previous_close":  8740.0,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  9100.0,
+                    "opening_price":  8670.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "EDN",
+                    "trade":  2060.0,
+                    "closing_price":  2062.0,
+                    "previous_close":  1977.0,
+                    "best_purchase_price":  2050.0,
+                    "best_selling_price":  0.0,
+                    "opening_price":  1999.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "TGSU2",
+                    "trade":  9195.0,
+                    "closing_price":  9135.0,
+                    "previous_close":  9130.0,
+                    "best_purchase_price":  9195.0,
+                    "best_selling_price":  9200.0,
+                    "opening_price":  9100.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "BMA",
+                    "trade":  13440.0,
+                    "closing_price":  13490.0,
+                    "previous_close":  13050.0,
+                    "best_purchase_price":  13470.0,
+                    "best_selling_price":  0.0,
+                    "opening_price":  13200.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "YPFD",
+                    "trade":  78625.0,
+                    "closing_price":  78350.0,
+                    "previous_close":  77075.0,
+                    "best_purchase_price":  78625.0,
+                    "best_selling_price":  78700.0,
+                    "opening_price":  77100.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "CEPU",
+                    "trade":  2359.0,
+                    "closing_price":  2356.0,
+                    "previous_close":  2256.0,
+                    "best_purchase_price":  2351.0,
+                    "best_selling_price":  2360.0,
+                    "opening_price":  2264.0
+                },
+                {
+                    "endpoint":  "acciones_0002",
+                    "symbol":  "GGAL",
+                    "trade":  7515.0,
+                    "closing_price":  7495.0,
+                    "previous_close":  7235.0,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  7515.0,
+                    "opening_price":  7240.0
+                },
+                {
+                    "endpoint":  "cedears_0002",
+                    "symbol":  "VIST",
+                    "trade":  36800.0,
+                    "closing_price":  36700.0,
+                    "previous_close":  36180.0,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  36780.0,
+                    "opening_price":  36000.0
+                },
+                {
+                    "endpoint":  "cedears_0002",
+                    "symbol":  "GLOB",
+                    "trade":  3332.5,
+                    "closing_price":  3327.5,
+                    "previous_close":  3295.0,
+                    "best_purchase_price":  3332.5,
+                    "best_selling_price":  0.0,
+                    "opening_price":  3282.5
+                },
+                {
+                    "endpoint":  "bonos_ars",
+                    "symbol":  "AL30",
+                    "trade":  91720.0,
+                    "closing_price":  91720.0,
+                    "previous_close":  91900.0,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  91720.0,
+                    "opening_price":  91910.0
+                },
+                {
+                    "endpoint":  "bonos_ars",
+                    "symbol":  "AL30",
+                    "trade":  91760.0,
+                    "closing_price":  91760.0,
+                    "previous_close":  91860.0,
+                    "best_purchase_price":  91760.0,
+                    "best_selling_price":  0.0,
+                    "opening_price":  91560.0
+                },
+                {
+                    "endpoint":  "bonos_usd",
+                    "symbol":  "AL30D",
+                    "trade":  63.97,
+                    "closing_price":  63.97,
+                    "previous_close":  64.12,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  0.0,
+                    "opening_price":  64.12
+                },
+                {
+                    "endpoint":  "bonos_usd",
+                    "symbol":  "AL30D",
+                    "trade":  64.02,
+                    "closing_price":  64.02,
+                    "previous_close":  64.12,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  0.0,
+                    "opening_price":  64.24
+                },
+                {
+                    "endpoint":  "bonos_ext",
+                    "symbol":  "AL30C",
+                    "trade":  61.9,
+                    "closing_price":  61.9,
+                    "previous_close":  62.0,
+                    "best_purchase_price":  0.0,
+                    "best_selling_price":  61.9,
+                    "opening_price":  62.09
+                },
+                {
+                    "endpoint":  "bonos_ext",
+                    "symbol":  "AL30C",
+                    "trade":  61.8,
+                    "closing_price":  61.8,
+                    "previous_close":  61.92,
+                    "best_purchase_price":  61.8,
+                    "best_selling_price":  0.0,
+                    "opening_price":  62.0
+                }
+            ],
+    "mep_trade":  1433.7970923870564,
+    "cable_trade":  1481.7447495961228
+}
