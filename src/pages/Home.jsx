@@ -213,6 +213,7 @@ export default function Home() {
   const totalActivos = brokers.reduce((sum, b) => sum + (b.assetsTotal || 0), 0);
   const totalDeuda   = brokers.reduce((sum, b) => sum + (b.debt || 0), 0);
   const totalNeto    = brokers.reduce((sum, b) => sum + b.balance, 0);
+  const cableVsMep = mep > 0 && cable > 0 ? ((cable / mep) - 1) * 100 : null;
 
   if (loading) return (
     <div className="flex justify-center items-center min-h-screen bg-[#080F12]">
@@ -297,6 +298,14 @@ export default function Home() {
             <div>
               <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Dólar Cable</div>
               <div className="font-bold text-[#F0FAFA]">$ {cable.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</div>
+            </div>
+          )}
+          {cableVsMep !== null && (
+            <div>
+              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Cable vs MEP</div>
+              <div className="font-bold text-[#F0FAFA]">
+                {cableVsMep > 0 ? '+' : ''}{cableVsMep.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+              </div>
             </div>
           )}
         </div>
