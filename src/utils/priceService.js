@@ -22,6 +22,14 @@ const EP = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function closePrice(item) {
+  if (item.trade          > 0) return item.trade;
+  if (item.closing_price  > 0) return item.closing_price;
+  if (item.previous_close > 0) return item.previous_close;
+  if (item.best_purchase_price > 0) return item.best_purchase_price;
+  return 0;
+}
+
+function changePrice(item) {
   if (item.closing_price  > 0) return item.closing_price;
   if (item.trade          > 0) return item.trade;
   if (item.previous_close > 0) return item.previous_close;
@@ -41,7 +49,7 @@ function toMap(items = []) {
 function toMetaMap(items = []) {
   const map = {};
   for (const item of items) {
-    const price = closePrice(item);
+    const price = changePrice(item);
     const previousClose = item.previous_close > 0 ? item.previous_close : 0;
     if (!item.symbol || price <= 0) continue;
 

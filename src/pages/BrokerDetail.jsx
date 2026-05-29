@@ -45,7 +45,7 @@ export default function BrokerDetail() {
   const fmtUSD = (v) => 'USD ' + parseNum(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (livePrices = {}, liveMepRate = null) => {
       try {
         const docSnap = await getDoc(doc(db, "brokerPositions", id));
         if (docSnap.exists()) {
@@ -53,19 +53,25 @@ export default function BrokerDetail() {
           const formattedAssets = (data.assets || []).map(a => ({
             ticker: a.ticker,
             quantity: a.quantity?.toString().replace('.', ',') || '',
-            price: formatDecimals(a.price),
-            isBond: a.isBond || false
+            price: formatDecimals((() => {
+              const ticker = a.ticker?.toUpperCase().trim();
+              let livePrice = ticker ? livePrices[ticker] : undefined;
+              if (livePrice !== undefined && isUSD && liveMepRate > 0) livePrice = livePrice / liveMepRate;
+              return livePrice ?? a.price;
+            })()),
+            isBond: a.isBond || isBondTicker(a.ticker) || false
           }));
           setAssets(formattedAssets);
-          if (!isUSD && data.usdRate) setUsdRate(formatDecimals(data.usdRate));
+          if (!isUSD) setUsdRate(formatDecimals(liveMepRate || data.usdRate || 0));
           if (data.debt) setDebt(formatDecimals(data.debt));
         }
       } catch (e) {}
       finally { setLoading(false); }
     };
     const init = async () => {
-      try { await fetchAllPrices(); } catch (e) {}
-      fetchData();
+      let livePrices = {};
+      try { livePrices = await fetchAllPrices(); } catch (e) {}
+      fetchData(livePrices, getMepRate());
     };
     init();
   }, [id, isUSD]);
