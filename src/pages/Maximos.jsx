@@ -9,6 +9,11 @@ import { assetDictionary } from '../utils/dictionary';
 import './Maximos.css';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
+const YAHOO_SYMBOLS = {
+  TGSU2: 'TGS',
+  YPFD: 'YPF',
+  TECO2: 'TEO',
+};
 
 const handleLogout = async () => {
   sessionStorage.removeItem('bioUnlocked');
@@ -76,6 +81,7 @@ export default function Maximos() {
             adrEquiv,
             holdingQty,
             holdingUsd,
+            yahooSymbol: YAHOO_SYMBOLS[item.ticker] || item.ticker,
             rubro: dictInfo?.sub || 'Sin clasificar',
             maxHistoricoDistance,
             maxHistoricoReturn,
@@ -191,18 +197,23 @@ export default function Maximos() {
               const isAbove = needed !== null && needed <= 0;
 
               return (
-                <div key={row.ticker} className="m-row">
+                <Link
+                  key={row.ticker}
+                  to={`/yahoo/${encodeURIComponent(row.yahooSymbol)}`}
+                  className="m-row m-row-link"
+                  aria-label={`Abrir grafico historico de ${row.yahooSymbol} en Yahoo Finance`}
+                >
                   <div>
                     <strong className="m-ticker">{row.ticker}</strong>
-                    <span className="m-ratio">{row.ratioADR} local / ADR</span>
+                    <span className="m-ratio">{row.ratioADR} local / ADR · Yahoo {row.yahooSymbol}</span>
                   </div>
                   <span className="m-holding-usd"><small>Tenencia</small>{fmtUSD(row.holdingUsd, 0)}</span>
                   <span className="m-current-local"><small>Actual local</small>{fmtUSD(row.localUSD, 2)}</span>
                   <span className="m-max-local"><small>Max local</small>{fmtUSD(maxLocal, 2)}</span>
-                  <span className="m-adr-equiv"><small>ADR equiv.</small>{fmtUSD(row.adrEquiv, 2)}</span>
+                  <span className="m-adr-equiv"><small>ADR actual</small>{fmtUSD(row.adrEquiv, 2)}</span>
                   <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
                   <span className={`m-needed ${isAbove ? 'm-positive' : 'm-negative'}`}><small>Falta a max.</small>{fmtPct(needed)}</span>
-                </div>
+                </Link>
               );
             })}
           </div>

@@ -9,6 +9,7 @@ import EventDetail from './pages/EventDetail';
 import Login from './pages/Login';
 import Unified from './pages/Unified';
 import Maximos from './pages/Maximos';
+import YahooChart from './pages/YahooChart';
 import {
   isPlatformAuthenticatorAvailable,
   isBiometricEnabled,
@@ -262,6 +263,7 @@ export default function App() {
         <Route path="/evento/:id" element={<RequireAuth><EventDetail /></RequireAuth>} />
         <Route path="/unificada" element={<RequireAuth><Unified /></RequireAuth>} />
         <Route path="/maximos" element={<RequireAuth><Maximos /></RequireAuth>} />
+        <Route path="/yahoo/:symbol" element={<RequireAuth><YahooChart /></RequireAuth>} />
       </Routes>
     </BrowserRouter>
   );

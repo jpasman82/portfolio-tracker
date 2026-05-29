@@ -89,6 +89,16 @@
   border-top: 1px solid rgba(45,212,191,0.06);
 }
 
+.m-row-link {
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.m-row-link:hover {
+  background: rgba(45,212,191,0.04);
+}
+
 .m-rubro-group {
   border-top: 1px solid rgba(45,212,191,0.08);
 }
@@ -224,8 +234,8 @@
     margin: 0;
   }
 
-  .m-adr-equiv,
-  .m-max-adr {
+  .m-current-local,
+  .m-max-local {
     display: none !important;
   }
 
