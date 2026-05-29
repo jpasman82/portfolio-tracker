@@ -183,7 +183,7 @@ export default function Maximos() {
 
               return (
                 <div key={row.ticker} className="m-row-card">
-                  <div className="m-row">
+                  <div className="m-row m-row-mobile">
                     <div>
                       <strong className="m-ticker">{row.ticker}</strong>
                       <span className="m-ratio">{row.ratioADR} local / ADR · {row.yahooSymbol}</span>
@@ -195,6 +195,22 @@ export default function Maximos() {
                     <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
                     <span className={`m-needed ${isAbove ? 'm-positive' : 'm-negative'}`}><small>Falta a max.</small>{fmtPct(needed)}</span>
                   </div>
+                  <Link
+                    to={`/yahoo/${encodeURIComponent(row.yahooSymbol)}`}
+                    className="m-row m-row-desktop m-row-link"
+                    aria-label={`Abrir grafico historico de ${row.yahooSymbol}`}
+                  >
+                    <div>
+                      <strong className="m-ticker">{row.ticker}</strong>
+                      <span className="m-ratio">{row.ratioADR} local / ADR · {row.yahooSymbol}</span>
+                    </div>
+                    <span className="m-holding-usd"><small>Tenencia</small>{fmtUSD(row.holdingUsd, 0)}</span>
+                    <span className="m-current-local"><small>Actual local</small>{fmtUSD(row.localUSD, 2)}</span>
+                    <span className="m-max-local"><small>Max local</small>{fmtUSD(maxLocal, 2)}</span>
+                    <span className="m-adr-equiv"><small>ADR actual</small>{fmtUSD(row.adrEquiv, 2)}</span>
+                    <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
+                    <span className={`m-needed ${isAbove ? 'm-positive' : 'm-negative'}`}><small>Falta a max.</small>{fmtPct(needed)}</span>
+                  </Link>
                   <div className="m-mobile-chart" aria-label={`Evolucion 5 anos de ${row.yahooSymbol}`}>
                     <iframe
                       title={`Grafico ${target === 'historico' ? 'historico' : '5 anos'} ${row.yahooSymbol}`}
