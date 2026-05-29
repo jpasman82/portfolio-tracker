@@ -42,7 +42,6 @@ const handleLogout = async () => {
 export default function Maximos() {
   const [target, setTarget] = useState('enero');
   const [rows, setRows] = useState([]);
-  const [cable, setCable] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const parseNum = (val) => {
@@ -67,7 +66,6 @@ export default function Maximos() {
       try {
         const priceMap = await fetchAllPrices();
         const cableRate = getCclRate();
-        setCable(cableRate);
         const maxTickers = new Set(preciosMaximosLocalesUSD.map((item) => item.ticker));
         const holdingsByTicker = {};
 
@@ -168,16 +166,9 @@ export default function Maximos() {
           <button className={target === 'historico' ? 'active' : ''} onClick={() => setTarget('historico')}>Historico</button>
           </div>
         </div>
-        <p className="font-mono text-[13px] tracking-[0.15em] uppercase text-[#5B8A8A] mt-1.5">
-          Precio local BYMA / cable, llevado a referencia ADR
-        </p>
       </div>
 
       <div className="m-summary-grid relative z-10">
-        <div className="m-summary-card m-cable-card">
-          <span>Cable usado</span>
-          <strong>{cable ? '$ ' + cable.toLocaleString('es-AR', { maximumFractionDigits: 0 }) : '-'}</strong>
-        </div>
         <div className="m-summary-card">
           <span>Arriba del maximo</span>
           <strong>{summary.above}/{rows.length}</strong>
@@ -217,11 +208,7 @@ export default function Maximos() {
 
               return (
                 <div key={row.ticker} className="m-row-card">
-                  <Link
-                    to={`/yahoo/${encodeURIComponent(row.yahooSymbol)}`}
-                    className="m-row m-row-link"
-                    aria-label={`Abrir grafico historico de ${row.yahooSymbol}`}
-                  >
+                  <div className="m-row">
                     <div>
                       <strong className="m-ticker">{row.ticker}</strong>
                       <span className="m-ratio">{row.ratioADR} local / ADR · {row.yahooSymbol}</span>
@@ -232,7 +219,7 @@ export default function Maximos() {
                     <span className="m-adr-equiv"><small>ADR actual</small>{fmtUSD(row.adrEquiv, 2)}</span>
                     <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
                     <span className={`m-needed ${isAbove ? 'm-positive' : 'm-negative'}`}><small>Falta a max.</small>{fmtPct(needed)}</span>
-                  </Link>
+                  </div>
                   <div className="m-mobile-chart" aria-label={`Evolucion 5 anos de ${row.yahooSymbol}`}>
                     <iframe
                       title={`Grafico 5 anos ${row.yahooSymbol}`}
