@@ -109,7 +109,7 @@
 .u-table-header { display: none !important; }
 
 .u-total-amount {
-  font-size: 34px;
+  font-size: 38px;
 }
 
 .u-cat-title {
@@ -121,15 +121,15 @@
 }
 
 .u-sub-amount {
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .u-asset-ticker-text {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .u-asset-val {
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .u-asset-value-cell {
@@ -140,11 +140,16 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-width: 58px;
+  min-width: 82px;
 }
 
 .u-asset-change {
-  font-size: 12px;
+  font-size: 17px;
+}
+
+.u-mobile-pct {
+  font-size: 14px !important;
+  font-weight: 700;
 }
 
 .u-bottomnav {
@@ -214,7 +219,7 @@
   /* Asset row → 5-column table */
   .u-asset-row {
     display: grid;
-    grid-template-columns: 110px 1fr 170px 86px 120px;
+    grid-template-columns: 118px 1fr 190px 116px 144px;
     align-items: center;
     gap: 16px;
   }
@@ -261,7 +266,7 @@
   }
 
   .u-total-amount {
-    font-size: 54px !important;
+    font-size: 58px !important;
     letter-spacing: -1.5px;
   }
 
@@ -274,7 +279,7 @@
   }
 
   .u-cat-pct {
-    font-size: 20px !important;
+    font-size: 24px !important;
   }
 
   .u-sub-title {
@@ -282,15 +287,15 @@
   }
 
   .u-sub-amount {
-    font-size: 17px !important;
+    font-size: 18px !important;
   }
 
   .u-asset-ticker-text {
-    font-size: 21px !important;
+    font-size: 22px !important;
   }
 
   .u-asset-val {
-    font-size: 20px !important;
+    font-size: 22px !important;
   }
 
   .u-table-header {
@@ -298,7 +303,7 @@
   }
 
   .u-asset-row > div:nth-child(2) {
-    font-size: 15px !important;
+    font-size: 16px !important;
   }
 
   .u-legend-name {
@@ -306,19 +311,19 @@
   }
 
   .u-legend-pct {
-    font-size: 17px !important;
+    font-size: 20px !important;
   }
 
   .u-legend-val {
-    font-size: 15px !important;
+    font-size: 16px !important;
   }
 
   .u-asset-change {
-    font-size: 15px !important;
+    font-size: 20px !important;
   }
 
   .u-asset-pct-bar span {
-    font-size: 14px !important;
+    font-size: 18px !important;
   }
 
   .u-bottomnav {
