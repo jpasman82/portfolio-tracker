@@ -16,6 +16,7 @@ const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 
 const REFRESH_MS = 60 * 1000;
 const APERTURA_MINUTOS = 10 * 60 + 30;
 const CIERRE_MINUTOS = 17 * 60;
+const BRAZIL_CEDEAR_WATCHLIST = ['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ'];
 
 function esMercadoAbierto() {
   const ahora = new Date();
@@ -43,6 +44,7 @@ export default function Unified() {
   };
 
   const fmtUSD = (v) => 'US$ ' + parseNum(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const fmtARS = (v) => '$ ' + parseNum(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtQty = (v) => parseNum(v).toLocaleString('es-AR', { maximumFractionDigits: 2 });
   const fmtChangePct = (v) => {
     const n = parseNum(v);
@@ -92,6 +94,21 @@ export default function Unified() {
               total += valueUsd;
             }
           });
+        });
+
+        BRAZIL_CEDEAR_WATCHLIST.forEach((ticker) => {
+          if (unified[ticker]) return;
+          const unitPriceArs = priceMap[ticker] ?? null;
+          const changePercent = priceMeta[ticker]?.changePercent ?? null;
+
+          unified[ticker] = {
+            ticker,
+            quantity: 0,
+            valueUsd: 0,
+            changePercent,
+            unitPriceArs,
+            isWatchlist: true,
+          };
         });
 
         const grouped = {};
@@ -302,7 +319,7 @@ export default function Unified() {
                         <div className="u-asset-row u-table-header font-mono text-[11px] tracking-[0.18em] uppercase text-[#5B8A8A] opacity-70 pb-2">
                           <span>Ticker</span>
                           <span>Nominales</span>
-                          <span style={{ textAlign: 'right' }}>Valor USD</span>
+                          <span style={{ textAlign: 'right' }}>Valor / Precio</span>
                           <span style={{ textAlign: 'right' }}>Var.</span>
                           <span className="u-asset-pct-bar">% Cartera</span>
                         </div>
@@ -320,14 +337,20 @@ export default function Unified() {
                                 </div>
                               </div>
                               <div className="font-mono text-[12px] text-[#5B8A8A]">
-                                {asset.ticker === 'DEUDA CAUCIÓN' ? 'Pasivo' : `${fmtQty(asset.quantity)} nom.`}
+                                {asset.ticker === 'DEUDA CAUCIÓN'
+                                  ? 'Pasivo'
+                                  : asset.isWatchlist
+                                    ? 'Seguimiento'
+                                    : `${fmtQty(asset.quantity)} nom.`}
                               </div>
                               <div className="u-asset-value-cell">
-                                <div className="u-asset-val font-bold" style={{ color: isDebt ? '#F87171' : '#2DD4BF' }}>
-                                  {fmtUSD(asset.valueUsd)}
+                                <div className="u-asset-val font-bold" style={{ color: isDebt ? '#F87171' : asset.isWatchlist ? '#A8C8C8' : '#2DD4BF' }}>
+                                  {asset.isWatchlist
+                                    ? asset.unitPriceArs > 0 ? fmtARS(asset.unitPriceArs) : 'Sin precio'
+                                    : fmtUSD(asset.valueUsd)}
                                 </div>
                                 <div className="u-mobile-pct font-mono text-[12px] text-[#5B8A8A]">
-                                  {pct.toFixed(1)}% cartera
+                                  {asset.isWatchlist ? 'Sin posicion' : `${pct.toFixed(1)}% cartera`}
                                 </div>
                               </div>
                               <div className="u-asset-change-cell">
@@ -342,10 +365,12 @@ export default function Unified() {
                               </div>
                               <div className="u-asset-pct-bar">
                                 <div className="flex justify-between items-baseline">
-                                  <span className="font-mono text-[12px] font-bold" style={{ color: catColor }}>{pct.toFixed(1)}%</span>
+                                  <span className="font-mono text-[12px] font-bold" style={{ color: asset.isWatchlist ? '#5B8A8A' : catColor }}>
+                                    {asset.isWatchlist ? 'Watch' : `${pct.toFixed(1)}%`}
+                                  </span>
                                 </div>
                                 <div className="u-asset-pct-bar-track">
-                                  <div className="u-asset-pct-bar-fill" style={{ width: `${Math.min(100, pct * 4)}%`, backgroundColor: catColor }} />
+                                  <div className="u-asset-pct-bar-fill" style={{ width: asset.isWatchlist ? '0%' : `${Math.min(100, pct * 4)}%`, backgroundColor: catColor }} />
                                 </div>
                               </div>
                             </div>
