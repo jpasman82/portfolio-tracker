@@ -192,29 +192,33 @@ export default function Unified() {
   const sortedCats = Object.keys(groupedData).sort((a, b) => groupedData[b].total - groupedData[a].total);
   const catColors = {};
   sortedCats.forEach((cat, i) => { catColors[cat] = baseColors[i % baseColors.length]; });
+  const getCatAssets = (cat) => Object.values(groupedData[cat].subs).flatMap(sub => sub.assets);
+  const sumPositiveAssets = (assets) => assets.reduce((sum, asset) => sum + Math.max(0, asset.valueUsd), 0);
 
   let pieData = [];
   let totalForPie = 0;
 
   if (pieMode === 'cat') {
-    sortedCats.forEach(cat => { if (groupedData[cat].total > 0) totalForPie += groupedData[cat].total; });
+    sortedCats.forEach(cat => { totalForPie += sumPositiveAssets(getCatAssets(cat)); });
     sortedCats.forEach(cat => {
-      if (groupedData[cat].total > 0) {
-        pieData.push({ name: cat, value: groupedData[cat].total, percentage: (groupedData[cat].total / totalForPie) * 100, color: catColors[cat] });
+      const catAssetsTotal = sumPositiveAssets(getCatAssets(cat));
+      if (catAssetsTotal > 0) {
+        pieData.push({ name: cat, value: catAssetsTotal, percentage: (catAssetsTotal / totalForPie) * 100, color: catColors[cat] });
       }
     });
   } else {
     let cIdx = 0;
     sortedCats.forEach(cat => {
       Object.keys(groupedData[cat].subs).forEach(sub => {
-        if (groupedData[cat].subs[sub].total > 0) totalForPie += groupedData[cat].subs[sub].total;
+        totalForPie += sumPositiveAssets(groupedData[cat].subs[sub].assets);
       });
     });
     sortedCats.forEach(cat => {
       const sortedSubs = Object.keys(groupedData[cat].subs).sort((a, b) => groupedData[cat].subs[b].total - groupedData[cat].subs[a].total);
       sortedSubs.forEach(sub => {
-        if (groupedData[cat].subs[sub].total > 0) {
-          pieData.push({ name: sub, value: groupedData[cat].subs[sub].total, percentage: (groupedData[cat].subs[sub].total / totalForPie) * 100, color: baseColors[cIdx % baseColors.length] });
+        const subAssetsTotal = sumPositiveAssets(groupedData[cat].subs[sub].assets);
+        if (subAssetsTotal > 0) {
+          pieData.push({ name: sub, value: subAssetsTotal, percentage: (subAssetsTotal / totalForPie) * 100, color: baseColors[cIdx % baseColors.length] });
           cIdx++;
         }
       });
@@ -226,8 +230,10 @@ export default function Unified() {
   const circ = 2 * Math.PI * radius;
   let strokeOffset = 0;
 
-  const grossTotal = totalUsd + Object.values(groupedData)
-    .flatMap(cat => Object.values(cat.subs).flatMap(sub => sub.assets))
+  const allAssets = Object.values(groupedData)
+    .flatMap(cat => Object.values(cat.subs).flatMap(sub => sub.assets));
+  const totalAssetsUsd = sumPositiveAssets(allAssets);
+  const totalDebtUsd = allAssets
     .filter(a => a.valueUsd < 0)
     .reduce((sum, a) => sum + Math.abs(a.valueUsd), 0);
 
@@ -260,7 +266,8 @@ export default function Unified() {
         <div className="u-detail">
           {sortedCats.map(cat => {
             const catColor = catColors[cat];
-            const catPct = totalUsd > 0 ? ((groupedData[cat].total / totalUsd) * 100) : 0;
+            const catAssetsTotal = sumPositiveAssets(getCatAssets(cat));
+            const catPct = totalAssetsUsd > 0 ? ((catAssetsTotal / totalAssetsUsd) * 100) : 0;
             const sortedSubs = Object.keys(groupedData[cat].subs).sort((a, b) => groupedData[cat].subs[b].total - groupedData[cat].subs[a].total);
 
             return (
@@ -275,7 +282,7 @@ export default function Unified() {
                     <span className="font-bold" style={{ color: groupedData[cat].total < 0 ? '#F87171' : '#F0FAFA' }}>
                       {fmtUSD(groupedData[cat].total)}
                     </span>
-                    {totalUsd > 0 && (
+                    {totalAssetsUsd > 0 && (
                       <span className="u-cat-pct font-mono text-sm font-bold ml-2" style={{ color: catColor }}>
                         {catPct.toFixed(1)}%
                       </span>
@@ -285,13 +292,14 @@ export default function Unified() {
 
                 {/* Category progress bar */}
                 <div className="h-[3px] bg-[#1e3040] rounded-full mb-4 overflow-hidden">
-                  <div style={{ height: '100%', width: `${Math.max(0, catPct)}%`, backgroundColor: catColor, borderRadius: '2px' }} />
+                  <div style={{ height: '100%', width: `${Math.min(100, Math.max(0, catPct))}%`, backgroundColor: catColor, borderRadius: '2px' }} />
                 </div>
 
                 {/* Sub-categories */}
                 {sortedSubs.map(sub => {
                   const subData = groupedData[cat].subs[sub];
-                  const subPct = totalUsd > 0 ? ((subData.total / totalUsd) * 100) : 0;
+                  const subAssetsTotal = sumPositiveAssets(subData.assets);
+                  const subPct = totalAssetsUsd > 0 ? ((subAssetsTotal / totalAssetsUsd) * 100) : 0;
 
                   return (
                     <div key={sub} className="u-sub-card bg-[#122329] border border-teal-400/10 hover:border-teal-400/20 rounded-xl p-4 mb-3 transition-colors">
@@ -304,7 +312,7 @@ export default function Unified() {
                           <div className="u-sub-title font-bold text-[#F0FAFA]">{sub}</div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="u-sub-amount font-mono text-[12px] text-[#5B8A8A]">{fmtUSD(subData.total)}</span>
-                            {totalUsd > 0 && (
+                            {totalAssetsUsd > 0 && (
                               <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ color: catColor, backgroundColor: catColor + '20' }}>
                                 {subPct.toFixed(1)}%
                               </span>
@@ -325,7 +333,7 @@ export default function Unified() {
                         </div>
 
                         {subData.assets.map(asset => {
-                          const denominator = asset.valueUsd < 0 ? grossTotal : totalUsd;
+                          const denominator = totalAssetsUsd;
                           const pct = denominator > 0 ? (Math.abs(asset.valueUsd) / denominator) * 100 : 0;
                           const isDebt = asset.valueUsd < 0;
 
@@ -349,8 +357,8 @@ export default function Unified() {
                                     ? asset.unitPriceArs > 0 ? fmtARS(asset.unitPriceArs) : 'Sin precio'
                                     : fmtUSD(asset.valueUsd)}
                                 </div>
-                                <div className="u-mobile-pct font-mono text-[12px] text-[#5B8A8A]">
-                                  {asset.isWatchlist ? 'Sin posicion' : `${pct.toFixed(1)}% cartera`}
+                                <div className="u-mobile-pct font-mono text-[12px]" style={{ color: asset.isWatchlist ? '#5B8A8A' : catColor }}>
+                                  {asset.isWatchlist ? 'Sin posicion' : `${pct.toFixed(1)}% Cartera`}
                                 </div>
                               </div>
                               <div className="u-asset-change-cell">
@@ -392,15 +400,20 @@ export default function Unified() {
           <div className="bg-[#122329] border border-teal-400/20 p-5 rounded-2xl mb-4 shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
             <div className="u-total-label font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-2">Valor Total Neto</div>
             <div className="u-total-amount font-black tracking-tight text-teal-400">{fmtUSD(totalUsd)}</div>
+            {totalDebtUsd > 0 && (
+              <div className="u-gross-note font-mono text-[12px] text-[#5B8A8A] mt-1">
+                Activos: {fmtUSD(totalAssetsUsd)}
+              </div>
+            )}
             <div className="mt-4 flex flex-col gap-2">
-              {sortedCats.filter(c => groupedData[c].total > 0).slice(0, 4).map(cat => (
+              {sortedCats.filter(c => sumPositiveAssets(getCatAssets(c)) > 0).slice(0, 4).map(cat => (
                 <div key={cat} className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <div style={{ width: '6px', height: '6px', borderRadius: '2px', backgroundColor: catColors[cat] }} />
                     <span className="font-mono text-[12px] text-[#A8C8C8]">{cat}</span>
                   </div>
                   <span className="font-mono text-[12px] font-bold" style={{ color: catColors[cat] }}>
-                    {((groupedData[cat].total / totalUsd) * 100).toFixed(1)}%
+                    {((sumPositiveAssets(getCatAssets(cat)) / totalAssetsUsd) * 100).toFixed(1)}%
                   </span>
                 </div>
               ))}
