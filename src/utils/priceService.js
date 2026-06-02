@@ -63,6 +63,29 @@ function toMetaMap(items = []) {
   return map;
 }
 
+function toDollarMetaMap(meta = {}, currentFx, previousFx) {
+  const map = {};
+  for (const [symbol, item] of Object.entries(meta)) {
+    if (!currentFx || !previousFx || !item.previousClose) {
+      map[symbol] = { ...item, change: null, changePercent: null, variationCurrency: 'USD' };
+      continue;
+    }
+
+    const priceUsd = item.price / currentFx;
+    const previousCloseUsd = item.previousClose / previousFx;
+
+    map[symbol] = {
+      ...item,
+      price: priceUsd,
+      previousClose: previousCloseUsd,
+      change: priceUsd - previousCloseUsd,
+      changePercent: previousCloseUsd > 0 ? ((priceUsd - previousCloseUsd) / previousCloseUsd) * 100 : null,
+      variationCurrency: 'USD',
+    };
+  }
+  return map;
+}
+
 async function fetchMap(endpoint) {
   try {
     const data = await bymaGet(endpoint);
@@ -103,14 +126,6 @@ export async function fetchAllPrices() {
     ...extMap,
   };
 
-  _priceMeta = {
-    ...accionesData.meta,
-    ...cedearsData.meta,
-    ...bonosARSData.meta,
-    ...bonosUSDData.meta,
-    ...bonosEXTData.meta,
-  };
-
   // MEP   = AL30(ARS) / AL30D(USD)  →  pesos por dólar MEP
   // Cable = AL30(ARS) / AL30C(EXT)  →  pesos por dólar cable
   const al30    = arsMap['AL30'];
@@ -122,7 +137,20 @@ export async function fetchAllPrices() {
   _mep   = (al30 && al30d) ? al30 / al30d : null;
   _cable = (al30 && al30c) ? al30 / al30c : null;
 
+  const al30Prev = bonosARSData.meta['AL30']?.previousClose;
+  const al30dPrev = bonosUSDData.meta['AL30D']?.previousClose ?? bonosUSDData.meta['AL30']?.previousClose;
+  const previousMep = (al30Prev && al30dPrev) ? al30Prev / al30dPrev : null;
+
+  _priceMeta = {
+    ...toDollarMetaMap(accionesData.meta, _mep, previousMep),
+    ...toDollarMetaMap(cedearsData.meta, _mep, previousMep),
+    ...toDollarMetaMap(bonosARSData.meta, _mep, previousMep),
+    ...bonosUSDData.meta,
+    ...bonosEXTData.meta,
+  };
+
   if (_mep)   console.log('[priceService] MEP (BYMA):', _mep.toFixed(2));
+  if (previousMep) console.log('[priceService] MEP cierre (BYMA):', previousMep.toFixed(2));
   if (_cable) console.log('[priceService] Cable (BYMA):', _cable.toFixed(2));
 
   if (!_mep || !_cable) {
