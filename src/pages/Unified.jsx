@@ -16,7 +16,7 @@ const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 
 const REFRESH_MS = 60 * 1000;
 const APERTURA_MINUTOS = 10 * 60 + 30;
 const CIERRE_MINUTOS = 17 * 60;
-const BRAZIL_CEDEAR_WATCHLIST = ['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ'];
+const BRAZIL_CEDEARS = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ']);
 
 function esMercadoAbierto() {
   const ahora = new Date();
@@ -77,6 +77,7 @@ export default function Unified() {
           (data.assets || []).forEach(a => {
             if (!a || !a.ticker) return;
             const t = a.ticker.toUpperCase().trim();
+            if (BRAZIL_CEDEARS.has(t)) return;
             const qty = parseNum(a.quantity);
             const isBond = a.isBond || isBondTicker(t);
             const bondDivisor = isBond ? 100 : 1;
@@ -94,21 +95,6 @@ export default function Unified() {
               total += valueUsd;
             }
           });
-        });
-
-        BRAZIL_CEDEAR_WATCHLIST.forEach((ticker) => {
-          if (unified[ticker]) return;
-          const unitPriceArs = priceMap[ticker] ?? null;
-          const changePercent = priceMeta[ticker]?.changePercent ?? null;
-
-          unified[ticker] = {
-            ticker,
-            quantity: 0,
-            valueUsd: 0,
-            changePercent,
-            unitPriceArs,
-            isWatchlist: true,
-          };
         });
 
         const grouped = {};

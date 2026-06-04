@@ -15,6 +15,11 @@ const TRADING_VIEW_SYMBOLS = {
   EDN: 'NYSE:EDN',
   GLOB: 'NYSE:GLOB',
   VIST: 'NYSE:VIST',
+  XP: 'NASDAQ:XP',
+  NU: 'NYSE:NU',
+  VALE: 'NYSE:VALE',
+  ITUB: 'NYSE:ITUB',
+  EWZ: 'AMEX:EWZ',
 };
 
 export default function YahooChart() {
