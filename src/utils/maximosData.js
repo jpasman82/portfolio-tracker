@@ -135,4 +135,15 @@ export const preciosMaximosLocalesUSD = [
     maxEnero2025ADR: 25.73,
     maxEnero2025LocalUSD: 12.865,
   },
+  {
+    ticker: "PAX",
+    ratioADR: 1,
+    maxHistoricoADR: 23.28,
+    maxHistoricoLocalUSD: 23.28,
+    maxEnero2025ADR: 12.33,
+    maxEnero2025LocalUSD: 12.33,
+    priceSource: "googleFinance",
+    googleFinanceSymbol: "PAX",
+    googleFinanceExchange: "NASDAQ",
+  },
 ];

@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth';
 import { collection, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { fetchAllPrices, getCclRate } from '../utils/priceService';
+import { fetchGoogleFinanceQuotes } from '../utils/googleFinanceService';
 import { preciosMaximosLocalesUSD } from '../utils/maximosData';
 import { assetDictionary } from '../utils/dictionary';
 import './Maximos.css';
@@ -29,6 +30,7 @@ const TRADING_VIEW_SYMBOLS = {
   VIST: 'NYSE:VIST',
   XP: 'NASDAQ:XP',
   NU: 'NYSE:NU',
+  PAX: 'NASDAQ:PAX',
   VALE: 'NYSE:VALE',
   ITUB: 'NYSE:ITUB',
   EWZ: 'AMEX:EWZ',
@@ -70,6 +72,14 @@ export default function Maximos() {
       setLoading(true);
       try {
         const priceMap = await fetchAllPrices();
+        const googleFinanceItems = preciosMaximosLocalesUSD
+          .filter((item) => item.priceSource === 'googleFinance')
+          .map((item) => ({
+            ticker: item.ticker,
+            symbol: item.googleFinanceSymbol || item.ticker,
+            exchange: item.googleFinanceExchange || 'NASDAQ',
+          }));
+        const googleFinancePrices = await fetchGoogleFinanceQuotes(googleFinanceItems);
         const cableRate = getCclRate();
         const maxTickers = new Set(preciosMaximosLocalesUSD.map((item) => item.ticker));
         const holdingsByTicker = {};
@@ -85,9 +95,15 @@ export default function Maximos() {
         });
 
         const nextRows = preciosMaximosLocalesUSD.map((item) => {
-          const localARS = priceMap[item.ticker] ?? null;
-          const localUSD = localARS && cableRate ? localARS / cableRate : null;
-          const adrEquiv = localUSD !== null ? localUSD * item.ratioADR : null;
+          const googleFinanceQuote = googleFinancePrices[item.ticker] || null;
+          const usesGoogleFinance = item.priceSource === 'googleFinance';
+          const localARS = usesGoogleFinance ? null : priceMap[item.ticker] ?? null;
+          const localUSD = usesGoogleFinance
+            ? googleFinanceQuote?.price ? googleFinanceQuote.price / item.ratioADR : null
+            : localARS && cableRate ? localARS / cableRate : null;
+          const adrEquiv = usesGoogleFinance
+            ? googleFinanceQuote?.price ?? null
+            : localUSD !== null ? localUSD * item.ratioADR : null;
           const holdingQty = holdingsByTicker[item.ticker] || 0;
           const holdingUsd = localUSD !== null ? holdingQty * localUSD : 0;
           const dictInfo = assetDictionary[item.ticker] || (item.ticker === 'VIST' ? { cat: 'Acciones', sub: 'Energia' } : null);
@@ -105,6 +121,7 @@ export default function Maximos() {
             holdingUsd,
             yahooSymbol: YAHOO_SYMBOLS[item.ticker] || item.ticker,
             rubro: dictInfo?.sub || 'Sin clasificar',
+            priceSourceLabel: usesGoogleFinance ? 'Google Finance' : null,
             maxHistoricoDistance,
             maxHistoricoReturn,
             maxEneroDistance,
@@ -191,10 +208,10 @@ export default function Maximos() {
                   <div className="m-row m-row-mobile">
                     <div>
                       <strong className="m-ticker">{row.ticker}</strong>
-                      <span className="m-ratio">{row.ratioADR} local / ADR · {row.yahooSymbol}</span>
+                      <span className="m-ratio">{row.ratioADR} local / ADR · {row.yahooSymbol}{row.priceSourceLabel ? ` · ${row.priceSourceLabel}` : ''}</span>
                     </div>
                     <span className="m-holding-usd"><small>Tenencia</small>{fmtUSD(row.holdingUsd, 0)}</span>
-                    <span className="m-current-local"><small>Actual local</small>{fmtUSD(row.localUSD, 2)}</span>
+                    <span className="m-current-local"><small>{row.priceSourceLabel ? 'Actual USD' : 'Actual local'}</small>{fmtUSD(row.localUSD, 2)}</span>
                     <span className="m-max-local"><small>Max local</small>{fmtUSD(maxLocal, 2)}</span>
                     <span className="m-adr-equiv"><small>ADR actual</small>{fmtUSD(row.adrEquiv, 2)}</span>
                     <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
@@ -207,10 +224,10 @@ export default function Maximos() {
                   >
                     <div>
                       <strong className="m-ticker">{row.ticker}</strong>
-                      <span className="m-ratio">{row.ratioADR} local / ADR · {row.yahooSymbol}</span>
+                      <span className="m-ratio">{row.ratioADR} local / ADR · {row.yahooSymbol}{row.priceSourceLabel ? ` · ${row.priceSourceLabel}` : ''}</span>
                     </div>
                     <span className="m-holding-usd"><small>Tenencia</small>{fmtUSD(row.holdingUsd, 0)}</span>
-                    <span className="m-current-local"><small>Actual local</small>{fmtUSD(row.localUSD, 2)}</span>
+                    <span className="m-current-local"><small>{row.priceSourceLabel ? 'Actual USD' : 'Actual local'}</small>{fmtUSD(row.localUSD, 2)}</span>
                     <span className="m-max-local"><small>Max local</small>{fmtUSD(maxLocal, 2)}</span>
                     <span className="m-adr-equiv"><small>ADR actual</small>{fmtUSD(row.adrEquiv, 2)}</span>
                     <span className="m-max-adr"><small>Max ADR</small>{fmtUSD(maxADR, 2)}</span>
