@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import BrokerDetail from './pages/BrokerDetail';
 import EventDetail from './pages/EventDetail';
+import NewEvent from './pages/NewEvent';
 import Login from './pages/Login';
 import Unified from './pages/Unified';
 import Maximos from './pages/Maximos';
@@ -260,6 +261,7 @@ export default function App() {
         <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
         <Route path="/broker/:id" element={<RequireAuth><BrokerDetail /></RequireAuth>} />
         <Route path="/rotaciones" element={<RequireAuth><Dashboard /></RequireAuth>} />
+        <Route path="/rotaciones/nueva" element={<RequireAuth><NewEvent /></RequireAuth>} />
         <Route path="/evento/:id" element={<RequireAuth><EventDetail /></RequireAuth>} />
         <Route path="/unificada" element={<RequireAuth><Unified /></RequireAuth>} />
         <Route path="/maximos" element={<RequireAuth><Maximos /></RequireAuth>} />

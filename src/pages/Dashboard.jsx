@@ -131,6 +131,12 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mt-1">
           <h2 className="text-2xl font-bold tracking-tight text-[#F0FAFA]">Estrategias</h2>
           <div className="flex gap-2">
+            <Link
+              to="/rotaciones/nueva"
+              className="font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 bg-teal-400 hover:bg-teal-300 text-[#080F12] rounded-lg transition-colors font-bold"
+            >
+              Nueva
+            </Link>
             <button
               onClick={exportarCartera}
               className="font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 bg-teal-400/10 border border-teal-400/20 hover:border-teal-400/50 text-teal-400 rounded-lg transition-colors"

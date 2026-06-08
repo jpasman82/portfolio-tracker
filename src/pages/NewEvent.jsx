@@ -68,7 +68,7 @@ export default function NewEvent() {
       } else {
         await addDoc(collection(db, "rotations"), eventData);
       }
-      navigate('/');
+      navigate('/rotaciones');
     } catch (error) {
       console.error("Error al guardar:", error);
       alert("Error al guardar.");
@@ -78,7 +78,7 @@ export default function NewEvent() {
   const handleDelete = async () => {
     if (window.confirm("¿Confirmás la eliminación definitiva?")) {
       await deleteDoc(doc(db, "rotations", id));
-      navigate('/');
+      navigate('/rotaciones');
     }
   };
 
