@@ -86,21 +86,24 @@ export default function NewEvent() {
     width: '100%',
     padding: '12px',
     borderRadius: '10px',
-    border: '1px solid #ced4da',
+    border: '1px solid rgba(45, 212, 191, 0.18)',
     fontSize: '16px',
     marginBottom: '10px',
-    backgroundColor: '#fff',
+    backgroundColor: '#0C1518',
+    color: '#F0FAFA',
+    caretColor: '#2DD4BF',
+    colorScheme: 'dark',
     outline: 'none',
     boxSizing: 'border-box'
   };
 
   return (
-    <div style={{ padding: '24px 0', maxWidth: '500px', margin: 'auto' }}>
+    <div style={{ padding: '24px 16px 40px', maxWidth: '500px', margin: 'auto', minHeight: '100vh', backgroundColor: '#080F12', color: '#F0FAFA', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>
           {isEditing ? 'Editar Rotación' : 'Nueva Rotación'}
         </h2>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: '#6c757d', fontWeight: 600, cursor: 'pointer' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: '#5B8A8A', fontWeight: 600, cursor: 'pointer' }}>
           Cancelar
         </button>
       </div>
@@ -108,14 +111,14 @@ export default function NewEvent() {
       {/* ESTADO DE LA OPERACIÓN (SWITCH) */}
       {isEditing && (
         <div style={{ 
-          backgroundColor: isClosed ? '#1a1d21' : '#f8f9fa', 
+          backgroundColor: isClosed ? '#1a1d21' : '#122329', 
           padding: '15px', 
           borderRadius: '16px', 
           marginBottom: '20px', 
           display: 'flex', 
           alignItems: 'center', 
           gap: '12px',
-          border: '1px solid #eaecef',
+          border: '1px solid rgba(45, 212, 191, 0.15)',
           transition: 'all 0.3s ease'
         }}>
           <input 
@@ -128,7 +131,7 @@ export default function NewEvent() {
           <label htmlFor="closedStatus" style={{ 
             fontWeight: 700, 
             fontSize: '14px', 
-            color: isClosed ? 'white' : '#1a1d21',
+            color: isClosed ? 'white' : '#F0FAFA',
             cursor: 'pointer' 
           }}>
             {isClosed ? '🔒 OPERACIÓN CERRADA' : '🔓 OPERACIÓN ABIERTA'}
@@ -136,17 +139,17 @@ export default function NewEvent() {
         </div>
       )}
 
-      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '20px', border: '1px solid #eaecef', marginBottom: '20px' }}>
-        <label style={{ fontSize: '12px', fontWeight: 700, color: '#6c757d', marginBottom: '5px', display: 'block' }}>NOMBRE DEL EVENTO</label>
+      <div style={{ backgroundColor: '#122329', padding: '20px', borderRadius: '20px', border: '1px solid rgba(45, 212, 191, 0.15)', marginBottom: '20px' }}>
+        <label style={{ fontSize: '12px', fontWeight: 700, color: '#5B8A8A', marginBottom: '5px', display: 'block' }}>NOMBRE DEL EVENTO</label>
         <input type="text" placeholder="Ej: Venta VISTA compra BBAR" value={eventName} onChange={(e) => setEventName(e.target.value)} style={inputStyle} />
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: '12px', fontWeight: 700, color: '#6c757d', marginBottom: '5px', display: 'block' }}>FECHA</label>
+            <label style={{ fontSize: '12px', fontWeight: 700, color: '#5B8A8A', marginBottom: '5px', display: 'block' }}>FECHA</label>
             <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} style={inputStyle} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: '12px', fontWeight: 700, color: '#6c757d', marginBottom: '5px', display: 'block' }}>DÓLAR BASE</label>
+            <label style={{ fontSize: '12px', fontWeight: 700, color: '#5B8A8A', marginBottom: '5px', display: 'block' }}>DÓLAR BASE</label>
             <input type="number" placeholder="1400" value={initialUsdRate} onChange={(e) => setInitialUsdRate(e.target.value)} style={inputStyle} />
           </div>
         </div>
@@ -154,7 +157,7 @@ export default function NewEvent() {
 
       {/* SECCIÓN VENTA */}
       <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#dc3545', marginBottom: '10px', paddingLeft: '5px' }}>⬇ LO QUE SE VENDIÓ</h3>
-      <div style={{ backgroundColor: '#fff5f5', padding: '15px', borderRadius: '20px', marginBottom: '20px', border: '1px solid #ffdada' }}>
+      <div style={{ backgroundColor: 'rgba(248, 113, 113, 0.08)', padding: '15px', borderRadius: '20px', marginBottom: '20px', border: '1px solid rgba(248, 113, 113, 0.22)' }}>
         {soldAssets.map((asset, index) => (
           <div key={`sold-${index}`} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
             <input type="text" placeholder="Ticker" value={asset.ticker} onChange={(e) => handleAssetChange(index, 'ticker', e.target.value, 'sold')} style={{ ...inputStyle, marginBottom: 0, flex: 1.5 }} />
@@ -167,7 +170,7 @@ export default function NewEvent() {
 
       {/* SECCIÓN COMPRA */}
       <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#198754', marginBottom: '10px', paddingLeft: '5px' }}>⬆ LO QUE SE COMPRÓ</h3>
-      <div style={{ backgroundColor: '#f4faf6', padding: '15px', borderRadius: '20px', marginBottom: '30px', border: '1px solid #d1e7dd' }}>
+      <div style={{ backgroundColor: 'rgba(45, 212, 191, 0.06)', padding: '15px', borderRadius: '20px', marginBottom: '30px', border: '1px solid rgba(45, 212, 191, 0.18)' }}>
         {boughtAssets.map((asset, index) => (
           <div key={`bought-${index}`} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
             <input type="text" placeholder="Ticker" value={asset.ticker} onChange={(e) => handleAssetChange(index, 'ticker', e.target.value, 'bought')} style={{ ...inputStyle, marginBottom: 0, flex: 1.5 }} />
@@ -178,7 +181,7 @@ export default function NewEvent() {
         <button onClick={() => addAssetRow('bought')} style={{ width: '100%', background: 'none', border: '1px dashed #198754', color: '#198754', padding: '8px', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>+ Otro activo comprado</button>
       </div>
 
-      <button onClick={handleSaveEvent} style={{ width: '100%', padding: '18px', backgroundColor: '#1a1d21', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+      <button onClick={handleSaveEvent} style={{ width: '100%', padding: '18px', backgroundColor: '#2DD4BF', color: '#080F12', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 24px rgba(45,212,191,0.2)' }}>
         {isEditing ? 'Guardar Cambios' : 'Crear Operación'}
       </button>
 
