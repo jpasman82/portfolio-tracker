@@ -73,7 +73,7 @@ export default function EventDetail() {
             ...a,
             quantity: a.quantity?.toString().replace('.', ',') || '',
             priceAtTrade: formatDecimals(a.priceAtTrade),
-            usdRateAtTrade: formatDecimals(a.usdRateAtTrade || initUsd)
+            usdRateAtTrade: formatDecimals(a.usdRateAtTrade || data.initialUsdRate || initUsd)
           }));
           setCurrentAssets(formattedAssets);
           const pB = {};
