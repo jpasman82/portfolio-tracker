@@ -263,7 +263,9 @@ export default function EventDetail() {
           const currUsd = parseNum(currentUsdRate) || 1;
           const pCompraUSD = pCompraARS / initUsd;
           const pActualUSD = pActualARS / currUsd;
-          const varPct = pCompraUSD > 0 ? ((pActualUSD / pCompraUSD) - 1) * 100 : 0;
+          const varPctARS = pCompraARS > 0 ? ((pActualARS / pCompraARS) - 1) * 100 : 0;
+          const varPctUSD = pCompraUSD > 0 ? ((pActualUSD / pCompraUSD) - 1) * 100 : 0;
+          const varPct = viewCurrency === 'USD' ? varPctUSD : varPctARS;
 
           return (
             <div key={index} className="mb-4 pb-4 border-b border-teal-400/5">
@@ -282,7 +284,7 @@ export default function EventDetail() {
                   )}
                   {!isEditingStructure && pCompraARS > 0 && (
                     <div className={`font-mono text-[11px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-lg ${varPct >= 0 ? 'bg-teal-400/10 text-teal-300' : 'bg-red-400/10 text-red-300'}`}>
-                      {varPct >= 0 ? '▲' : '▼'} {Math.abs(varPct).toFixed(1)}% USD
+                      {varPct >= 0 ? '▲' : '▼'} {Math.abs(varPct).toFixed(1)}% {viewCurrency}
                     </div>
                   )}
                 </div>
