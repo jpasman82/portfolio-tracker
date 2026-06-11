@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { Link } from 'react-router-dom';
 import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
+import { esMercadoAbierto } from '../utils/marketHours';
 import * as XLSX from 'xlsx';
 
 const handleLogout = async () => {
@@ -25,8 +26,9 @@ export default function Dashboard() {
 
   const fetchEvents = async () => {
     try {
-      const priceMap = await fetchAllPrices();
-      const mepRate = getMepRate();
+      const mercadoEstaAbierto = esMercadoAbierto();
+      const priceMap = mercadoEstaAbierto ? await fetchAllPrices() : {};
+      const mepRate = mercadoEstaAbierto ? getMepRate() : null;
       const querySnapshot = await getDocs(collection(db, "rotations"));
       let data = querySnapshot.docs.map(doc => {
         const rotation = { id: doc.id, ...doc.data() };

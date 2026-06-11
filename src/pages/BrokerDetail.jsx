@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { fetchAllPrices, isBondTicker, getMepRate, getCclRate } from '../utils/priceService';
+import { esMercadoAbierto } from '../utils/marketHours';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 const INPUT = "w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 focus:border-teal-400/60 text-[#F0FAFA] placeholder-[#3d5a5a] rounded-xl text-sm outline-none transition-colors box-border";
@@ -70,7 +71,9 @@ export default function BrokerDetail() {
     };
     const init = async () => {
       let livePrices = {};
-      try { livePrices = await fetchAllPrices(); } catch (e) {}
+      if (esMercadoAbierto()) {
+        try { livePrices = await fetchAllPrices(); } catch (e) {}
+      }
       fetchData(livePrices, getMepRate());
     };
     init();

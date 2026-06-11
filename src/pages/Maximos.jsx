@@ -7,6 +7,7 @@ import { fetchAllPrices, getCclRate } from '../utils/priceService';
 import { fetchGoogleFinanceQuotes } from '../utils/googleFinanceService';
 import { preciosMaximosLocalesUSD } from '../utils/maximosData';
 import { assetDictionary } from '../utils/dictionary';
+import { esMercadoAbierto } from '../utils/marketHours';
 import './Maximos.css';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
@@ -71,7 +72,8 @@ export default function Maximos() {
     const load = async () => {
       setLoading(true);
       try {
-        const priceMap = await fetchAllPrices();
+        const mercadoEstaAbierto = esMercadoAbierto();
+        const priceMap = mercadoEstaAbierto ? await fetchAllPrices() : {};
         const googleFinanceItems = preciosMaximosLocalesUSD
           .filter((item) => item.priceSource === 'googleFinance')
           .map((item) => ({
@@ -80,7 +82,7 @@ export default function Maximos() {
             exchange: item.googleFinanceExchange || 'NASDAQ',
           }));
         const googleFinancePrices = await fetchGoogleFinanceQuotes(googleFinanceItems);
-        const cableRate = getCclRate();
+        const cableRate = mercadoEstaAbierto ? getCclRate() : null;
         const maxTickers = new Set(preciosMaximosLocalesUSD.map((item) => item.ticker));
         const holdingsByTicker = {};
 

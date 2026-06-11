@@ -5,6 +5,7 @@ import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { assetDictionary } from '../utils/dictionary';
 import { fetchAllPrices, getMepRate, getPriceMeta, isBondTicker } from '../utils/priceService';
+import { esMercadoAbierto } from '../utils/marketHours';
 import './Unified.css';
 
 const handleLogout = async () => {
@@ -14,16 +15,7 @@ const handleLogout = async () => {
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 const REFRESH_MS = 60 * 1000;
-const APERTURA_MINUTOS = 10 * 60 + 30;
-const CIERRE_MINUTOS = 17 * 60;
 const BRAZIL_CEDEARS = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ']);
-
-function esMercadoAbierto() {
-  const ahora = new Date();
-  const dia = ahora.getDay();
-  const minutos = ahora.getHours() * 60 + ahora.getMinutes();
-  return dia >= 1 && dia <= 5 && minutos >= APERTURA_MINUTOS && minutos < CIERRE_MINUTOS;
-}
 
 export default function Unified() {
   const [groupedData, setGroupedData] = useState({});
@@ -54,9 +46,10 @@ export default function Unified() {
     if (showLoading) setLoading(true);
     setRefreshing(true);
       try {
-        const priceMap = await fetchAllPrices();
-        const mepRate = getMepRate();
-        const priceMeta = getPriceMeta();
+        const mercadoEstaAbierto = esMercadoAbierto();
+        const priceMap = mercadoEstaAbierto ? await fetchAllPrices() : {};
+        const mepRate = mercadoEstaAbierto ? getMepRate() : null;
+        const priceMeta = mercadoEstaAbierto ? getPriceMeta() : {};
         const querySnapshot = await getDocs(collection(db, "brokerPositions"));
         const unified = {};
         let total = 0;

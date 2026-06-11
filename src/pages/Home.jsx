@@ -4,23 +4,20 @@ import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
+import {
+  actualizacionCercaDelCierre,
+  esDespuesDelCierre,
+  esMercadoAbierto,
+  fechaMercadoKey,
+} from '../utils/marketHours';
 import './Home.css';
 
 const INTERVALO_MINUTOS = 1;
-const APERTURA_MINUTOS = 10 * 60 + 30;
-const CIERRE_MINUTOS = 17 * 60;
 
 const handleLogout = async () => {
   sessionStorage.removeItem('bioUnlocked');
   await signOut(auth);
 };
-
-function esMercadoAbierto() {
-  const ahora = new Date();
-  const dia = ahora.getDay();
-  const minutos = ahora.getHours() * 60 + ahora.getMinutes();
-  return dia >= 1 && dia <= 5 && minutos >= APERTURA_MINUTOS && minutos < CIERRE_MINUTOS;
-}
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 
@@ -48,7 +45,7 @@ export default function Home() {
 
   const fetchBalances = async () => {
     try {
-      if (!getMepRate()) {
+      if (esMercadoAbierto() && !getMepRate()) {
         try { await fetchAllPrices(); } catch (e) {}
       }
       const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
@@ -104,8 +101,10 @@ export default function Home() {
       } else {
         setLatestGlobalUpdate('Sin registros');
       }
+      return latestTimestamp;
     } catch (e) {
       console.error('[fetchBalances]', e);
+      return 0;
     } finally {
       setLoading(false);
     }
@@ -113,7 +112,14 @@ export default function Home() {
 
   fetchBalancesRef.current = fetchBalances;
 
-  const handleUpdatePrices = async (silencioso = false) => {
+  const handleUpdatePrices = async (silencioso = false, options = {}) => {
+    if (!esMercadoAbierto() && !options.allowClosedRefresh) {
+      setMercadoAbierto(false);
+      if (!silencioso) alert('Mercado cerrado: no se actualizan precios fuera de 10:30 a 17:00 hs.');
+      await fetchBalancesRef.current();
+      return;
+    }
+
     if (!silencioso) setUpdatingPrices(true);
     try {
       const priceMap = await fetchAllPrices();
@@ -173,8 +179,18 @@ export default function Home() {
       if (abierto) {
         await handleUpdatePrices(true);
       } else {
-        try { await fetchAllPrices(); } catch (e) {}
-        await fetchBalancesRef.current();
+        const latestTimestamp = await fetchBalancesRef.current();
+        const ahora = new Date();
+        const closeRefreshKey = `close-refresh:${fechaMercadoKey(ahora)}`;
+        const necesitaFotoCierre =
+          esDespuesDelCierre(ahora) &&
+          !actualizacionCercaDelCierre(latestTimestamp, ahora) &&
+          sessionStorage.getItem(closeRefreshKey) !== 'done';
+
+        if (necesitaFotoCierre) {
+          await handleUpdatePrices(true, { allowClosedRefresh: true });
+          sessionStorage.setItem(closeRefreshKey, 'done');
+        }
       }
     };
     init();
