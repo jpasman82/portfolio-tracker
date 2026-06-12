@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { fetchAllPrices, isBondTicker, getMepRate, getCclRate } from '../utils/priceService';
 import { esMercadoAbierto } from '../utils/marketHours';
+import { getBrokerName, isUsdBroker } from '../utils/brokers';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 const INPUT = "w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 focus:border-teal-400/60 text-[#F0FAFA] placeholder-[#3d5a5a] rounded-xl text-sm outline-none transition-colors box-border";
@@ -19,8 +20,7 @@ export default function BrokerDetail() {
   const [usdRate, setUsdRate] = useState('');
   const [debt, setDebt] = useState('');
 
-  const brokerNames = { jpm: 'J.P. Morgan', one: 'One618', latin: 'Latin Securities' };
-  const isUSD = id === 'jpm';
+  const isUSD = isUsdBroker(id);
 
   const formatInput = (val) => {
     if (val === undefined || val === null || val === '') return '';
@@ -153,7 +153,7 @@ export default function BrokerDetail() {
       <div className="bg-[#122329] border border-teal-400/20 rounded-2xl p-5 mb-5 shadow-[0_20px_40px_rgba(0,0,0,0.3)] relative z-10">
         <p className={KICKER}>
           <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
-          {brokerNames[id]}
+          {getBrokerName(id)}
         </p>
         <div className="text-4xl font-black tracking-tight text-teal-400 mt-2">
           US$ {totalUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}

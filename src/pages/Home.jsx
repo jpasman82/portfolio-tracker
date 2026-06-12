@@ -4,6 +4,7 @@ import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
+import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
 import {
   actualizacionCercaDelCierre,
   actualizacionPosteriorAlCierre,
@@ -23,11 +24,7 @@ const handleLogout = async () => {
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 
 export default function Home() {
-  const [brokerData, setBrokerData] = useState({
-    jpm:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-    one:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-    latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-  });
+  const [brokerData, setBrokerData] = useState(() => createEmptyBrokerData());
   const [loading, setLoading] = useState(true);
   const [updatingPrices, setUpdatingPrices] = useState(false);
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
@@ -50,17 +47,13 @@ export default function Home() {
         try { await fetchAllPrices(); } catch (e) {}
       }
       const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
-      const newBrokerData = {
-        jpm:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-        one:   { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-        latin: { balance: 0, assetsTotal: 0, debt: 0, updated: null },
-      };
+      const newBrokerData = createEmptyBrokerData();
       let latestTimestamp = 0;
       const heldTickers = new Set();
 
       querySnapshot.forEach((document) => {
         const data = document.data();
-        const rate = document.id === 'jpm' ? 1 : (parseNum(data.usdRate) || 1);
+        const rate = isUsdBroker(document.id) ? 1 : (parseNum(data.usdRate) || 1);
         const assetsTotal = (data.assets || []).reduce((sum, a) => {
           const bond = a.isBond || isBondTicker(a.ticker);
           const divisor = bond ? 100 : 1;
@@ -142,7 +135,7 @@ export default function Home() {
 
       for (const document of querySnapshot.docs) {
         const data = document.data();
-        const isJPM = document.id === 'jpm';
+        const isJPM = isUsdBroker(document.id);
         const payload = {};
 
         const updatedAssets = (data.assets || []).map(a => {
@@ -233,11 +226,7 @@ export default function Home() {
     );
   };
 
-  const brokers = [
-    { id: 'jpm',   name: 'J.P. Morgan',       ...brokerData.jpm,   logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/J_P_Morgan_Chase_Logo_2008_1.svg/512px-J_P_Morgan_Chase_Logo_2008_1.svg.png' },
-    { id: 'one',   name: 'One618',             ...brokerData.one,   logo: 'https://play-lh.googleusercontent.com/rmyAkju1LNJl3AEF4cN2ef4jGxzmiSfxga17vLkwPDc-nyDkkxP78TEoKj1cxF_xGtLHBs6BWb0ccR5WvhCj' },
-    { id: 'latin', name: 'Latin Securities',   ...brokerData.latin, logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png' },
-  ];
+  const brokers = BROKERS.map((broker) => ({ ...broker, ...brokerData[broker.id] }));
 
   const tickerTapeItems = tickerTape.length > 0 ? [...tickerTape, ...tickerTape] : [];
 

@@ -5,6 +5,7 @@ import { db, auth } from '../firebase/config';
 import { Link } from 'react-router-dom';
 import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
 import { esMercadoAbierto } from '../utils/marketHours';
+import { getBrokerName, isUsdBroker } from '../utils/brokers';
 import * as XLSX from 'xlsx';
 
 const handleLogout = async () => {
@@ -80,8 +81,8 @@ export default function Dashboard() {
       querySnapshot.forEach((document) => {
         const data = document.data();
         const brokerId = document.id;
-        let brokerName = brokerId === 'jpm' ? 'J.P. Morgan' : brokerId === 'one' ? 'One618' : 'Latin Securities';
-        const rate = brokerId === 'jpm' ? 1 : (parseNum(data.usdRate) || 1);
+        const brokerName = getBrokerName(brokerId);
+        const rate = isUsdBroker(brokerId) ? 1 : (parseNum(data.usdRate) || 1);
         (data.assets || []).forEach(asset => {
           const isBond = asset.isBond || isBondTicker(asset.ticker);
           const divisor = isBond ? 100 : 1;
