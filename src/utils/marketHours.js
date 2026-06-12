@@ -24,6 +24,15 @@ export function cierreDelDia(date = new Date()) {
   return cierre;
 }
 
+export function actualizacionPosteriorAlCierre(lastUpdated, date = new Date()) {
+  if (!lastUpdated) return false;
+  const updatedAt = lastUpdated instanceof Date ? lastUpdated : new Date(lastUpdated);
+  const timestamp = updatedAt.getTime();
+  if (!Number.isFinite(timestamp)) return false;
+
+  return fechaMercadoKey(updatedAt) === fechaMercadoKey(date) && timestamp >= cierreDelDia(date).getTime();
+}
+
 export function fechaMercadoKey(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

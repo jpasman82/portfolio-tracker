@@ -6,6 +6,7 @@ import { db, auth } from '../firebase/config';
 import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
 import {
   actualizacionCercaDelCierre,
+  actualizacionPosteriorAlCierre,
   esDespuesDelCierre,
   esMercadoAbierto,
   fechaMercadoKey,
@@ -113,11 +114,22 @@ export default function Home() {
   fetchBalancesRef.current = fetchBalances;
 
   const handleUpdatePrices = async (silencioso = false, options = {}) => {
-    if (!esMercadoAbierto() && !options.allowClosedRefresh) {
+    const ahora = new Date();
+    if (!esMercadoAbierto(ahora)) {
       setMercadoAbierto(false);
-      if (!silencioso) alert('Mercado cerrado: no se actualizan precios fuera de 10:30 a 17:00 hs.');
-      await fetchBalancesRef.current();
-      return;
+      const latestTimestamp = await fetchBalancesRef.current();
+      const yaActualizoPostCierre = actualizacionPosteriorAlCierre(latestTimestamp, ahora);
+      const puedeTomarFotoCierre = options.allowClosedRefresh && !yaActualizoPostCierre;
+
+      if (!puedeTomarFotoCierre) {
+        if (!silencioso) {
+          const mensaje = yaActualizoPostCierre
+            ? 'Mercado cerrado: los precios ya fueron actualizados después del cierre. Se volverán a actualizar cuando abra el mercado.'
+            : 'Mercado cerrado: no se actualizan precios fuera de 10:30 a 17:00 hs.';
+          alert(mensaje);
+        }
+        return false;
+      }
     }
 
     if (!silencioso) setUpdatingPrices(true);
@@ -164,9 +176,11 @@ export default function Home() {
         }
       }
       await fetchBalancesRef.current();
+      return true;
     } catch (error) {
       if (!silencioso) alert(`Error al actualizar: ${error.message}`);
       else console.error('[auto-refresh] Error:', error.message);
+      return false;
     } finally {
       if (!silencioso) setUpdatingPrices(false);
     }
@@ -184,12 +198,13 @@ export default function Home() {
         const closeRefreshKey = `close-refresh:${fechaMercadoKey(ahora)}`;
         const necesitaFotoCierre =
           esDespuesDelCierre(ahora) &&
+          !actualizacionPosteriorAlCierre(latestTimestamp, ahora) &&
           !actualizacionCercaDelCierre(latestTimestamp, ahora) &&
           sessionStorage.getItem(closeRefreshKey) !== 'done';
 
         if (necesitaFotoCierre) {
-          await handleUpdatePrices(true, { allowClosedRefresh: true });
-          sessionStorage.setItem(closeRefreshKey, 'done');
+          const updated = await handleUpdatePrices(true, { allowClosedRefresh: true });
+          if (updated) sessionStorage.setItem(closeRefreshKey, 'done');
         }
       }
     };
