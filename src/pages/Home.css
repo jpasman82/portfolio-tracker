@@ -240,8 +240,9 @@
   .h-page {
     max-width: 1440px;
     padding: 32px 56px 0;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
   }
@@ -335,7 +336,7 @@
 
   .h-broker-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 20px;
     flex: 1;
     min-height: 0;
@@ -404,5 +405,11 @@
     border-radius: 0;
     border-top: 1px solid rgba(45, 212, 191, 0.08);
     padding: 10px 56px 14px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .h-broker-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
