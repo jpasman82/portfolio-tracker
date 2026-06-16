@@ -4,6 +4,7 @@ import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
+import { fetchRiskCountry } from '../utils/riskCountryService';
 import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
 import {
   actualizacionCercaDelCierre,
@@ -30,6 +31,7 @@ export default function Home() {
   const [latestGlobalUpdate, setLatestGlobalUpdate] = useState('');
   const [mep, setMep] = useState(null);
   const [cable, setCable] = useState(null);
+  const [riskCountry, setRiskCountry] = useState(null);
   const [tickerTape, setTickerTape] = useState([]);
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
 
@@ -79,6 +81,9 @@ export default function Home() {
       setBrokerData(newBrokerData);
       setMep(getMepRate());
       setCable(getCclRate());
+      fetchRiskCountry()
+        .then(setRiskCountry)
+        .catch((err) => console.warn('[Home] Riesgo pais:', err.message));
       const priceMeta = getPriceMeta();
       setTickerTape(
         [...heldTickers]
@@ -234,6 +239,8 @@ export default function Home() {
   const totalDeuda   = brokers.reduce((sum, b) => sum + (b.debt || 0), 0);
   const totalNeto    = brokers.reduce((sum, b) => sum + b.balance, 0);
   const cableVsMep = mep > 0 && cable > 0 ? ((cable / mep) - 1) * 100 : null;
+  const riskCountryDirection =
+    riskCountry?.change > 0 ? 'up' : riskCountry?.change < 0 ? 'down' : 'flat';
 
   if (loading) return (
     <div className="flex justify-center items-center min-h-screen bg-[#080F12]">
@@ -325,6 +332,25 @@ export default function Home() {
               <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Cable vs MEP</div>
               <div className="font-bold text-[#F0FAFA]">
                 {cableVsMep > 0 ? '+' : ''}{cableVsMep.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+              </div>
+            </div>
+          )}
+          {riskCountry?.value !== null && riskCountry?.value !== undefined && (
+            <div>
+              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Riesgo País</div>
+              <div className="h-risk-country">
+                <span className="font-bold text-[#F0FAFA]">
+                  {riskCountry.value.toLocaleString('es-AR', { maximumFractionDigits: 0 })} pts
+                </span>
+                {riskCountry.change !== null && (
+                  <span className={`h-risk-change h-risk-${riskCountryDirection}`}>
+                    {riskCountry.change > 0 ? '+' : ''}
+                    {riskCountry.change.toLocaleString('es-AR', { maximumFractionDigits: 0 })} pts
+                    {riskCountry.changePercent !== null && (
+                      <> ({riskCountry.changePercent > 0 ? '+' : ''}{riskCountry.changePercent.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</>
+                    )}
+                  </span>
+                )}
               </div>
             </div>
           )}

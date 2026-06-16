@@ -198,6 +198,32 @@
   font-size: 21px;
 }
 
+.h-risk-country {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.h-risk-change {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.h-risk-up {
+  color: #F87171;
+}
+
+.h-risk-down {
+  color: #34D399;
+}
+
+.h-risk-flat {
+  color: #5B8A8A;
+}
+
 .h-balance {
   font-size: 21px;
 }
@@ -324,6 +350,14 @@
 
   .h-summary-sub-amount {
     font-size: 16px !important;
+  }
+
+  .h-risk-country {
+    gap: 7px;
+  }
+
+  .h-risk-change {
+    font-size: 11px !important;
   }
 
   .h-summary-stats-debt {
