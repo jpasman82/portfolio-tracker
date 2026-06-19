@@ -45,8 +45,12 @@ export default function Home() {
 
   const fetchBalances = async () => {
     try {
-      if (esMercadoAbierto() && !getMepRate()) {
-        try { await fetchAllPrices(); } catch (e) {}
+      if (!getMepRate() || !getCclRate()) {
+        try {
+          await fetchAllPrices();
+        } catch (err) {
+          console.warn('[Home] Cotizaciones MEP/Cable:', err.message);
+        }
       }
       const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
       const newBrokerData = createEmptyBrokerData();
@@ -239,6 +243,12 @@ export default function Home() {
   const totalDeuda   = brokers.reduce((sum, b) => sum + (b.debt || 0), 0);
   const totalNeto    = brokers.reduce((sum, b) => sum + b.balance, 0);
   const cableVsMep = mep > 0 && cable > 0 ? ((cable / mep) - 1) * 100 : null;
+  const formatFxRate = (value) =>
+    value > 0 ? `$ ${value.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : 'Sin datos';
+  const formatCableVsMep = (value) =>
+    value !== null
+      ? `${value > 0 ? '+' : ''}${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+      : 'Sin datos';
   const riskCountryDirection =
     riskCountry?.change > 0 ? 'up' : riskCountry?.change < 0 ? 'down' : 'flat';
 
@@ -315,26 +325,20 @@ export default function Home() {
               - US$ {totalDeuda.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </div>
           </div>
-          {mep && (
-            <div>
-              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Dólar MEP</div>
-              <div className="font-bold text-[#F0FAFA]">$ {mep.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</div>
+          <div>
+            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Dólar MEP</div>
+            <div className={`font-bold ${mep > 0 ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>{formatFxRate(mep)}</div>
+          </div>
+          <div>
+            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Dólar Cable</div>
+            <div className={`font-bold ${cable > 0 ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>{formatFxRate(cable)}</div>
+          </div>
+          <div>
+            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Cable vs MEP</div>
+            <div className={`font-bold ${cableVsMep !== null ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>
+              {formatCableVsMep(cableVsMep)}
             </div>
-          )}
-          {cable && (
-            <div>
-              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Dólar Cable</div>
-              <div className="font-bold text-[#F0FAFA]">$ {cable.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</div>
-            </div>
-          )}
-          {cableVsMep !== null && (
-            <div>
-              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Cable vs MEP</div>
-              <div className="font-bold text-[#F0FAFA]">
-                {cableVsMep > 0 ? '+' : ''}{cableVsMep.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
-              </div>
-            </div>
-          )}
+          </div>
           {riskCountry?.value !== null && riskCountry?.value !== undefined && (
             <div>
               <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Riesgo País</div>
