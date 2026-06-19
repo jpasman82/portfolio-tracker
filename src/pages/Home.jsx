@@ -15,7 +15,12 @@ import {
 } from '../utils/marketHours';
 import './Home.css';
 
-const INTERVALO_MINUTOS = 1;
+const MS_POR_MINUTO = 60 * 1000;
+
+const msHastaProximoMinuto = (date = new Date()) => {
+  const transcurrido = date.getSeconds() * 1000 + date.getMilliseconds();
+  return transcurrido === 0 ? MS_POR_MINUTO : MS_POR_MINUTO - transcurrido;
+};
 
 const handleLogout = async () => {
   sessionStorage.removeItem('bioUnlocked');
@@ -214,14 +219,25 @@ export default function Home() {
     const estadoMercado = setInterval(() => {
       setMercadoAbierto(esMercadoAbierto());
     }, 30 * 1000);
-    const intervalo = setInterval(() => {
-      const abierto = esMercadoAbierto();
-      setMercadoAbierto(abierto);
-      if (abierto) handleUpdatePrices(true);
-    }, INTERVALO_MINUTOS * 60 * 1000);
+
+    let refreshTimer = null;
+    let refreshActivo = true;
+    const programarProximoRefresh = () => {
+      refreshTimer = setTimeout(async () => {
+        if (!refreshActivo) return;
+        const abierto = esMercadoAbierto();
+        setMercadoAbierto(abierto);
+        if (abierto) await handleUpdatePrices(true);
+        if (refreshActivo) programarProximoRefresh();
+      }, msHastaProximoMinuto());
+    };
+
+    programarProximoRefresh();
+
     return () => {
+      refreshActivo = false;
       clearInterval(estadoMercado);
-      clearInterval(intervalo);
+      clearTimeout(refreshTimer);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
