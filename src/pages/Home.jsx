@@ -408,6 +408,7 @@ export default function Home() {
       <div className="h-broker-grid">
         {brokers.map(b => {
           const percentage = totalNeto > 0 ? ((b.balance / totalNeto) * 100).toFixed(1) : 0;
+          const debtPct = b.assetsTotal > 0 ? (b.debt / b.assetsTotal) * 100 : 0;
           const balanceCCL = b.id === 'jpm' && mep > 0 && cable > 0
             ? b.balance * mep / cable
             : null;
@@ -441,6 +442,11 @@ export default function Home() {
                     {balanceCCL !== null && (
                       <div className="h-cable-val font-mono text-[#5B8A8A]">
                         Cable US$ {balanceCCL.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      </div>
+                    )}
+                    {b.debt > 0 && (
+                      <div className="h-cable-val font-mono text-red-400">
+                        Deuda US$ {b.debt.toLocaleString('en-US', { maximumFractionDigits: 0 })} ({debtPct.toFixed(1)}%)
                       </div>
                     )}
                     <div className="h-broker-pct font-mono text-teal-400/60">

@@ -120,7 +120,38 @@
 .u-table-header { display: none !important; }
 
 .u-total-amount {
-  font-size: 38px;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.u-balance-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(45, 212, 191, 0.1);
+}
+
+.u-balance-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: #5B8A8A;
+}
+
+.u-balance-row strong {
+  color: #A8C8C8;
+  font-size: 13px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.u-balance-row-debt,
+.u-balance-row-debt strong {
+  color: #F87171;
 }
 
 .u-cat-title {
@@ -290,12 +321,25 @@
   }
 
   .u-total-amount {
-    font-size: 58px !important;
-    letter-spacing: -1.5px;
+    font-size: 48px !important;
+    letter-spacing: -1px;
   }
 
   .u-total-label {
     font-size: 13px !important;
+  }
+
+  .u-balance-breakdown {
+    gap: 8px;
+    padding-top: 12px;
+  }
+
+  .u-balance-row {
+    font-size: 14px !important;
+  }
+
+  .u-balance-row strong {
+    font-size: 16px !important;
   }
 
   .u-cat-title {

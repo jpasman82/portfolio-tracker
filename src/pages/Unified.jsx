@@ -215,6 +215,7 @@ export default function Unified() {
   const totalDebtUsd = allAssets
     .filter(a => a.valueUsd < 0)
     .reduce((sum, a) => sum + Math.abs(a.valueUsd), 0);
+  const totalDebtPct = totalAssetsUsd > 0 ? (totalDebtUsd / totalAssetsUsd) * 100 : 0;
 
   return (
     <div className="u-page relative">
@@ -379,9 +380,16 @@ export default function Unified() {
           <div className="bg-[#122329] border border-teal-400/20 p-5 rounded-2xl mb-4 shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
             <div className="u-total-label font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-2">Valor Total Neto</div>
             <div className="u-total-amount font-black tracking-tight text-teal-400">{fmtUSD(totalUsd)}</div>
-            {totalDebtUsd > 0 && (
-              <div className="u-gross-note font-mono text-[12px] text-[#5B8A8A] mt-1">
-                Activos: {fmtUSD(totalAssetsUsd)}
+            {(totalAssetsUsd > 0 || totalDebtUsd > 0) && (
+              <div className="u-balance-breakdown mt-3">
+                <div className="u-balance-row">
+                  <span>Total activos</span>
+                  <strong>{fmtUSD(totalAssetsUsd)}</strong>
+                </div>
+                <div className="u-balance-row u-balance-row-debt">
+                  <span>Total deuda</span>
+                  <strong>{fmtUSD(totalDebtUsd)} · {totalDebtPct.toFixed(1)}%</strong>
+                </div>
               </div>
             )}
             <div className="mt-4 flex flex-col gap-2">
