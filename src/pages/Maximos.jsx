@@ -8,6 +8,7 @@ import { fetchGoogleFinanceQuotes } from '../utils/googleFinanceService';
 import { preciosMaximosLocalesUSD } from '../utils/maximosData';
 import { assetDictionary } from '../utils/dictionary';
 import { esMercadoAbierto } from '../utils/marketHours';
+import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import './Maximos.css';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
@@ -51,6 +52,7 @@ export default function Maximos() {
   const [target, setTarget] = useState('enero');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const bottomNavHidden = useHideBottomNavOnScroll();
 
   const parseNum = (val) => {
     if (!val) return 0;
@@ -249,7 +251,7 @@ export default function Maximos() {
         ))}
       </div>
 
-      <div className="m-bottomnav bg-[#0C1518] border-t border-teal-400/10">
+      <div className={`m-bottomnav bg-[#0C1518] border-t border-teal-400/10 ${bottomNavHidden ? 'is-hidden' : ''}`}>
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#5B8A8A', flex: 1 }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span className="font-mono text-[11px] tracking-[0.12em] uppercase">Brokers</span>

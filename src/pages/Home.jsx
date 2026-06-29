@@ -6,6 +6,7 @@ import { db, auth } from '../firebase/config';
 import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
 import { fetchRiskCountry } from '../utils/riskCountryService';
 import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
+import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import {
   actualizacionCercaDelCierre,
   actualizacionPosteriorAlCierre,
@@ -39,6 +40,7 @@ export default function Home() {
   const [riskCountry, setRiskCountry] = useState(null);
   const [tickerTape, setTickerTape] = useState([]);
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
+  const bottomNavHidden = useHideBottomNavOnScroll();
 
   const fetchBalancesRef = useRef(null);
 
@@ -98,7 +100,7 @@ export default function Home() {
         [...heldTickers]
           .map((ticker) => ({ ticker, changePercent: priceMeta[ticker]?.changePercent }))
           .filter((item) => item.changePercent !== null && item.changePercent !== undefined)
-          .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+          .sort((a, b) => a.changePercent - b.changePercent)
       );
 
       if (latestTimestamp > 0) {
@@ -465,7 +467,7 @@ export default function Home() {
       </div>
 
       {/* Bottom nav */}
-      <div className="h-bottomnav bg-[#0C1518] border-t border-teal-400/10">
+      <div className={`h-bottomnav bg-[#0C1518] border-t border-teal-400/10 ${bottomNavHidden ? 'is-hidden' : ''}`}>
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#2DD4BF', flex: 1 }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span className="font-mono text-[11px] tracking-[0.12em] uppercase">Brokers</span>

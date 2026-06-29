@@ -6,6 +6,7 @@ import { db, auth } from '../firebase/config';
 import { assetDictionary } from '../utils/dictionary';
 import { fetchAllPrices, getMepRate, getPriceMeta, isBondTicker } from '../utils/priceService';
 import { esMercadoAbierto } from '../utils/marketHours';
+import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import './Unified.css';
 
 const handleLogout = async () => {
@@ -26,6 +27,7 @@ export default function Unified() {
   const [pieMode, setPieMode] = useState('cat');
   const [hoverData, setHoverData] = useState(null);
   const animatedRef = useRef(false);
+  const bottomNavHidden = useHideBottomNavOnScroll();
 
   const baseColors = ['#2DD4BF', '#34D399', '#FBBF24', '#A78BFA', '#FB923C', '#F472B6', '#4ADE80', '#38BDF8', '#E879F9', '#818CF8', '#FF6B6B', '#22D3EE', '#94A3B8'];
 
@@ -502,7 +504,7 @@ export default function Unified() {
       </div>
 
       {/* Bottom nav */}
-      <div className="u-bottomnav bg-[#0C1518] border-t border-teal-400/10">
+      <div className={`u-bottomnav bg-[#0C1518] border-t border-teal-400/10 ${bottomNavHidden ? 'is-hidden' : ''}`}>
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#5B8A8A', flex: 1 }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span className="font-mono text-[11px] tracking-[0.12em] uppercase">Brokers</span>

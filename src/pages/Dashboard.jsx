@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
 import { esMercadoAbierto } from '../utils/marketHours';
 import { getBrokerName, isUsdBroker } from '../utils/brokers';
+import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import * as XLSX from 'xlsx';
 
 const handleLogout = async () => {
@@ -18,6 +19,7 @@ const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 
 export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const bottomNavHidden = useHideBottomNavOnScroll();
 
   const parseNum = (val) => {
     if (!val) return 0;
@@ -236,7 +238,7 @@ export default function Dashboard() {
       </div>
 
       {/* Bottom nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[600px] bg-[#0C1518] border-t border-teal-400/10 flex justify-around px-4 pt-3 pb-6 z-[1000]">
+      <div className={`fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[600px] bg-[#0C1518] border-t border-teal-400/10 flex justify-around px-4 pt-3 pb-6 z-[1000] transition-[transform,opacity] duration-300 ease-out ${bottomNavHidden ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#5B8A8A', flex: 1 }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span className="font-mono text-[11px] tracking-[0.12em] uppercase">Brokers</span>
