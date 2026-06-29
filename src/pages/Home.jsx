@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
-import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
+import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker, getBrokerLivePrice } from '../utils/priceService';
 import { fetchRiskCountry } from '../utils/riskCountryService';
 import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
@@ -157,12 +157,11 @@ export default function Home() {
         const updatedAssets = (data.assets || []).map(a => {
           if (!a.ticker) return a;
           const t = a.ticker.toUpperCase().trim();
-          let newPrice = priceMap[t];
+          const newPrice = getBrokerLivePrice(t, priceMap, { isUSD: isJPM, mepRate });
           let bond = isBondTicker(t);
           if (!bond && a.isBond) bond = true;
 
           if (newPrice !== undefined) {
-            if (isJPM && mepRate > 0) newPrice = newPrice / mepRate;
             if (Math.abs(parseNum(a.price) - newPrice) > 0.001 || a.isBond !== bond) {
               payload.assets = true;
               return { ...a, price: newPrice, isBond: bond };

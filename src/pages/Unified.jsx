@@ -4,7 +4,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { assetDictionary } from '../utils/dictionary';
-import { fetchAllPrices, getMepRate, getPriceMeta, isBondTicker } from '../utils/priceService';
+import { fetchAllPrices, getMepRate, getPriceMeta, isBondTicker, getBrokerLivePrice } from '../utils/priceService';
 import { esMercadoAbierto } from '../utils/marketHours';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import './Unified.css';
@@ -76,8 +76,7 @@ export default function Unified() {
             const qty = parseNum(a.quantity);
             const isBond = a.isBond || isBondTicker(t);
             const bondDivisor = isBond ? 100 : 1;
-            let assetPrice = priceMap[t] ?? parseNum(a.price);
-            if (isJPM && priceMap[t] !== undefined && mepRate > 0) assetPrice = assetPrice / mepRate;
+            const assetPrice = getBrokerLivePrice(t, priceMap, { isUSD: isJPM, mepRate }) ?? parseNum(a.price);
             const priceUsd = assetPrice / rate / bondDivisor;
             const valueUsd = qty * priceUsd;
             const changePercent = priceMeta[t]?.changePercent ?? null;

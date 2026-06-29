@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { fetchAllPrices, isBondTicker, getMepRate, getCclRate } from '../utils/priceService';
+import { fetchAllPrices, isBondTicker, getMepRate, getCclRate, getBrokerLivePrice } from '../utils/priceService';
 import { esMercadoAbierto } from '../utils/marketHours';
 import { getBrokerName, isUsdBroker } from '../utils/brokers';
 
@@ -56,8 +56,7 @@ export default function BrokerDetail() {
             quantity: a.quantity?.toString().replace('.', ',') || '',
             price: formatDecimals((() => {
               const ticker = a.ticker?.toUpperCase().trim();
-              let livePrice = ticker ? livePrices[ticker] : undefined;
-              if (livePrice !== undefined && isUSD && liveMepRate > 0) livePrice = livePrice / liveMepRate;
+              const livePrice = getBrokerLivePrice(ticker, livePrices, { isUSD, mepRate: liveMepRate });
               return livePrice ?? a.price;
             })()),
             isBond: a.isBond || isBondTicker(a.ticker) || false

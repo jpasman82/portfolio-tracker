@@ -14,9 +14,13 @@ const BASE = '/snapshot/v1';
 const EP = {
   acciones:  `${BASE}/equity?group=ACCIONES&operativeForm=CONTADO&currency=ARS&settlPeriod=0002`,
   cedears:   `${BASE}/equity?group=CEDEARS&operativeForm=CONTADO&currency=ARS&settlPeriod=0002`,
-  bonosARS:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=ARS`,
-  bonosUSD:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=USD`,
-  bonosEXT:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=EXT`,
+  bonosARS:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=ARS&settlPeriod=0002`,
+  bonosUSD:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=USD&settlPeriod=0002`,
+  bonosEXT:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=EXT&settlPeriod=0002`,
+};
+
+const USD_TICKER_ALIASES = {
+  TFU27: 'TU27D',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -181,6 +185,22 @@ export async function fetchAllPrices() {
 export function getMepRate()  { return _mep;   }
 export function getCclRate()  { return _cable;  }
 export function getPriceMeta() { return _priceMeta; }
+
+export function getBrokerLivePrice(ticker, priceMap, { isUSD = false, mepRate = null } = {}) {
+  const t = ticker?.toUpperCase().trim();
+  if (!t) return undefined;
+
+  if (!isUSD) return priceMap[t];
+
+  const usdAlias = USD_TICKER_ALIASES[t];
+  if (usdAlias && priceMap[usdAlias] !== undefined) return priceMap[usdAlias];
+
+  const livePrice = priceMap[t];
+  if (livePrice === undefined) return undefined;
+
+  if (/[DCY]$/i.test(t)) return livePrice;
+  return mepRate > 0 ? livePrice / mepRate : livePrice;
+}
 
 export function isBondTicker(ticker) {
   if (!ticker) return false;
