@@ -7,6 +7,7 @@ let _precios = {};
 let _priceMeta = {};
 let _mep     = null;
 let _cable   = null;
+let _usdBondSymbols = new Set();
 
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 const BASE = '/snapshot/v1';
@@ -121,6 +122,10 @@ export async function fetchAllPrices() {
   const arsMap = bonosARSData.prices;
   const usdMap = bonosUSDData.prices;
   const extMap = bonosEXTData.prices;
+  _usdBondSymbols = new Set([
+    ...Object.keys(usdMap),
+    ...Object.keys(extMap),
+  ]);
 
   _precios = {
     ...accionesData.prices,
@@ -198,7 +203,7 @@ export function getBrokerLivePrice(ticker, priceMap, { isUSD = false, mepRate = 
   const livePrice = priceMap[t];
   if (livePrice === undefined) return undefined;
 
-  if (/[DCY]$/i.test(t)) return livePrice;
+  if (_usdBondSymbols.has(t)) return livePrice;
   return mepRate > 0 ? livePrice / mepRate : livePrice;
 }
 
