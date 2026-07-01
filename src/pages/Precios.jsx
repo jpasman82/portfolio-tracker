@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { collection, getDocs } from 'firebase/firestore';
+import { auth, db } from '../firebase/config';
 import { fetchAllPrices, getPriceRows, getMepRate } from '../utils/priceService';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 
@@ -14,6 +15,8 @@ const handleLogout = async () => {
 
 export default function Precios() {
   const [rows, setRows] = useState([]);
+  const [portfolioTickers, setPortfolioTickers] = useState(new Set());
+  const [viewMode, setViewMode] = useState('portfolio');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sort, setSort] = useState({ key: 'changePercent', dir: 'asc' });
@@ -23,7 +26,17 @@ export default function Precios() {
     const loadPrices = async () => {
       try {
         setError('');
+        const positionsSnap = await getDocs(collection(db, 'brokerPositions'));
+        const tickers = new Set();
+        positionsSnap.forEach((document) => {
+          (document.data().assets || []).forEach((asset) => {
+            const ticker = asset.ticker?.toUpperCase().trim();
+            if (ticker) tickers.add(ticker);
+          });
+        });
+
         await fetchAllPrices();
+        setPortfolioTickers(tickers);
         setRows(getPriceRows());
       } catch (e) {
         setError('No se pudieron cargar los precios.');
@@ -34,9 +47,14 @@ export default function Precios() {
     loadPrices();
   }, []);
 
+  const visibleRows = useMemo(() => {
+    if (viewMode === 'all') return rows;
+    return rows.filter((row) => portfolioTickers.has(row.ticker));
+  }, [portfolioTickers, rows, viewMode]);
+
   const sortedRows = useMemo(() => {
     const direction = sort.dir === 'asc' ? 1 : -1;
-    return [...rows].sort((a, b) => {
+    return [...visibleRows].sort((a, b) => {
       if (sort.key === 'ticker') {
         return a.ticker.localeCompare(b.ticker) * direction;
       }
@@ -46,7 +64,7 @@ export default function Precios() {
       if (bv === null || bv === undefined) return -1;
       return (av - bv) * direction;
     });
-  }, [rows, sort]);
+  }, [visibleRows, sort]);
 
   const setSortKey = (key) => {
     setSort((current) => ({
@@ -88,7 +106,7 @@ export default function Precios() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-[#F0FAFA]">Precios</h2>
             <p className="font-mono text-[11px] tracking-[0.12em] uppercase text-[#5B8A8A] mt-1">
-              {rows.length} especies · MEP {getMepRate() ? `$ ${getMepRate().toLocaleString('es-AR', { maximumFractionDigits: 2 })}` : '-'}
+              {visibleRows.length} especies · MEP {getMepRate() ? `$ ${getMepRate().toLocaleString('es-AR', { maximumFractionDigits: 2 })}` : '-'}
             </p>
           </div>
           <button
@@ -96,6 +114,20 @@ export default function Precios() {
             className="font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 bg-teal-400/10 border border-teal-400/20 hover:border-teal-400/50 text-teal-400 rounded-lg transition-colors"
           >
             Bajas
+          </button>
+        </div>
+        <div className="flex bg-[#0C1518] border border-teal-400/10 rounded-lg p-0.5 mt-4 w-fit">
+          <button
+            onClick={() => setViewMode('portfolio')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${viewMode === 'portfolio' ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
+          >
+            En cartera
+          </button>
+          <button
+            onClick={() => setViewMode('all')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${viewMode === 'all' ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
+          >
+            Todos
           </button>
         </div>
       </div>
@@ -122,6 +154,10 @@ export default function Precios() {
           </div>
         ) : error ? (
           <div className="px-4 py-10 text-center text-red-300 font-mono text-[13px] tracking-[0.12em] uppercase">{error}</div>
+        ) : sortedRows.length === 0 ? (
+          <div className="px-4 py-10 text-center text-[#5B8A8A] font-mono text-[13px] tracking-[0.12em] uppercase">
+            {viewMode === 'portfolio' ? 'Sin especies en cartera con precio disponible' : 'Sin precios disponibles'}
+          </div>
         ) : (
           <div className="divide-y divide-teal-400/5">
             {sortedRows.map((row) => {
