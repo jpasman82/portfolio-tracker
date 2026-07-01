@@ -48,6 +48,8 @@ export default function EventDetail() {
   const fmtQty = (v) => formatInput(v);
   const fmtARS = (v) => '$ ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
   const fmtUSD = (v) => 'USD ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
+  const fmtSignedARS = (v) => `${parseNum(v) >= 0 ? '+' : '-'} ${fmtARS(Math.abs(parseNum(v)))}`;
+  const fmtSignedUSD = (v) => `${parseNum(v) >= 0 ? '+' : '-'} ${fmtUSD(Math.abs(parseNum(v)))}`;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -145,6 +147,8 @@ export default function EventDetail() {
   const totalUSD_Now = totalARS_Now / (parseNum(currentUsdRate) || parseNum(event.initialUsdRate) || 1);
   const totalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(soldCurrentPrices[a.ticker])), 0);
   const totalUSD_Now_Prev = totalARS_Now_Prev / (parseNum(currentUsdRate) || parseNum(event.initialUsdRate) || 1);
+  const resultARS = totalARS_Now - totalARS_Init;
+  const resultUSD = totalUSD_Now - totalUSD_Init;
 
   const pUSD = totalUSD_Init > 0 ? ((totalUSD_Now / totalUSD_Init) - 1) * 100 : 0;
   const pARS = totalARS_Init > 0 ? ((totalARS_Now / totalARS_Init) - 1) * 100 : 0;
@@ -208,6 +212,17 @@ export default function EventDetail() {
             <div className="font-mono text-[13px] text-teal-400/60 mt-0.5">US$ {totalUSD_Now.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           </div>
         </div>
+        <div className="mt-4 pt-4 border-t border-teal-400/10 flex justify-between items-end gap-3">
+          <div>
+            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Ganancia / Pérdida</div>
+            <div className={`text-lg font-black ${resultARS >= 0 ? 'text-teal-300' : 'text-red-300'}`}>
+              {fmtSignedARS(resultARS)}
+            </div>
+          </div>
+          <div className={`font-mono text-[13px] text-right ${resultUSD >= 0 ? 'text-teal-400/70' : 'text-red-400/80'}`}>
+            {fmtSignedUSD(resultUSD)}
+          </div>
+        </div>
       </div>
 
       {/* Performance badges */}
@@ -264,9 +279,17 @@ export default function EventDetail() {
           const currUsd = parseNum(currentUsdRate) || 1;
           const pCompraUSD = pCompraARS / initUsd;
           const pActualUSD = pActualARS / currUsd;
+          const qty = parseNum(asset.quantity);
+          const investedARS = pCompraARS * qty;
+          const currentARS = pActualARS * qty;
+          const investedUSD = pCompraUSD * qty;
+          const currentUSD = pActualUSD * qty;
+          const varAmountARS = currentARS - investedARS;
+          const varAmountUSD = currentUSD - investedUSD;
           const varPctARS = pCompraARS > 0 ? ((pActualARS / pCompraARS) - 1) * 100 : 0;
           const varPctUSD = pCompraUSD > 0 ? ((pActualUSD / pCompraUSD) - 1) * 100 : 0;
           const varPct = viewCurrency === 'USD' ? varPctUSD : varPctARS;
+          const varAmount = viewCurrency === 'USD' ? varAmountUSD : varAmountARS;
 
           return (
             <div key={index} className="mb-4 pb-4 border-b border-teal-400/5">
@@ -285,7 +308,7 @@ export default function EventDetail() {
                   )}
                   {!isEditingStructure && pCompraARS > 0 && (
                     <div className={`font-mono text-[11px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-lg ${varPct >= 0 ? 'bg-teal-400/10 text-teal-300' : 'bg-red-400/10 text-red-300'}`}>
-                      {varPct >= 0 ? '▲' : '▼'} {Math.abs(varPct).toFixed(1)}% {viewCurrency}
+                      {varPct >= 0 ? '▲' : '▼'} {Math.abs(varPct).toFixed(1)}% · {viewCurrency === 'USD' ? fmtSignedUSD(varAmount) : fmtSignedARS(varAmount)}
                     </div>
                   )}
                 </div>
@@ -361,11 +384,25 @@ export default function EventDetail() {
                 </div>
               )}
 
-              <div className="border-t border-teal-400/10 pt-3 mt-3 flex justify-between items-center">
-                <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A]">Subtotal</span>
-                <span className="font-bold text-teal-400">
-                  {viewCurrency === 'USD' ? fmtUSD(pActualUSD * parseNum(asset.quantity)) : fmtARS(pActualARS * parseNum(asset.quantity))}
-                </span>
+              <div className="border-t border-teal-400/10 pt-3 mt-3 grid grid-cols-3 gap-2">
+                <div>
+                  <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-1">Invertido</div>
+                  <div className="font-bold text-[#A8C8C8] text-sm">
+                    {viewCurrency === 'USD' ? fmtUSD(investedUSD) : fmtARS(investedARS)}
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-1">Actual</div>
+                  <div className="font-bold text-teal-400 text-sm">
+                    {viewCurrency === 'USD' ? fmtUSD(currentUSD) : fmtARS(currentARS)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-1">Resultado</div>
+                  <div className={`font-bold text-sm ${varAmount >= 0 ? 'text-teal-300' : 'text-red-300'}`}>
+                    {viewCurrency === 'USD' ? fmtSignedUSD(varAmountUSD) : fmtSignedARS(varAmountARS)}
+                  </div>
+                </div>
               </div>
             </div>
           );
