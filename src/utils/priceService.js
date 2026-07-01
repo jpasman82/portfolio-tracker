@@ -5,6 +5,7 @@ import { bymaGet } from './bymaService';
 // ─── Cache de módulo ──────────────────────────────────────────────────────────
 let _precios = {};
 let _priceMeta = {};
+let _priceRows = [];
 let _mep     = null;
 let _cable   = null;
 let _usdBondSymbols = new Set();
@@ -91,6 +92,20 @@ function toDollarMetaMap(meta = {}, currentFx, previousFx) {
   return map;
 }
 
+function toPriceRows(meta = {}, type, market = 'USD') {
+  return Object.entries(meta)
+    .map(([ticker, item]) => ({
+      ticker,
+      type,
+      market,
+      priceUsd: item.price,
+      previousCloseUsd: item.previousClose,
+      changeUsd: item.change,
+      changePercent: item.changePercent,
+    }))
+    .filter((row) => row.ticker && row.priceUsd > 0);
+}
+
 async function fetchMap(endpoint) {
   try {
     const data = await bymaGet(endpoint);
@@ -150,13 +165,25 @@ export async function fetchAllPrices() {
   const al30dPrev = bonosUSDData.meta['AL30D']?.previousClose ?? bonosUSDData.meta['AL30']?.previousClose;
   const previousMep = (al30Prev && al30dPrev) ? al30Prev / al30dPrev : null;
 
+  const accionesUsdMeta = toDollarMetaMap(accionesData.meta, _mep, previousMep);
+  const cedearsUsdMeta = toDollarMetaMap(cedearsData.meta, _mep, previousMep);
+  const bonosARSUsdMeta = toDollarMetaMap(bonosARSData.meta, _mep, previousMep);
+
   _priceMeta = {
-    ...toDollarMetaMap(accionesData.meta, _mep, previousMep),
-    ...toDollarMetaMap(cedearsData.meta, _mep, previousMep),
-    ...toDollarMetaMap(bonosARSData.meta, _mep, previousMep),
+    ...accionesUsdMeta,
+    ...cedearsUsdMeta,
+    ...bonosARSUsdMeta,
     ...bonosUSDData.meta,
     ...bonosEXTData.meta,
   };
+
+  _priceRows = [
+    ...toPriceRows(accionesUsdMeta, 'Acción'),
+    ...toPriceRows(cedearsUsdMeta, 'CEDEAR'),
+    ...toPriceRows(bonosARSUsdMeta, 'Bono', 'MEP'),
+    ...toPriceRows(bonosUSDData.meta, 'Bono', 'USD'),
+    ...toPriceRows(bonosEXTData.meta, 'Bono', 'Cable'),
+  ];
 
   if (_mep)   console.log('[priceService] MEP (BYMA):', _mep.toFixed(2));
   if (previousMep) console.log('[priceService] MEP cierre (BYMA):', previousMep.toFixed(2));
@@ -190,6 +217,7 @@ export async function fetchAllPrices() {
 export function getMepRate()  { return _mep;   }
 export function getCclRate()  { return _cable;  }
 export function getPriceMeta() { return _priceMeta; }
+export function getPriceRows() { return _priceRows; }
 
 export function getBrokerLivePrice(ticker, priceMap, { isUSD = false, mepRate = null } = {}) {
   const t = ticker?.toUpperCase().trim();
