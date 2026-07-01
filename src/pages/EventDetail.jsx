@@ -149,10 +149,14 @@ export default function EventDetail() {
   const totalUSD_Now_Prev = totalARS_Now_Prev / (parseNum(currentUsdRate) || parseNum(event.initialUsdRate) || 1);
   const resultARS = totalARS_Now - totalARS_Init;
   const resultUSD = totalUSD_Now - totalUSD_Init;
+  const selectedInvested = viewCurrency === 'USD' ? totalUSD_Init : totalARS_Init;
+  const selectedCurrent = viewCurrency === 'USD' ? totalUSD_Now : totalARS_Now;
+  const selectedResult = viewCurrency === 'USD' ? resultUSD : resultARS;
 
   const pUSD = totalUSD_Init > 0 ? ((totalUSD_Now / totalUSD_Init) - 1) * 100 : 0;
   const pARS = totalARS_Init > 0 ? ((totalARS_Now / totalARS_Init) - 1) * 100 : 0;
-  const pALFA = totalUSD_Now_Prev > 0 ? ((totalUSD_Now / totalUSD_Now_Prev) - 1) * 100 : 0;
+  const pSoldUSD = totalUSD_Init > 0 ? ((totalUSD_Now_Prev / totalUSD_Init) - 1) * 100 : 0;
+  const pALFA = pUSD - pSoldUSD;
 
   const getBadgeClasses = (val) => {
     if (val > 0.1) return 'bg-teal-400/10 text-teal-300 border border-teal-400/30';
@@ -196,31 +200,38 @@ export default function EventDetail() {
             )}
           </div>
         </div>
+        <div className="flex bg-[#0C1518] border border-teal-400/10 rounded-lg p-0.5 mt-4 w-fit">
+          <button
+            onClick={() => setViewCurrency('ARS')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[12px] uppercase tracking-[0.12em] transition-colors ${viewCurrency === 'ARS' ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
+          >ARS</button>
+          <button
+            onClick={() => setViewCurrency('USD')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[12px] uppercase tracking-[0.12em] transition-colors ${viewCurrency === 'USD' ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
+          >USD</button>
+        </div>
       </div>
 
       {/* Summary values */}
       <div className="bg-[#122329] border border-teal-400/15 rounded-2xl p-5 mb-4 relative z-10">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="border-r border-teal-400/10 pr-4">
-            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-2">Invertido</div>
-            <div className="text-xl font-black text-[#A8C8C8]">$ {totalARS_Init.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div className="font-mono text-[13px] text-[#5B8A8A] mt-0.5">US$ {totalUSD_Init.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          </div>
-          <div className="pl-1">
-            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-teal-400/70 mb-2">Valor Actual</div>
-            <div className="text-xl font-black text-teal-400">$ {totalARS_Now.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div className="font-mono text-[13px] text-teal-400/60 mt-0.5">US$ {totalUSD_Now.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          </div>
-        </div>
-        <div className="mt-4 pt-4 border-t border-teal-400/10 flex justify-between items-end gap-3">
+        <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-3">
           <div>
-            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Ganancia / Pérdida</div>
-            <div className={`text-lg font-black ${resultARS >= 0 ? 'text-teal-300' : 'text-red-300'}`}>
-              {fmtSignedARS(resultARS)}
+            <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-2">Invertido</div>
+            <div className="text-base font-black text-[#A8C8C8] break-words">
+              {viewCurrency === 'USD' ? fmtUSD(selectedInvested) : fmtARS(selectedInvested)}
             </div>
           </div>
-          <div className={`font-mono text-[13px] text-right ${resultUSD >= 0 ? 'text-teal-400/70' : 'text-red-400/80'}`}>
-            {fmtSignedUSD(resultUSD)}
+          <div className="text-center">
+            <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-teal-400/70 mb-2">Actual</div>
+            <div className="text-base font-black text-teal-400 break-words">
+              {viewCurrency === 'USD' ? fmtUSD(selectedCurrent) : fmtARS(selectedCurrent)}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-2">Resultado</div>
+            <div className={`text-base font-black break-words ${selectedResult >= 0 ? 'text-teal-300' : 'text-red-300'}`}>
+              {viewCurrency === 'USD' ? fmtSignedUSD(selectedResult) : fmtSignedARS(selectedResult)}
+            </div>
           </div>
         </div>
       </div>
@@ -233,8 +244,8 @@ export default function EventDetail() {
           { label: 'ALFA', val: pALFA },
         ].map(({ label, val }) => (
           <div key={label} className={`text-center py-3 rounded-xl ${getBadgeClasses(val)}`}>
-            <div className="font-mono text-[8px] tracking-[0.15em] uppercase mb-1 opacity-80">{label}</div>
-            <div className="text-lg font-black">{val.toFixed(1)}%</div>
+            <div className="font-mono text-[10px] tracking-[0.12em] uppercase mb-1 opacity-90">{label}</div>
+            <div className="text-xl font-black">{val >= 0 ? '+' : ''}{val.toFixed(1)}%</div>
           </div>
         ))}
       </div>
@@ -247,16 +258,6 @@ export default function EventDetail() {
               <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
               Posición Comprada
             </p>
-            <div className="flex bg-[#0C1518] border border-teal-400/10 rounded-lg p-0.5">
-              <button
-                onClick={() => setViewCurrency('ARS')}
-                className={`px-2.5 py-1 rounded-md font-mono text-[11px] uppercase tracking-[0.12em] transition-colors ${viewCurrency === 'ARS' ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
-              >ARS</button>
-              <button
-                onClick={() => setViewCurrency('USD')}
-                className={`px-2.5 py-1 rounded-md font-mono text-[11px] uppercase tracking-[0.12em] transition-colors ${viewCurrency === 'USD' ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
-              >USD</button>
-            </div>
           </div>
           {!event.isClosed && (
             <button
@@ -294,7 +295,7 @@ export default function EventDetail() {
           return (
             <div key={index} className="mb-4 pb-4 border-b border-teal-400/5">
               <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
                   {isEditingStructure ? (
                     <input
                       type="text"
@@ -307,7 +308,7 @@ export default function EventDetail() {
                     <div className="text-base font-black text-[#F0FAFA] font-mono">{asset.ticker}</div>
                   )}
                   {!isEditingStructure && pCompraARS > 0 && (
-                    <div className={`font-mono text-[11px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-lg ${varPct >= 0 ? 'bg-teal-400/10 text-teal-300' : 'bg-red-400/10 text-red-300'}`}>
+                    <div className={`font-mono text-base font-black uppercase tracking-[0.02em] px-2 py-0.5 rounded-lg max-w-full break-words ${varPct >= 0 ? 'bg-teal-400/10 text-teal-300' : 'bg-red-400/10 text-red-300'}`}>
                       {varPct >= 0 ? '▲' : '▼'} {Math.abs(varPct).toFixed(1)}% · {viewCurrency === 'USD' ? fmtSignedUSD(varAmount) : fmtSignedARS(varAmount)}
                     </div>
                   )}
@@ -510,7 +511,9 @@ export default function EventDetail() {
               const hTotalUSD_Now = hTotalARS_Now / parseNum(entry.usdRate || 1);
               const hTotalARS_Now_Prev = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(entry.soldPrices[a.ticker])), 0);
               const hTotalUSD_Now_Prev = hTotalARS_Now_Prev / parseNum(entry.usdRate || 1);
-              const hAlfa = hTotalUSD_Now_Prev > 0 ? ((hTotalUSD_Now / hTotalUSD_Now_Prev) - 1) * 100 : 0;
+              const hUsd = totalUSD_Init > 0 ? ((hTotalUSD_Now / totalUSD_Init) - 1) * 100 : 0;
+              const hSoldUsd = totalUSD_Init > 0 ? ((hTotalUSD_Now_Prev / totalUSD_Init) - 1) * 100 : 0;
+              const hAlfa = hUsd - hSoldUsd;
 
               return (
                 <div key={idx} className="bg-[#122329] border border-teal-400/10 rounded-xl p-4">
