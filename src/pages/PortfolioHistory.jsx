@@ -15,6 +15,13 @@ const handleLogout = async () => {
 const fmtUSD = (v) => 'US$ ' + (v || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
 const fmtARS = (v) => '$ ' + (v || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
 const fmtPct = (v) => `${v > 0 ? '+' : ''}${(v || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+const RANGE_OPTIONS = [
+  { id: '1D', label: '1D' },
+  { id: '5D', label: '5D' },
+  { id: '30D', label: '30D' },
+  { id: '1Y', label: '1A' },
+  { id: 'YTM', label: 'YTM' },
+];
 
 const dateKey = (date = new Date()) => {
   const year = date.getFullYear();
@@ -30,6 +37,39 @@ const yesterdayKey = () => {
 };
 
 const parseInputNumber = (value) => Number(value.toString().replace(/\./g, '').replace(',', '.')) || 0;
+
+const parseSnapshotDate = (value) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const addDays = (date, days) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const filterSnapshotsByRange = (rows, range) => {
+  if (rows.length <= 1) return rows;
+  if (range === '1D') return rows.slice(-2);
+
+  const last = rows[rows.length - 1];
+  const lastDate = parseSnapshotDate(last.date);
+  let startDate;
+
+  if (range === 'YTM') {
+    startDate = new Date(lastDate.getFullYear(), 0, 1);
+  } else {
+    const days = range === '5D' ? 5 : range === '30D' ? 30 : 365;
+    startDate = addDays(lastDate, -days);
+  }
+
+  const filtered = rows.filter((row) => parseSnapshotDate(row.date) >= startDate);
+  if (filtered.length > 1) return filtered;
+
+  const previous = [...rows].reverse().find((row) => parseSnapshotDate(row.date) < startDate);
+  return previous ? [previous, ...filtered] : filtered;
+};
 
 function EvolutionChart({ rows, currency }) {
   const values = rows.map((row) => currency === 'ARS' ? row.totals?.netArs || 0 : row.totals?.netUsd || 0);
@@ -82,6 +122,7 @@ export default function PortfolioHistory() {
   const [saving, setSaving] = useState(false);
   const [savingBaseline, setSavingBaseline] = useState(false);
   const [currency, setCurrency] = useState('USD');
+  const [range, setRange] = useState('30D');
   const [error, setError] = useState('');
   const [baselineDate, setBaselineDate] = useState(() => yesterdayKey());
   const [baselineUsd, setBaselineUsd] = useState('');
@@ -100,10 +141,12 @@ export default function PortfolioHistory() {
       .finally(() => setLoading(false));
   }, []);
 
+  const filteredSnapshots = useMemo(() => filterSnapshotsByRange(snapshots, range), [range, snapshots]);
+
   const summary = useMemo(() => {
-    if (snapshots.length === 0) return null;
-    const first = snapshots[0];
-    const last = snapshots[snapshots.length - 1];
+    if (filteredSnapshots.length === 0) return null;
+    const first = filteredSnapshots[0];
+    const last = filteredSnapshots[filteredSnapshots.length - 1];
     const firstUsd = first.totals?.netUsd || 0;
     const lastUsd = last.totals?.netUsd || 0;
     const firstArs = first.totals?.netArs || 0;
@@ -114,8 +157,9 @@ export default function PortfolioHistory() {
       last,
       usdChange: firstUsd > 0 ? ((lastUsd / firstUsd) - 1) * 100 : 0,
       arsChange: firstArs > 0 ? ((lastArs / firstArs) - 1) * 100 : 0,
+      count: filteredSnapshots.length,
     };
-  }, [snapshots]);
+  }, [filteredSnapshots]);
 
   const captureToday = async () => {
     setSaving(true);
@@ -161,7 +205,7 @@ export default function PortfolioHistory() {
           <div>
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-[#F0FAFA]">Evolución</h2>
             <p className="font-mono text-[12px] tracking-[0.12em] uppercase text-[#5B8A8A] mt-1">
-              {snapshots.length} registros diarios
+              {snapshots.length} registros diarios · {summary?.count || 0} en vista
             </p>
           </div>
           <button
@@ -253,22 +297,35 @@ export default function PortfolioHistory() {
               </div>
             </div>
 
-            <div className="flex bg-[#0C1518] border border-teal-400/10 rounded-lg p-0.5 mb-4 w-fit">
-              {['USD', 'ARS'].map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setCurrency(mode)}
-                  className={`px-4 py-1.5 rounded-md font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${currency === mode ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
-                >
-                  {mode}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <div className="flex bg-[#0C1518] border border-teal-400/10 rounded-lg p-0.5 w-fit">
+                {['USD', 'ARS'].map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setCurrency(mode)}
+                    className={`px-4 py-1.5 rounded-md font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${currency === mode ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+              <div className="flex bg-[#0C1518] border border-teal-400/10 rounded-lg p-0.5 w-fit">
+                {RANGE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => setRange(option.id)}
+                    className={`px-3 py-1.5 rounded-md font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${range === option.id ? 'bg-teal-400/10 text-teal-300 border border-teal-400/30' : 'text-[#5B8A8A]'}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <EvolutionChart rows={snapshots} currency={currency} />
+            <EvolutionChart rows={filteredSnapshots} currency={currency} />
 
             <div className="bg-[#122329] border border-teal-400/15 rounded-2xl overflow-hidden mt-4">
-              {snapshots.slice().reverse().map((row) => (
+              {filteredSnapshots.slice().reverse().map((row) => (
                 <div key={row.id || row.date} className="grid grid-cols-[1fr_auto] sm:grid-cols-[140px_1fr_1fr_100px] gap-3 items-center px-4 py-3 border-b border-teal-400/5 last:border-b-0">
                   <div className="font-mono text-[13px] font-bold text-[#F0FAFA]">{row.date}</div>
                   <div className="text-right sm:text-left font-bold text-teal-300">{fmtUSD(row.totals?.netUsd)}</div>
