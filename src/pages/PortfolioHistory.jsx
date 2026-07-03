@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { fetchPortfolioSnapshots, saveDailyPortfolioSnapshot } from '../utils/portfolioSnapshots';
+import { fetchPortfolioSnapshots, saveDailyPortfolioSnapshot, saveManualPortfolioSnapshot } from '../utils/portfolioSnapshots';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
@@ -15,6 +15,21 @@ const handleLogout = async () => {
 const fmtUSD = (v) => 'US$ ' + (v || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
 const fmtARS = (v) => '$ ' + (v || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
 const fmtPct = (v) => `${v > 0 ? '+' : ''}${(v || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+
+const dateKey = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const yesterdayKey = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  return dateKey(date);
+};
+
+const parseInputNumber = (value) => Number(value.toString().replace(/\./g, '').replace(',', '.')) || 0;
 
 function EvolutionChart({ rows, currency }) {
   const values = rows.map((row) => currency === 'ARS' ? row.totals?.netArs || 0 : row.totals?.netUsd || 0);
@@ -65,8 +80,12 @@ export default function PortfolioHistory() {
   const [snapshots, setSnapshots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingBaseline, setSavingBaseline] = useState(false);
   const [currency, setCurrency] = useState('USD');
   const [error, setError] = useState('');
+  const [baselineDate, setBaselineDate] = useState(() => yesterdayKey());
+  const [baselineUsd, setBaselineUsd] = useState('');
+  const [baselineMep, setBaselineMep] = useState('');
   const bottomNavHidden = useHideBottomNavOnScroll();
 
   const loadSnapshots = async () => {
@@ -111,6 +130,24 @@ export default function PortfolioHistory() {
     }
   };
 
+  const saveBaseline = async () => {
+    setSavingBaseline(true);
+    setError('');
+    try {
+      await saveManualPortfolioSnapshot({
+        date: baselineDate,
+        netUsd: parseInputNumber(baselineUsd),
+        mepRate: parseInputNumber(baselineMep),
+      });
+      setBaselineUsd('');
+      await loadSnapshots();
+    } catch (err) {
+      setError(`No se pudo guardar la referencia: ${err.message}`);
+    } finally {
+      setSavingBaseline(false);
+    }
+  };
+
   return (
     <div className="px-5 pt-8 pb-28 max-w-[920px] mx-auto font-[Space_Grotesk,system-ui,sans-serif] bg-[#080F12] min-h-screen relative overflow-hidden">
       <div className="pointer-events-none absolute top-[-150px] right-[-200px] w-[600px] h-[500px] rounded-full bg-teal-400/[0.04] blur-[100px]" />
@@ -143,6 +180,49 @@ export default function PortfolioHistory() {
             {error}
           </div>
         )}
+
+        <div className="bg-[#122329] border border-teal-400/15 rounded-2xl p-4 mb-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[130px]">
+              <label className="block font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-1">Fecha</label>
+              <input
+                type="date"
+                value={baselineDate}
+                onChange={(event) => setBaselineDate(event.target.value)}
+                className="w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 text-[#F0FAFA] rounded-lg text-sm outline-none"
+              />
+            </div>
+            <div className="flex-1 min-w-[150px]">
+              <label className="block font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-1">Valor USD</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="110000"
+                value={baselineUsd}
+                onChange={(event) => setBaselineUsd(event.target.value)}
+                className="w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 text-[#F0FAFA] rounded-lg text-sm outline-none"
+              />
+            </div>
+            <div className="flex-1 min-w-[130px]">
+              <label className="block font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-1">MEP opcional</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="1430"
+                value={baselineMep}
+                onChange={(event) => setBaselineMep(event.target.value)}
+                className="w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 text-[#F0FAFA] rounded-lg text-sm outline-none"
+              />
+            </div>
+            <button
+              onClick={saveBaseline}
+              disabled={savingBaseline}
+              className="font-mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 bg-teal-400/10 border border-teal-400/20 hover:border-teal-400/50 text-teal-400 rounded-lg transition-colors disabled:opacity-60"
+            >
+              {savingBaseline ? 'Guardando...' : 'Guardar referencia'}
+            </button>
+          </div>
+        </div>
 
         {loading ? (
           <div className="flex justify-center items-center py-24">

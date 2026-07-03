@@ -26,6 +26,41 @@ export async function saveDailyPortfolioSnapshot({
   return payload;
 }
 
+export async function saveManualPortfolioSnapshot({
+  date,
+  netUsd,
+  mepRate = 0,
+} = {}) {
+  const parsedUsd = Number(netUsd) || 0;
+  const parsedMep = Number(mepRate) || 0;
+  if (!date) throw new Error('Falta la fecha del registro.');
+  if (parsedUsd <= 0) throw new Error('El valor USD tiene que ser mayor a cero.');
+
+  const payload = {
+    date,
+    source: 'manual-baseline',
+    capturedAt: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+    rates: {
+      mep: parsedMep,
+      cable: 0,
+    },
+    totals: {
+      assetsUsd: parsedUsd,
+      debtUsd: 0,
+      netUsd: parsedUsd,
+      assetsArs: parsedMep > 0 ? parsedUsd * parsedMep : 0,
+      debtArs: 0,
+      netArs: parsedMep > 0 ? parsedUsd * parsedMep : 0,
+    },
+    brokers: [],
+    assets: [],
+  };
+
+  await setDoc(doc(db, SNAPSHOT_COLLECTION, date), payload, { merge: true });
+  return payload;
+}
+
 export async function fetchPortfolioSnapshots() {
   const snapshotsQuery = query(collection(db, SNAPSHOT_COLLECTION), orderBy('date', 'asc'));
   const snap = await getDocs(snapshotsQuery);
