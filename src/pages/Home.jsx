@@ -7,7 +7,7 @@ import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker, get
 import { fetchRiskCountry } from '../utils/riskCountryService';
 import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
-import { saveDailyPortfolioSnapshot } from '../utils/portfolioSnapshots';
+import { fetchPortfolioSnapshots, saveDailyPortfolioSnapshot } from '../utils/portfolioSnapshots';
 import {
   actualizacionCercaDelCierre,
   actualizacionPosteriorAlCierre,
@@ -31,6 +31,39 @@ const handleLogout = async () => {
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 
+function PortfolioSparkline({ rows }) {
+  if (rows.length === 0) return null;
+
+  const width = 420;
+  const height = 96;
+  const pad = 10;
+  const values = rows.map((row) => row.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = rows.map((row, index) => {
+    const x = rows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (rows.length - 1);
+    const y = height - pad - ((row.value - min) / range) * (height - pad * 2);
+    return { ...row, x, y };
+  });
+  const line = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-sparkline" role="img" aria-label="Evolucion de la cartera">
+      {[0, 1, 2].map((tick) => {
+        const y = pad + tick * ((height - pad * 2) / 2);
+        return <line key={tick} x1={pad} x2={width - pad} y1={y} y2={y} stroke="rgba(45,212,191,0.08)" strokeWidth="1" />;
+      })}
+      <path d={line} fill="none" stroke="#2DD4BF" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      {points.map((point) => (
+        <circle key={point.date} cx={point.x} cy={point.y} r="4" fill="#080F12" stroke="#FBBF24" strokeWidth="2">
+          <title>{`${point.date}: US$ ${point.value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}</title>
+        </circle>
+      ))}
+    </svg>
+  );
+}
+
 export default function Home() {
   const [brokerData, setBrokerData] = useState(() => createEmptyBrokerData());
   const [loading, setLoading] = useState(true);
@@ -40,6 +73,7 @@ export default function Home() {
   const [cable, setCable] = useState(null);
   const [riskCountry, setRiskCountry] = useState(null);
   const [tickerTape, setTickerTape] = useState([]);
+  const [portfolioSnapshots, setPortfolioSnapshots] = useState([]);
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const bottomNavHidden = useHideBottomNavOnScroll();
 
@@ -49,6 +83,17 @@ export default function Home() {
     if (!val) return 0;
     if (typeof val === 'number') return val;
     return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
+  };
+
+  const refreshSnapshotHistory = async () => {
+    try {
+      const rows = await fetchPortfolioSnapshots();
+      setPortfolioSnapshots(rows);
+      return rows;
+    } catch (err) {
+      console.warn('[Home] Historial cartera:', err.message);
+      return [];
+    }
   };
 
   const fetchBalances = async () => {
@@ -93,6 +138,7 @@ export default function Home() {
       setBrokerData(newBrokerData);
       setMep(getMepRate());
       setCable(getCclRate());
+      refreshSnapshotHistory();
       fetchRiskCountry()
         .then(setRiskCountry)
         .catch((err) => console.warn('[Home] Riesgo pais:', err.message));
@@ -190,6 +236,7 @@ export default function Home() {
           source: options.snapshotSource || 'post-close',
           refreshPrices: false,
         });
+        await refreshSnapshotHistory();
       }
       return true;
     } catch (error) {
@@ -233,6 +280,7 @@ export default function Home() {
             source: actualizacionPosteriorAlCierre(latestTimestamp, ahora) ? 'post-close' : 'near-close',
             refreshPrices: false,
           });
+          await refreshSnapshotHistory();
           sessionStorage.setItem(closeRefreshKey, 'done');
         }
       }
@@ -280,7 +328,34 @@ export default function Home() {
   const totalActivos = brokers.reduce((sum, b) => sum + (b.assetsTotal || 0), 0);
   const totalDeuda   = brokers.reduce((sum, b) => sum + (b.debt || 0), 0);
   const totalNeto    = brokers.reduce((sum, b) => sum + b.balance, 0);
+  const todayKey = fechaMercadoKey(new Date());
+  const previousSnapshot = [...portfolioSnapshots]
+    .reverse()
+    .find((snapshot) => snapshot.date < todayKey) || null;
+  const latestSnapshot = portfolioSnapshots[portfolioSnapshots.length - 1] || null;
+  const comparisonSnapshot = previousSnapshot || latestSnapshot;
+  const dailyDeltaUsd = comparisonSnapshot ? totalNeto - (comparisonSnapshot.totals?.netUsd || 0) : null;
+  const dailyDeltaPct = comparisonSnapshot && comparisonSnapshot.totals?.netUsd
+    ? (dailyDeltaUsd / comparisonSnapshot.totals.netUsd) * 100
+    : null;
+  const sparkRows = portfolioSnapshots
+    .slice(-9)
+    .map((snapshot) => ({ date: snapshot.date, value: snapshot.totals?.netUsd || 0 }));
+  const hasTodayInSpark = sparkRows.some((row) => row.date === todayKey);
+  const sparklineRows = totalNeto > 0 && !hasTodayInSpark
+    ? [...sparkRows, { date: todayKey, value: totalNeto }]
+    : sparkRows;
   const cableVsMep = mep > 0 && cable > 0 ? ((cable / mep) - 1) * 100 : null;
+  const formatUsdSigned = (value) => {
+    if (value === null || value === undefined) return 'Sin historial';
+    const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+    return `${sign}US$ ${Math.abs(value).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  };
+  const formatPctSigned = (value) => (
+    value !== null && value !== undefined
+      ? `${value > 0 ? '+' : ''}${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+      : 'Sin datos'
+  );
   const formatFxRate = (value) =>
     value > 0 ? `$ ${value.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : 'Sin datos';
   const formatCableVsMep = (value) =>
@@ -358,6 +433,14 @@ export default function Home() {
           <div className="h-last-update font-mono text-[12px] tracking-[0.12em] uppercase text-[#A8C8C8] mt-2">
             {latestGlobalUpdate}
           </div>
+          {comparisonSnapshot && (
+            <div className="h-daily-change mt-3">
+              <span className="h-daily-label">vs {comparisonSnapshot.date}</span>
+              <span className={`h-daily-value ${dailyDeltaUsd >= 0 ? 'is-up' : 'is-down'}`}>
+                {formatUsdSigned(dailyDeltaUsd)} · {formatPctSigned(dailyDeltaPct)}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="h-summary-stats border-t border-teal-400/10 px-5 py-4 grid grid-cols-2 gap-4">
@@ -408,6 +491,25 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {sparklineRows.length > 0 && (
+        <Link to="/evolucion" className="h-evolution-card relative z-10">
+          <div className="h-evolution-head">
+            <div>
+              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A]">Evolución USD</div>
+              <div className="h-evolution-title">Cartera diaria</div>
+            </div>
+            <div className={`h-evolution-change ${dailyDeltaUsd === null || dailyDeltaUsd >= 0 ? 'is-up' : 'is-down'}`}>
+              {dailyDeltaUsd === null ? 'Sin base' : formatPctSigned(dailyDeltaPct)}
+            </div>
+          </div>
+          <PortfolioSparkline rows={sparklineRows} />
+          <div className="h-evolution-foot">
+            <span>{sparklineRows[0]?.date}</span>
+            <span>{sparklineRows[sparklineRows.length - 1]?.date}</span>
+          </div>
+        </Link>
+      )}
 
       {tickerTapeItems.length > 0 && (
         <div className="h-ticker-tape relative z-10">
