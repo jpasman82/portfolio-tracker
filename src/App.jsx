@@ -9,6 +9,7 @@ import EventDetail from './pages/EventDetail';
 import NewEvent from './pages/NewEvent';
 import Login from './pages/Login';
 import Unified from './pages/Unified';
+import PortfolioHistory from './pages/PortfolioHistory';
 import Maximos from './pages/Maximos';
 import Precios from './pages/Precios';
 import YahooChart from './pages/YahooChart';
@@ -265,6 +266,7 @@ export default function App() {
         <Route path="/rotaciones/nueva" element={<RequireAuth><NewEvent /></RequireAuth>} />
         <Route path="/evento/:id" element={<RequireAuth><EventDetail /></RequireAuth>} />
         <Route path="/unificada" element={<RequireAuth><Unified /></RequireAuth>} />
+        <Route path="/evolucion" element={<RequireAuth><PortfolioHistory /></RequireAuth>} />
         <Route path="/precios" element={<RequireAuth><Precios /></RequireAuth>} />
         <Route path="/maximos" element={<RequireAuth><Maximos /></RequireAuth>} />
         <Route path="/yahoo/:symbol" element={<RequireAuth><YahooChart /></RequireAuth>} />

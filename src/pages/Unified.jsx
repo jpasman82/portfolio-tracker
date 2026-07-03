@@ -1,10 +1,8 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { db, auth } from '../firebase/config';
-import { assetDictionary } from '../utils/dictionary';
-import { fetchAllPrices, getMepRate, getPriceMeta, isBondTicker, getBrokerLivePrice } from '../utils/priceService';
+import { auth } from '../firebase/config';
+import { fetchPortfolioValuation, parsePortfolioNumber } from '../utils/portfolioValuation';
 import { esMercadoAbierto } from '../utils/marketHours';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import './Unified.css';
@@ -16,7 +14,6 @@ const handleLogout = async () => {
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 const REFRESH_MS = 60 * 1000;
-const BRAZIL_CEDEARS = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ']);
 
 export default function Unified() {
   const [groupedData, setGroupedData] = useState({});
@@ -31,11 +28,7 @@ export default function Unified() {
 
   const baseColors = ['#2DD4BF', '#34D399', '#FBBF24', '#A78BFA', '#FB923C', '#F472B6', '#4ADE80', '#38BDF8', '#E879F9', '#818CF8', '#FF6B6B', '#22D3EE', '#94A3B8'];
 
-  const parseNum = (val) => {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
-    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
-  };
+  const parseNum = parsePortfolioNumber;
 
   const fmtUSD = (v) => 'US$ ' + parseNum(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
   const fmtARS = (v) => '$ ' + parseNum(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -48,67 +41,9 @@ export default function Unified() {
     if (showLoading) setLoading(true);
     setRefreshing(true);
       try {
-        const mercadoEstaAbierto = esMercadoAbierto();
-        const priceMap = mercadoEstaAbierto ? await fetchAllPrices() : {};
-        const mepRate = mercadoEstaAbierto ? getMepRate() : null;
-        const priceMeta = mercadoEstaAbierto ? getPriceMeta() : {};
-        const querySnapshot = await getDocs(collection(db, "brokerPositions"));
-        const unified = {};
-        let total = 0;
-
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          const isJPM = doc.id === 'jpm';
-          const rate = isJPM ? 1 : (mepRate || parseNum(data.usdRate) || 1);
-
-          const debt = parseNum(data.debt);
-          if (debt > 0) {
-            const tDebt = "DEUDA CAUCIÓN";
-            if (!unified[tDebt]) unified[tDebt] = { ticker: tDebt, quantity: 1, valueUsd: 0 };
-            unified[tDebt].valueUsd -= debt;
-            total -= debt;
-          }
-
-          (data.assets || []).forEach(a => {
-            if (!a || !a.ticker) return;
-            const t = a.ticker.toUpperCase().trim();
-            if (BRAZIL_CEDEARS.has(t)) return;
-            const qty = parseNum(a.quantity);
-            const isBond = a.isBond || isBondTicker(t);
-            const bondDivisor = isBond ? 100 : 1;
-            const assetPrice = getBrokerLivePrice(t, priceMap, { isUSD: isJPM, mepRate }) ?? parseNum(a.price);
-            const priceUsd = assetPrice / rate / bondDivisor;
-            const valueUsd = qty * priceUsd;
-            const changePercent = priceMeta[t]?.changePercent ?? null;
-
-            if (valueUsd !== 0) {
-              if (!unified[t]) unified[t] = { ticker: t, quantity: 0, valueUsd: 0, changePercent };
-              unified[t].quantity += qty;
-              unified[t].valueUsd += valueUsd;
-              if (changePercent !== null) unified[t].changePercent = changePercent;
-              total += valueUsd;
-            }
-          });
-        });
-
-        const grouped = {};
-        Object.values(unified).forEach(item => {
-          const info = assetDictionary[item.ticker] || { cat: 'Otros', sub: 'Sin Clasificar', icon: '?' };
-          if (!grouped[info.cat]) grouped[info.cat] = { total: 0, subs: {} };
-          if (!grouped[info.cat].subs[info.sub]) grouped[info.cat].subs[info.sub] = { icon: info.icon, total: 0, assets: [] };
-          grouped[info.cat].subs[info.sub].assets.push(item);
-          grouped[info.cat].subs[info.sub].total += item.valueUsd;
-          grouped[info.cat].total += item.valueUsd;
-        });
-
-        Object.keys(grouped).forEach(cat => {
-          Object.keys(grouped[cat].subs).forEach(sub => {
-            grouped[cat].subs[sub].assets.sort((a, b) => b.valueUsd - a.valueUsd);
-          });
-        });
-
-        setGroupedData(grouped);
-        setTotalUsd(total);
+        const valuation = await fetchPortfolioValuation({ refreshPrices: esMercadoAbierto() });
+        setGroupedData(valuation.grouped);
+        setTotalUsd(valuation.totals.netUsd);
       } catch (e) {
         console.error('[Unified] BYMA refresh:', e.message);
       }

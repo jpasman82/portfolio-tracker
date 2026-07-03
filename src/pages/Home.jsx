@@ -7,6 +7,7 @@ import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker, get
 import { fetchRiskCountry } from '../utils/riskCountryService';
 import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
+import { saveDailyPortfolioSnapshot } from '../utils/portfolioSnapshots';
 import {
   actualizacionCercaDelCierre,
   actualizacionPosteriorAlCierre,
@@ -184,6 +185,12 @@ export default function Home() {
         }
       }
       await fetchBalancesRef.current();
+      if (options.captureSnapshot) {
+        await saveDailyPortfolioSnapshot({
+          source: options.snapshotSource || 'post-close',
+          refreshPrices: false,
+        });
+      }
       return true;
     } catch (error) {
       if (!silencioso) alert(`Error al actualizar: ${error.message}`);
@@ -211,8 +218,22 @@ export default function Home() {
           sessionStorage.getItem(closeRefreshKey) !== 'done';
 
         if (necesitaFotoCierre) {
-          const updated = await handleUpdatePrices(true, { allowClosedRefresh: true });
+          const updated = await handleUpdatePrices(true, {
+            allowClosedRefresh: true,
+            captureSnapshot: true,
+            snapshotSource: 'post-close',
+          });
           if (updated) sessionStorage.setItem(closeRefreshKey, 'done');
+        } else if (
+          esDespuesDelCierre(ahora) &&
+          sessionStorage.getItem(closeRefreshKey) !== 'done' &&
+          (actualizacionPosteriorAlCierre(latestTimestamp, ahora) || actualizacionCercaDelCierre(latestTimestamp, ahora))
+        ) {
+          await saveDailyPortfolioSnapshot({
+            source: actualizacionPosteriorAlCierre(latestTimestamp, ahora) ? 'post-close' : 'near-close',
+            refreshPrices: false,
+          });
+          sessionStorage.setItem(closeRefreshKey, 'done');
         }
       }
     };
@@ -305,6 +326,16 @@ export default function Home() {
               <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>
             </svg>
           </button>
+          <Link
+            to="/evolucion"
+            className="w-10 h-10 rounded-xl bg-[#122329] border border-teal-400/15 hover:border-teal-400/30 flex items-center justify-center text-teal-400 transition-colors"
+            title="Evolución"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 17l6-6 4 4 8-8"/>
+              <path d="M14 7h7v7"/>
+            </svg>
+          </Link>
           <div className="w-10 h-10 rounded-xl bg-teal-400 flex items-center justify-center text-[#080F12] font-black text-sm">M</div>
         </div>
       </div>
