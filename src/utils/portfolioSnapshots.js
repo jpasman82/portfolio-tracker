@@ -20,6 +20,7 @@ export async function saveDailyPortfolioSnapshot({
     totals: valuation.totals,
     brokers: valuation.brokers,
     assets: valuation.assets,
+    marketPrices: valuation.marketPrices,
   };
 
   await setDoc(doc(db, SNAPSHOT_COLLECTION, snapshotDate), payload, { merge: true });
@@ -55,6 +56,7 @@ export async function saveManualPortfolioSnapshot({
     },
     brokers: [],
     assets: [],
+    marketPrices: [],
   };
 
   await setDoc(doc(db, SNAPSHOT_COLLECTION, date), payload, { merge: true });

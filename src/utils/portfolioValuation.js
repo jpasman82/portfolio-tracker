@@ -32,6 +32,7 @@ export async function fetchPortfolioValuation({ refreshPrices = esMercadoAbierto
   const positionsSnap = await getDocs(collection(db, 'brokerPositions'));
 
   const assetsByTicker = {};
+  const marketPriceByTicker = {};
   const brokers = [];
   let totalAssetsUsd = 0;
   let totalDebtUsd = 0;
@@ -88,6 +89,28 @@ export async function fetchPortfolioValuation({ refreshPrices = esMercadoAbierto
       assetsByTicker[ticker].valueUsd += valueUsd;
       assetsByTicker[ticker].valueArs += valueArs;
       if (changePercent !== null) assetsByTicker[ticker].changePercent = changePercent;
+
+      if (!marketPriceByTicker[ticker]) {
+        marketPriceByTicker[ticker] = {
+          ticker,
+          isBond,
+          currency: isUSD ? 'USD' : 'ARS',
+          unitPrice,
+          unitPriceUsd,
+          mepRate: mepRate || 0,
+          cableRate: cableRate || 0,
+          quantity: 0,
+          valueUsd: 0,
+          valueArs: 0,
+          brokers: [],
+          changePercent,
+        };
+      }
+      marketPriceByTicker[ticker].quantity += quantity;
+      marketPriceByTicker[ticker].valueUsd += valueUsd;
+      marketPriceByTicker[ticker].valueArs += valueArs;
+      marketPriceByTicker[ticker].brokers.push(brokerId);
+      if (changePercent !== null) marketPriceByTicker[ticker].changePercent = changePercent;
     });
 
     const debtUsd = parsePortfolioNumber(data.debt);
@@ -108,6 +131,9 @@ export async function fetchPortfolioValuation({ refreshPrices = esMercadoAbierto
   const netUsd = totalAssetsUsd - totalDebtUsd;
   const effectiveMep = mepRate || 0;
   const assets = Object.values(assetsByTicker).sort((a, b) => b.valueUsd - a.valueUsd);
+  const marketPrices = Object.values(marketPriceByTicker)
+    .map((item) => ({ ...item, brokers: [...new Set(item.brokers)] }))
+    .sort((a, b) => a.ticker.localeCompare(b.ticker));
   const grouped = groupPortfolioAssets(assets, totalDebtUsd);
 
   return {
@@ -126,6 +152,7 @@ export async function fetchPortfolioValuation({ refreshPrices = esMercadoAbierto
     },
     brokers,
     assets,
+    marketPrices,
     grouped,
   };
 }

@@ -297,6 +297,7 @@ async function updatePositionsAndBuildSnapshot() {
   const { prices, usdBondSymbols, mep, cable } = await fetchBymaPrices();
   const positions = await listBrokerPositions();
   const assetsByTicker = {};
+  const marketPriceByTicker = {};
   const brokers = [];
   let totalAssetsUsd = 0;
   let totalDebtUsd = 0;
@@ -350,6 +351,26 @@ async function updatePositionsAndBuildSnapshot() {
       assetsByTicker[asset.ticker].quantity += quantity;
       assetsByTicker[asset.ticker].valueUsd += valueUsd;
       assetsByTicker[asset.ticker].valueArs += valueArs;
+
+      if (!marketPriceByTicker[asset.ticker]) {
+        marketPriceByTicker[asset.ticker] = {
+          ticker: asset.ticker,
+          isBond,
+          currency: isUSD ? 'USD' : 'ARS',
+          unitPrice,
+          unitPriceUsd,
+          mepRate: mep,
+          cableRate: cable,
+          quantity: 0,
+          valueUsd: 0,
+          valueArs: 0,
+          brokers: [],
+        };
+      }
+      marketPriceByTicker[asset.ticker].quantity += quantity;
+      marketPriceByTicker[asset.ticker].valueUsd += valueUsd;
+      marketPriceByTicker[asset.ticker].valueArs += valueArs;
+      marketPriceByTicker[asset.ticker].brokers.push(brokerId);
     }
 
     const debtUsd = parseNum(data.debt);
@@ -391,6 +412,9 @@ async function updatePositionsAndBuildSnapshot() {
     },
     brokers,
     assets: Object.values(assetsByTicker).sort((a, b) => b.valueUsd - a.valueUsd),
+    marketPrices: Object.values(marketPriceByTicker)
+      .map((item) => ({ ...item, brokers: [...new Set(item.brokers)] }))
+      .sort((a, b) => a.ticker.localeCompare(b.ticker)),
   };
 }
 
