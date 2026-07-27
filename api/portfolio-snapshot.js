@@ -9,8 +9,12 @@ const USD_BROKER_IDS = new Set(['jpm']);
 const USD_TICKER_ALIASES = {
   TFU27: 'TU27D',
 };
+const SNAPSHOT_SOURCE = 'vercel-cron-close';
+const RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1_000;
 
 let bymaTokenCache = { token: null, expiresAt: 0 };
+let bymaTokenInFlight = null;
 let googleTokenCache = { token: null, expiresAt: 0 };
 
 function parseNum(value) {
@@ -49,29 +53,38 @@ function getBymaCredentials() {
 async function getBymaToken() {
   const now = Date.now();
   if (bymaTokenCache.token && now < bymaTokenCache.expiresAt - 60_000) return bymaTokenCache.token;
+  if (bymaTokenInFlight) return bymaTokenInFlight;
 
-  const { clientId, clientSecret } = getBymaCredentials();
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: clientId,
-    client_secret: clientSecret,
-    scope: 'snapshot.read',
-  });
+  bymaTokenInFlight = (async () => {
+    const { clientId, clientSecret } = getBymaCredentials();
+    const body = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: 'snapshot.read',
+    });
 
-  const response = await fetch(`${BYMA_BASE}/oauth/token/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
+    const response = await fetch(`${BYMA_BASE}/oauth/token/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
 
-  if (!response.ok) throw new Error(`BYMA token ${response.status}: ${await response.text()}`);
+    if (!response.ok) throw new Error(`BYMA token ${response.status}: ${await response.text()}`);
 
-  const data = await response.json();
-  bymaTokenCache = {
-    token: data.access_token,
-    expiresAt: now + (data.expires_in ?? 86400) * 1000,
-  };
-  return bymaTokenCache.token;
+    const data = await response.json();
+    bymaTokenCache = {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in ?? 86400) * 1000,
+    };
+    return bymaTokenCache.token;
+  })();
+
+  try {
+    return await bymaTokenInFlight;
+  } finally {
+    bymaTokenInFlight = null;
+  }
 }
 
 async function bymaGet(path) {
@@ -85,11 +98,30 @@ async function bymaGet(path) {
 }
 
 function closePrice(item) {
-  if (item.trade > 0) return item.trade;
   if (item.closing_price > 0) return item.closing_price;
   if (item.previous_close > 0) return item.previous_close;
-  if (item.best_purchase_price > 0) return item.best_purchase_price;
   return 0;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function withRetry(label, operation) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt === RETRY_ATTEMPTS) break;
+
+      const delay = RETRY_DELAY_MS * (2 ** (attempt - 1));
+      console.warn(`[portfolio-snapshot] ${label} falló (intento ${attempt}/${RETRY_ATTEMPTS}): ${error.message}. Reintento en ${delay}ms.`);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
 }
 
 function toMap(items = []) {
@@ -112,11 +144,11 @@ async function fetchBymaPrices() {
   };
 
   const [acciones, cedears, bonosARS, bonosUSD, bonosEXT] = await Promise.all([
-    bymaGet(endpoints.acciones),
-    bymaGet(endpoints.cedears),
-    bymaGet(endpoints.bonosARS),
-    bymaGet(endpoints.bonosUSD),
-    bymaGet(endpoints.bonosEXT),
+    withRetry('BYMA acciones', () => bymaGet(endpoints.acciones)),
+    withRetry('BYMA CEDEARs', () => bymaGet(endpoints.cedears)),
+    withRetry('BYMA bonos ARS', () => bymaGet(endpoints.bonosARS)),
+    withRetry('BYMA bonos USD', () => bymaGet(endpoints.bonosUSD)),
+    withRetry('BYMA bonos Cable', () => bymaGet(endpoints.bonosEXT)),
   ]);
 
   const accionesMap = toMap(acciones?.result);
@@ -257,7 +289,7 @@ function decodeFirestoreFields(fields = {}) {
   return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, decodeFirestoreValue(value)]));
 }
 
-async function firestoreFetch(path, options = {}) {
+async function firestoreFetch(path, { allowNotFound = false, ...options } = {}) {
   const account = getServiceAccount();
   const token = await getGoogleAccessToken();
   const response = await fetch(`https://firestore.googleapis.com/v1/projects/${account.projectId}/databases/(default)/documents${path}`, {
@@ -269,7 +301,10 @@ async function firestoreFetch(path, options = {}) {
     },
   });
 
-  if (!response.ok) throw new Error(`Firestore ${response.status}: ${await response.text()}`);
+  if (!response.ok) {
+    if (allowNotFound && response.status === 404) return null;
+    throw new Error(`Firestore ${response.status}: ${await response.text()}`);
+  }
   return response.json();
 }
 
@@ -292,6 +327,11 @@ async function patchDocument(collectionName, id, data, fieldPaths) {
   });
 }
 
+async function getSnapshot(date) {
+  const document = await firestoreFetch(`/${SNAPSHOT_COLLECTION}/${date}`, { allowNotFound: true });
+  return document ? decodeFirestoreFields(document.fields || {}) : null;
+}
+
 async function updatePositionsAndBuildSnapshot() {
   const nowIso = new Date().toISOString();
   const { prices, usdBondSymbols, mep, cable } = await fetchBymaPrices();
@@ -302,6 +342,7 @@ async function updatePositionsAndBuildSnapshot() {
   let totalAssetsUsd = 0;
   let totalDebtUsd = 0;
   const positionUpdates = [];
+  const missingPrices = new Set();
 
   positions.forEach((position) => {
     const data = position.data;
@@ -316,6 +357,7 @@ async function updatePositionsAndBuildSnapshot() {
       const ticker = asset.ticker.toUpperCase().trim();
       const livePrice = getLivePrice(ticker, prices, { isUSD, mep, usdBondSymbols });
       const isBond = asset.isBond || isBondTicker(ticker);
+      if (!BRAZIL_CEDEARS.has(ticker) && livePrice === undefined) missingPrices.add(ticker);
       return livePrice !== undefined ? { ...asset, ticker, price: livePrice, isBond } : { ...asset, ticker, isBond };
     });
 
@@ -386,19 +428,22 @@ async function updatePositionsAndBuildSnapshot() {
       assets: brokerAssets,
     });
 
-    positionUpdates.push(patchDocument(POSITIONS_COLLECTION, brokerId, {
+    positionUpdates.push(() => withRetry(`Firestore posición ${brokerId}`, () => patchDocument(POSITIONS_COLLECTION, brokerId, {
       assets: updatedAssets,
       usdRate: isUSD ? 1 : (mep || data.usdRate || 1),
       lastUpdated: nowIso,
-    }, ['assets', 'usdRate', 'lastUpdated']));
+    }, ['assets', 'usdRate', 'lastUpdated'])));
   });
 
-  await Promise.all(positionUpdates);
+  if (!mep) throw new Error('BYMA no devolvió un tipo de cambio MEP de cierre válido.');
+  if (missingPrices.size > 0) {
+    throw new Error(`BYMA no devolvió precio de cierre para: ${[...missingPrices].sort().join(', ')}.`);
+  }
 
   const netUsd = totalAssetsUsd - totalDebtUsd;
   return {
     date: snapshotDate(),
-    source: 'vercel-cron-close',
+    source: SNAPSHOT_SOURCE,
     capturedAt: nowIso,
     updatedAt: nowIso,
     rates: { mep, cable },
@@ -415,6 +460,7 @@ async function updatePositionsAndBuildSnapshot() {
     marketPrices: Object.values(marketPriceByTicker)
       .map((item) => ({ ...item, brokers: [...new Set(item.brokers)] }))
       .sort((a, b) => a.ticker.localeCompare(b.ticker)),
+    positionUpdates,
   };
 }
 
@@ -437,8 +483,18 @@ export default async function handler(req, res) {
       return res.status(200).json({ skipped: true, reason: 'Fin de semana en Argentina' });
     }
 
-    const snapshot = await updatePositionsAndBuildSnapshot();
-    await patchDocument(SNAPSHOT_COLLECTION, snapshot.date, snapshot, Object.keys(snapshot));
+    const date = snapshotDate();
+    const existingSnapshot = await withRetry('Lectura del snapshot existente', () => getSnapshot(date));
+    if (existingSnapshot?.source === SNAPSHOT_SOURCE && existingSnapshot?.marketPrices?.length > 0) {
+      return res.status(200).json({ ok: true, date, alreadyCaptured: true });
+    }
+
+    const { positionUpdates, ...snapshot } = await updatePositionsAndBuildSnapshot();
+    await withRetry('Guardado del snapshot diario', () => patchDocument(SNAPSHOT_COLLECTION, snapshot.date, snapshot, Object.keys(snapshot)));
+
+    const positionUpdateResults = await Promise.allSettled(positionUpdates.map((update) => update()));
+    const positionUpdateFailures = positionUpdateResults.filter((result) => result.status === 'rejected');
+    positionUpdateFailures.forEach((result) => console.error('[portfolio-snapshot] No se pudo actualizar una posición:', result.reason));
 
     return res.status(200).json({
       ok: true,
@@ -448,6 +504,7 @@ export default async function handler(req, res) {
       mep: snapshot.rates.mep,
       assets: snapshot.assets.length,
       brokers: snapshot.brokers.length,
+      positionUpdateFailures: positionUpdateFailures.length,
     });
   } catch (err) {
     console.error('[portfolio-snapshot]', err);

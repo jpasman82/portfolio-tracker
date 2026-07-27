@@ -1,0 +1,200 @@
+{
+  "closing_date": "2026-07-05",
+  "due_date": "2026-07-14",
+  "total_ars": 3758750.65,
+  "total_usd": 66.14,
+  "transactions": [
+    {
+      "date": "2026-06-02",
+      "description": "=NETFLIX_COM 010732010732",
+      "amount": 30800.98,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-17",
+      "description": "OSDE",
+      "amount": 3052288.88,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-19",
+      "description": "DEV PERCEPCION RG 5617",
+      "amount": 122996.96,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-19",
+      "description": "SAN CRISTOBAL SOC.MUTUAL SEG.",
+      "amount": 110902,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-19",
+      "description": "CARREFOUR 315724315724",
+      "amount": 71581.6,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-23",
+      "description": "COMISION TRANSF DE PUNTOS",
+      "amount": 4983.47,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-23",
+      "description": "IMPUESTO AL VALOR AGREGADO",
+      "amount": 1046.53,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-24",
+      "description": "=ALLPAGO 033523033523",
+      "amount": 11727.32,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-26",
+      "description": "PROSEGUR ACTIVA SA 0295914034",
+      "amount": 106358.23,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-02",
+      "description": "ATM CÍA. DE SEGUROS",
+      "amount": 24471.01,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-02",
+      "description": "=NETFLIX_COM 010891010891",
+      "amount": 30800.98,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "PERCEPCION RG 5617",
+      "amount": 27180,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "PERCEPCION IVA R.G. 3337 - 3%",
+      "amount": 5105.07,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "Intereses punitorios",
+      "amount": 83845.87,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "Intereses financieros",
+      "amount": 86322.89,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "IVA 21%",
+      "amount": 35735.44,
+      "currency": "ARS",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-14",
+      "description": "ANTHROPIC 10.00 US DOLLA",
+      "amount": 10,
+      "currency": "USD",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-21",
+      "description": "ANTHROPIC 10.00 US DOLLA",
+      "amount": 10,
+      "currency": "USD",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-23",
+      "description": "ANTHROPIC* CLAUDE SUB 20.00 US DOLLA",
+      "amount": 20,
+      "currency": "USD",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-06-28",
+      "description": "OPENAI *CHATGPT SUBSCR 20.00 US DOLLA",
+      "amount": 20,
+      "currency": "USD",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "PERCEPCION IVA R.G. 3337 - 3%",
+      "amount": 0.15,
+      "currency": "USD",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "Intereses punitorios",
+      "amount": 2.44,
+      "currency": "USD",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "Intereses financieros",
+      "amount": 2.51,
+      "currency": "USD",
+      "installment_current": null,
+      "installment_total": null
+    },
+    {
+      "date": "2026-07-05",
+      "description": "IVA 21%",
+      "amount": 1.04,
+      "currency": "USD",
+      "installment_current": null,
+      "installment_total": null
+    }
+  ]
+}

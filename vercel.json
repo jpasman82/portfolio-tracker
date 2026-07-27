@@ -1,10 +1,20 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "vite build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/portfolio-snapshot.js": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/portfolio-snapshot",
-      "schedule": "15 20 * * 1-5"
+      "schedule": "10 21 * * 1-5"
+    },
+    {
+      "path": "/api/portfolio-snapshot",
+      "schedule": "35 22 * * 1-5"
     }
   ],
   "rewrites": [

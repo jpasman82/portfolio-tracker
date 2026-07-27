@@ -443,52 +443,57 @@ export default function Home() {
           )}
         </div>
 
-        <div className="h-summary-stats border-t border-teal-400/10 px-5 py-4 grid grid-cols-2 gap-4">
-          <div>
-            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Total Activos</div>
-            <div className="h-summary-sub-amount font-bold text-[#F0FAFA]">
-              US$ {totalActivos.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-            </div>
-          </div>
-          <div className="h-summary-stats-debt">
-            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-red-400/70 mb-1">Deuda / Caución</div>
-            <div className="h-summary-sub-amount font-bold text-red-400">
-              - US$ {totalDeuda.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-            </div>
-          </div>
-          <div>
-            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Dólar MEP</div>
-            <div className={`font-bold ${mep > 0 ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>{formatFxRate(mep)}</div>
-          </div>
-          <div>
-            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Dólar Cable</div>
-            <div className={`font-bold ${cable > 0 ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>{formatFxRate(cable)}</div>
-          </div>
-          <div>
-            <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Cable vs MEP</div>
-            <div className={`font-bold ${cableVsMep !== null ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>
-              {formatCableVsMep(cableVsMep)}
-            </div>
-          </div>
-          {riskCountry?.value !== null && riskCountry?.value !== undefined && (
+        <div className="h-summary-stats border-t border-teal-400/10 px-5 py-4 grid grid-cols-2 gap-5">
+          <div className="space-y-4">
             <div>
-              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Riesgo País</div>
-              <div className="h-risk-country">
-                <span className="font-bold text-[#F0FAFA]">
-                  {riskCountry.value.toLocaleString('es-AR', { maximumFractionDigits: 0 })} pts
-                </span>
-                {riskCountry.change !== null && (
-                  <span className={`h-risk-change h-risk-${riskCountryDirection}`}>
-                    {riskCountry.change > 0 ? '+' : ''}
-                    {riskCountry.change.toLocaleString('es-AR', { maximumFractionDigits: 0 })} pts
-                    {riskCountry.changePercent !== null && (
-                      <> ({riskCountry.changePercent > 0 ? '+' : ''}{riskCountry.changePercent.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</>
-                    )}
-                  </span>
-                )}
+              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1">Total Activos</div>
+              <div className="h-summary-sub-amount font-bold text-[#F0FAFA]">
+                US$ {totalActivos.toLocaleString('en-US', { maximumFractionDigits: 0 })}
               </div>
             </div>
-          )}
+            <div className="h-summary-stats-debt">
+              <div className="font-mono text-[11px] tracking-[0.22em] uppercase text-red-400/70 mb-1">Deuda / Caución</div>
+              <div className="h-summary-sub-amount font-bold text-red-400">
+                - US$ {totalDeuda.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[#5B8A8A]">Dólar MEP</span>
+              <span className={`font-bold whitespace-nowrap ${mep > 0 ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>{formatFxRate(mep)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[#5B8A8A]">Dólar Cable</span>
+              <span className={`font-bold whitespace-nowrap ${cable > 0 ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>{formatFxRate(cable)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[#5B8A8A]">Cable vs MEP</span>
+              <span className={`font-bold whitespace-nowrap ${cableVsMep !== null ? 'text-[#F0FAFA]' : 'text-[#5B8A8A]'}`}>
+                {formatCableVsMep(cableVsMep)}
+              </span>
+            </div>
+            {riskCountry?.value !== null && riskCountry?.value !== undefined && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[#5B8A8A]">Riesgo País</span>
+                <span className="h-risk-country justify-end text-right">
+                  <span className="font-bold text-[#F0FAFA] whitespace-nowrap">
+                    {riskCountry.value.toLocaleString('es-AR', { maximumFractionDigits: 0 })} pts
+                  </span>
+                  {riskCountry.change !== null && (
+                    <span className={`h-risk-change h-risk-${riskCountryDirection}`}>
+                      {riskCountry.change > 0 ? '+' : ''}
+                      {riskCountry.change.toLocaleString('es-AR', { maximumFractionDigits: 0 })} pts
+                      {riskCountry.changePercent !== null && (
+                        <> ({riskCountry.changePercent > 0 ? '+' : ''}{riskCountry.changePercent.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</>
+                      )}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
