@@ -25,11 +25,11 @@ export const preciosMaximosLocalesUSD = [
   },
   {
     ticker: "YPFD",
-    ratioADR: 1,
+    ratioADR: 10,
     maxHistoricoADR: 68.7,
-    maxHistoricoLocalUSD: 68.7,
+    maxHistoricoLocalUSD: 6.87,
     maxEnero2025ADR: 47.43,
-    maxEnero2025LocalUSD: 47.43,
+    maxEnero2025LocalUSD: 4.743,
   },
   {
     ticker: "TECO2",
