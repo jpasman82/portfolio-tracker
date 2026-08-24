@@ -52,6 +52,7 @@ export default function Maximos() {
   const [target, setTarget] = useState('enero');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const bottomNavHidden = useHideBottomNavOnScroll();
 
   const parseNum = (val) => {
@@ -75,7 +76,10 @@ export default function Maximos() {
       setLoading(true);
       try {
         const mercadoEstaAbierto = esMercadoAbierto();
-        const priceMap = mercadoEstaAbierto ? await fetchAllPrices() : {};
+        setMercadoAbierto(mercadoEstaAbierto);
+        // BYMA devuelve closing_price / previous_close tambien con el mercado cerrado:
+        // pedimos siempre y fuera de horario quedan los precios del ultimo cierre.
+        const priceMap = await fetchAllPrices();
         const googleFinanceItems = preciosMaximosLocalesUSD
           .filter((item) => item.priceSource === 'googleFinance')
           .map((item) => ({
@@ -84,7 +88,7 @@ export default function Maximos() {
             exchange: item.googleFinanceExchange || 'NASDAQ',
           }));
         const googleFinancePrices = await fetchGoogleFinanceQuotes(googleFinanceItems);
-        const cableRate = mercadoEstaAbierto ? getCclRate() : null;
+        const cableRate = getCclRate();
         const maxTickers = new Set(preciosMaximosLocalesUSD.map((item) => item.ticker));
         const holdingsByTicker = {};
 
@@ -173,6 +177,7 @@ export default function Maximos() {
         <p className={KICKER}>
           <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
           Comparacion contra techos
+          {!mercadoAbierto && <span className="text-[#5B8A8A] normal-case tracking-normal ml-1">- precios al cierre</span>}
         </p>
         <div className="m-title-row">
           <h2 className="m-title text-2xl font-bold tracking-tight text-[#F0FAFA] mt-1">Maximos</h2>
