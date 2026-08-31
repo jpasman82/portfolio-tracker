@@ -200,6 +200,13 @@
   margin-top: 3px;
 }
 
+.u-asset-unit-price {
+  font-size: 12px;
+  line-height: 1.15;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
 .u-bottomnav {
   position: fixed;
   bottom: 0;

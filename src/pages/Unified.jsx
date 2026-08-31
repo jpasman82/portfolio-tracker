@@ -33,6 +33,12 @@ export default function Unified() {
   const fmtUSD = (v) => 'US$ ' + parseNum(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
   const fmtARS = (v) => '$ ' + parseNum(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtQty = (v) => parseNum(v).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  // Precio unitario: los CEDEARs de menos de 1 USD necesitan mas decimales.
+  const fmtPrice = (v) => {
+    const n = parseNum(v);
+    const digits = n > 0 && n < 1 ? 4 : 2;
+    return 'US$ ' + n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  };
   const fmtChangePct = (v) => {
     const n = parseNum(v);
     return `${n > 0 ? '+' : ''}${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
@@ -243,7 +249,7 @@ export default function Unified() {
                         <div className="u-asset-row u-table-header font-mono text-[11px] tracking-[0.18em] uppercase text-[#5B8A8A] opacity-70 pb-2">
                           <span>Ticker</span>
                           <span>Nominales</span>
-                          <span style={{ textAlign: 'right' }}>Valor / Precio</span>
+                          <span style={{ textAlign: 'right' }}>Valorizado</span>
                           <span style={{ textAlign: 'right' }}>Var.</span>
                           <span className="u-asset-pct-bar">% Cartera</span>
                         </div>
@@ -273,6 +279,11 @@ export default function Unified() {
                                     ? asset.unitPriceArs > 0 ? fmtARS(asset.unitPriceArs) : 'Sin precio'
                                     : fmtUSD(asset.valueUsd)}
                                 </div>
+                                {!isDebt && !asset.isWatchlist && asset.quotedPriceUsd > 0 && (
+                                  <div className="u-asset-unit-price font-mono text-[#5B8A8A]">
+                                    {fmtPrice(asset.quotedPriceUsd)}{asset.isBond ? ' / 100 nom.' : ' c/u'}
+                                  </div>
+                                )}
                                 <div className="u-mobile-pct font-mono text-[12px]" style={{ color: asset.isWatchlist ? '#5B8A8A' : catColor }}>
                                   {asset.isWatchlist ? 'Sin posicion' : `${pct.toFixed(1)}% Cartera`}
                                 </div>

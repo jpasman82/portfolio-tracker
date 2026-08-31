@@ -76,6 +76,7 @@ export async function fetchPortfolioValuation({ refreshPrices = esMercadoAbierto
       if (!assetsByTicker[ticker]) {
         assetsByTicker[ticker] = {
           ticker,
+          isBond,
           quantity: 0,
           valueUsd: 0,
           valueArs: 0,
@@ -127,7 +128,17 @@ export async function fetchPortfolioValuation({ refreshPrices = esMercadoAbierto
 
   const netUsd = totalAssetsUsd - totalDebtUsd;
   const effectiveMep = mepRate || 0;
-  const assets = Object.values(assetsByTicker).sort((a, b) => b.valueUsd - a.valueUsd);
+  const assets = Object.values(assetsByTicker)
+    .map((item) => {
+      const unitPriceUsd = item.quantity > 0 ? item.valueUsd / item.quantity : 0;
+      return {
+        ...item,
+        unitPriceUsd,
+        // Precio como lo cotiza el mercado: los bonos, por lámina de 100 nominales.
+        quotedPriceUsd: item.isBond ? unitPriceUsd * 100 : unitPriceUsd,
+      };
+    })
+    .sort((a, b) => b.valueUsd - a.valueUsd);
   const marketPrices = Object.values(marketPriceByTicker)
     .map((item) => ({ ...item, brokers: [...new Set(item.brokers)] }))
     .sort((a, b) => a.ticker.localeCompare(b.ticker));
