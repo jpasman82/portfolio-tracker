@@ -8,6 +8,7 @@ import { fetchRiskCountry } from '../utils/riskCountryService';
 import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import { fetchPortfolioSnapshots, saveDailyPortfolioSnapshot } from '../utils/portfolioSnapshots';
+import { parseNum } from '../utils/numberFormat';
 import {
   actualizacionCercaDelCierre,
   actualizacionPosteriorAlCierre,
@@ -78,12 +79,6 @@ export default function Home() {
   const bottomNavHidden = useHideBottomNavOnScroll();
 
   const fetchBalancesRef = useRef(null);
-
-  const parseNum = (val) => {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
-    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
-  };
 
   const refreshSnapshotHistory = async () => {
     try {

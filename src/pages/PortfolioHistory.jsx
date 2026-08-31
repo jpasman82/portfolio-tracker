@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { fetchPortfolioSnapshots, saveDailyPortfolioSnapshot, saveManualPortfolioSnapshot } from '../utils/portfolioSnapshots';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
+import { parseNum } from '../utils/numberFormat';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 
@@ -36,7 +37,7 @@ const yesterdayKey = () => {
   return dateKey(date);
 };
 
-const parseInputNumber = (value) => Number(value.toString().replace(/\./g, '').replace(',', '.')) || 0;
+const parseInputNumber = parseNum;
 
 const parseSnapshotDate = (value) => {
   const [year, month, day] = value.split('-').map(Number);

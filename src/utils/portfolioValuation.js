@@ -1,17 +1,14 @@
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { assetDictionary } from './dictionary';
+import { parseNum } from './numberFormat';
 import { fetchAllPrices, getBrokerLivePrice, getCclRate, getMepRate, getPriceMeta, isBondTicker } from './priceService';
 import { isUsdBroker } from './brokers';
 import { esMercadoAbierto } from './marketHours';
 
 const BRAZIL_CEDEARS = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ']);
 
-export const parsePortfolioNumber = (val) => {
-  if (!val) return 0;
-  if (typeof val === 'number') return val;
-  return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
-};
+export const parsePortfolioNumber = parseNum;
 
 export function getPortfolioSnapshotDate(date = new Date()) {
   const year = date.getFullYear();

@@ -4,6 +4,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { fetchAllPrices, getMepRate } from '../utils/priceService';
 import { esMercadoAbierto } from '../utils/marketHours';
+import { formatDecimals, formatInput, formatPrice, normalizeTypedInput, parseNum } from '../utils/numberFormat';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 const INPUT = "w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 focus:border-teal-400/60 text-[#F0FAFA] placeholder-[#3d5a5a] rounded-xl text-sm outline-none transition-colors box-border";
@@ -27,24 +28,6 @@ export default function EventDetail() {
   const [saving, setSaving] = useState(false);
   const [viewCurrency, setViewCurrency] = useState('USD');
 
-  const formatInput = (val) => {
-    if (val === undefined || val === null || val === '') return '';
-    let str = val.toString();
-    if (typeof val === 'number' || (str.includes('.') && !str.includes(','))) str = str.replace(/\./g, ',');
-    let clean = str.replace(/[^0-9,]/g, '');
-    let parts = clean.split(',');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    if (parts.length > 2) parts = [parts[0], parts.slice(1).join('')];
-    return parts.join(',');
-  };
-
-  const parseNum = (val) => {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
-    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
-  };
-
-  const formatDecimals = (val) => parseNum(val).toFixed(2).replace('.', ',');
   const fmtQty = (v) => formatInput(v);
   const fmtARS = (v) => '$ ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
   const fmtUSD = (v) => 'USD ' + formatInput(typeof v === 'number' ? v.toFixed(2) : v);
@@ -75,20 +58,20 @@ export default function EventDetail() {
           const formattedAssets = assets.map(a => ({
             ...a,
             quantity: a.quantity?.toString().replace('.', ',') || '',
-            priceAtTrade: formatDecimals(a.priceAtTrade),
+            priceAtTrade: formatPrice(a.priceAtTrade),
             usdRateAtTrade: formatDecimals(a.usdRateAtTrade || data.initialUsdRate || initUsd)
           }));
           setCurrentAssets(formattedAssets);
           const pB = {};
           formattedAssets.forEach(a => {
             const t = a.ticker?.toUpperCase().trim();
-            pB[a.ticker] = formatDecimals(priceMap[t] ?? data.currentPricesFromDb?.[a.ticker] ?? a.priceAtTrade ?? 0);
+            pB[a.ticker] = formatPrice(priceMap[t] ?? data.currentPricesFromDb?.[a.ticker] ?? a.priceAtTrade ?? 0);
           });
           setCurrentPrices(pB);
           const pS = {};
           (data.soldAssets || []).forEach(a => {
             const t = a.ticker?.toUpperCase().trim();
-            pS[a.ticker] = formatDecimals(priceMap[t] ?? data.soldCurrentPricesFromDb?.[a.ticker] ?? a.priceAtTrade ?? 0);
+            pS[a.ticker] = formatPrice(priceMap[t] ?? data.soldCurrentPricesFromDb?.[a.ticker] ?? a.priceAtTrade ?? 0);
           });
           setSoldCurrentPrices(pS);
         }
@@ -335,7 +318,7 @@ export default function EventDetail() {
                 <div>
                   <label className={LABEL}>Cantidad</label>
                   {isEditingStructure ? (
-                    <input type="text" value={formatInput(asset.quantity)} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, quantity: e.target.value } : a))} className={INPUT} />
+                    <input type="text" inputMode="decimal" value={formatInput(asset.quantity)} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, quantity: normalizeTypedInput(a.quantity, e.target.value) } : a))} className={INPUT} />
                   ) : (
                     <div className={BOX_READ}>{fmtQty(asset.quantity)}</div>
                   )}
@@ -348,7 +331,7 @@ export default function EventDetail() {
                     isEditingStructure ? (
                       <div className="relative">
                         <span className="absolute left-3 top-2.5 text-[#5B8A8A] text-sm font-mono">$</span>
-                        <input type="text" value={formatInput(asset.priceAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, priceAtTrade: formatDecimals(e.target.value) } : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, priceAtTrade: e.target.value } : a))} className={`${INPUT} pl-7 text-right`} />
+                        <input type="text" inputMode="decimal" value={formatInput(asset.priceAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, priceAtTrade: formatPrice(e.target.value) } : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, priceAtTrade: normalizeTypedInput(a.priceAtTrade, e.target.value) } : a))} className={`${INPUT} pl-7 text-right`} />
                       </div>
                     ) : (
                       <div className={BOX_READ}>{fmtARS(pCompraARS)}</div>
@@ -365,7 +348,7 @@ export default function EventDetail() {
                     ) : (
                       <div className="relative">
                         <span className="absolute left-3 top-2.5 text-teal-400/70 text-sm font-mono">$</span>
-                        <input type="text" value={formatInput(currentPrices[asset.ticker])} onBlur={(e) => setCurrentPrices({ ...currentPrices, [asset.ticker]: formatDecimals(e.target.value) })} onChange={(e) => setCurrentPrices({ ...currentPrices, [asset.ticker]: e.target.value })} className={`${INPUT_TEAL} pl-7`} />
+                        <input type="text" inputMode="decimal" value={formatInput(currentPrices[asset.ticker])} onBlur={(e) => setCurrentPrices({ ...currentPrices, [asset.ticker]: formatPrice(e.target.value) })} onChange={(e) => setCurrentPrices({ ...currentPrices, [asset.ticker]: normalizeTypedInput(currentPrices[asset.ticker], e.target.value) })} className={`${INPUT_TEAL} pl-7`} />
                       </div>
                     )
                   )}
@@ -379,7 +362,7 @@ export default function EventDetail() {
                     <label className={LABEL}>Tipo de cambio al comprar</label>
                     <div className="relative">
                       <span className="absolute left-3 top-2.5 text-[#5B8A8A] text-sm font-mono">$</span>
-                      <input type="text" value={formatInput(asset.usdRateAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, usdRateAtTrade: formatDecimals(e.target.value) } : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, usdRateAtTrade: e.target.value } : a))} className={`${INPUT} pl-7 text-right`} />
+                      <input type="text" inputMode="decimal" value={formatInput(asset.usdRateAtTrade)} onBlur={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, usdRateAtTrade: formatDecimals(e.target.value) } : a))} onChange={(e) => setCurrentAssets(currentAssets.map((a, i) => i === index ? { ...a, usdRateAtTrade: normalizeTypedInput(a.usdRateAtTrade, e.target.value) } : a))} className={`${INPUT} pl-7 text-right`} />
                     </div>
                   </div>
                 </div>
@@ -448,7 +431,7 @@ export default function EventDetail() {
                   ) : (
                     <div className="relative">
                       <span className="absolute left-3 top-2.5 text-teal-400/70 text-sm font-mono">$</span>
-                      <input type="text" value={formatInput(soldCurrentPrices[asset.ticker])} onBlur={(e) => setSoldCurrentPrices({ ...soldCurrentPrices, [asset.ticker]: formatDecimals(e.target.value) })} onChange={(e) => setSoldCurrentPrices({ ...soldCurrentPrices, [asset.ticker]: e.target.value })} className={`${INPUT_TEAL} pl-7`} />
+                      <input type="text" inputMode="decimal" value={formatInput(soldCurrentPrices[asset.ticker])} onBlur={(e) => setSoldCurrentPrices({ ...soldCurrentPrices, [asset.ticker]: formatPrice(e.target.value) })} onChange={(e) => setSoldCurrentPrices({ ...soldCurrentPrices, [asset.ticker]: normalizeTypedInput(soldCurrentPrices[asset.ticker], e.target.value) })} className={`${INPUT_TEAL} pl-7`} />
                     </div>
                   )
                 )}

@@ -5,6 +5,7 @@ import { db } from '../firebase/config';
 import { fetchAllPrices, isBondTicker, getMepRate, getCclRate, getBrokerLivePrice } from '../utils/priceService';
 import { esMercadoAbierto } from '../utils/marketHours';
 import { getBrokerName, isUsdBroker } from '../utils/brokers';
+import { formatDecimals, formatInput, formatPrice, normalizeTypedInput, parseNum } from '../utils/numberFormat';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 const INPUT = "w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 focus:border-teal-400/60 text-[#F0FAFA] placeholder-[#3d5a5a] rounded-xl text-sm outline-none transition-colors box-border";
@@ -22,25 +23,6 @@ export default function BrokerDetail() {
 
   const isUSD = isUsdBroker(id);
 
-  const formatInput = (val) => {
-    if (val === undefined || val === null || val === '') return '';
-    let str = val.toString();
-    if (typeof val === 'number') str = str.replace('.', ',');
-    if (str.endsWith('.')) str = str.slice(0, -1) + ',';
-    let clean = str.replace(/\./g, '').replace(/[^0-9,]/g, '');
-    let parts = clean.split(',');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    if (parts.length > 2) parts = [parts[0], parts.slice(1).join('')];
-    return parts.join(',');
-  };
-
-  const parseNum = (val) => {
-    if (val === undefined || val === null || val === '') return 0;
-    if (typeof val === 'number') return val;
-    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
-  };
-
-  const formatDecimals = (val) => parseNum(val).toFixed(2).replace('.', ',');
   const fmtQty = (v) => parseNum(v).toLocaleString('es-AR');
   const fmtARS = (v) => '$ ' + parseNum(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtUSD = (v) => 'USD ' + parseNum(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -54,7 +36,7 @@ export default function BrokerDetail() {
           const formattedAssets = (data.assets || []).map(a => ({
             ticker: a.ticker,
             quantity: a.quantity?.toString().replace('.', ',') || '',
-            price: formatDecimals((() => {
+            price: formatPrice((() => {
               const ticker = a.ticker?.toUpperCase().trim();
               const livePrice = getBrokerLivePrice(ticker, livePrices, { isUSD, mepRate: liveMepRate });
               return livePrice ?? a.price;
@@ -215,10 +197,11 @@ export default function BrokerDetail() {
                   <label className={LABEL}>Cantidad</label>
                   <input
                     type="text"
+                    inputMode="decimal"
                     value={formatInput(asset.quantity)}
                     onChange={(e) => {
                       const newAssets = [...assets];
-                      newAssets[index].quantity = e.target.value;
+                      newAssets[index].quantity = normalizeTypedInput(asset.quantity, e.target.value);
                       setAssets(newAssets);
                     }}
                     className={INPUT}
@@ -230,15 +213,16 @@ export default function BrokerDetail() {
                     <span className="absolute left-3 top-2.5 text-[#5B8A8A] font-mono text-sm">{isUSD ? 'U$' : '$'}</span>
                     <input
                       type="text"
+                      inputMode="decimal"
                       value={formatInput(asset.price)}
                       onBlur={(e) => {
                         const newAssets = [...assets];
-                        newAssets[index].price = formatDecimals(e.target.value);
+                        newAssets[index].price = formatPrice(e.target.value);
                         setAssets(newAssets);
                       }}
                       onChange={(e) => {
                         const newAssets = [...assets];
-                        newAssets[index].price = e.target.value;
+                        newAssets[index].price = normalizeTypedInput(asset.price, e.target.value);
                         setAssets(newAssets);
                       }}
                       className={`${INPUT} pl-8`}
@@ -283,9 +267,10 @@ export default function BrokerDetail() {
               <span className="absolute left-3 top-2.5 text-red-400 font-mono text-sm">U$</span>
               <input
                 type="text"
+                inputMode="decimal"
                 value={formatInput(debt)}
                 onBlur={(e) => setDebt(formatDecimals(e.target.value))}
-                onChange={(e) => setDebt(e.target.value)}
+                onChange={(e) => setDebt(normalizeTypedInput(debt, e.target.value))}
                 className="w-full pl-8 pr-3 py-2.5 bg-red-400/5 border border-red-400/20 hover:border-red-400/40 focus:border-red-400/60 text-red-400 rounded-xl text-sm outline-none transition-colors text-right box-border"
               />
             </div>

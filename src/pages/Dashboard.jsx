@@ -7,6 +7,7 @@ import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService'
 import { esMercadoAbierto } from '../utils/marketHours';
 import { getBrokerName, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
+import { parseNum } from '../utils/numberFormat';
 import * as XLSX from 'xlsx';
 
 const handleLogout = async () => {
@@ -20,12 +21,6 @@ export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const bottomNavHidden = useHideBottomNavOnScroll();
-
-  const parseNum = (val) => {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
-    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
-  };
 
   const fetchEvents = async () => {
     try {

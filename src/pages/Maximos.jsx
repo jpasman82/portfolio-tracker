@@ -9,6 +9,7 @@ import { preciosMaximosLocalesUSD } from '../utils/maximosData';
 import { assetDictionary } from '../utils/dictionary';
 import { esMercadoAbierto } from '../utils/marketHours';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
+import { parseNum } from '../utils/numberFormat';
 import './Maximos.css';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
@@ -54,12 +55,6 @@ export default function Maximos() {
   const [loading, setLoading] = useState(true);
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const bottomNavHidden = useHideBottomNavOnScroll();
-
-  const parseNum = (val) => {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
-    return Number(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
-  };
 
   const fmtUSD = (v, digits = 2) => {
     if (v === null || v === undefined || Number.isNaN(v)) return '-';
