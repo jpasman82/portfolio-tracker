@@ -152,15 +152,61 @@
   box-sizing: border-box;
 }
 
-.h-card-inner {
+.h-card-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 14px;
 }
 
-.h-card-right {
+.h-card-head .h-broker-name {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.h-card-balance {
+  margin-bottom: 14px;
+}
+
+.h-card-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 12px;
+  margin-bottom: 14px;
+  border-top: 1px solid rgba(45, 212, 191, 0.1);
+}
+
+.h-stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.h-stat-label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #5B8A8A;
+  white-space: nowrap;
+}
+
+.h-stat-label.is-debt {
+  color: rgba(248, 113, 113, 0.7);
+}
+
+.h-stat-value {
+  font-size: 15px;
+  white-space: nowrap;
   text-align: right;
+}
+
+.h-stat-pct {
+  font-size: 13px;
+  opacity: 0.75;
+  margin-left: 5px;
 }
 
 .h-card-logo-wrap {
@@ -313,25 +359,23 @@
 }
 
 .h-balance {
-  font-size: 21px;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
 }
 
 .h-cable-val {
   font-size: 13px;
-  margin-top: 1px;
+  margin-top: 3px;
 }
 
 .h-broker-pct {
-  font-size: 15px;
-  margin-top: 2px;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .h-broker-name {
   font-size: 17px;
-}
-
-.h-broker-date {
-  font-size: 12px;
 }
 
 .h-bottomnav {
@@ -524,21 +568,40 @@
     border-radius: 14px !important;
   }
 
-  .h-card-inner {
+  .h-card-head {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .h-card-balance {
+    margin-bottom: 12px;
+  }
+
+  .h-card-stats {
+    gap: 6px;
+    padding-top: 10px;
+    margin-bottom: 12px;
+  }
+
+  .h-stat-row {
     flex-direction: column;
     align-items: flex-start;
-    justify-content: flex-start;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 1px;
   }
 
-  .h-card-left {
-    width: 100%;
+  .h-stat-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
   }
 
-  .h-card-right {
+  .h-stat-value {
+    font-size: 14px;
     text-align: left;
-    width: 100%;
+  }
+
+  .h-stat-pct {
+    font-size: 12px;
+    margin-left: 4px;
   }
 
   .h-card-logo-wrap {
@@ -552,13 +615,9 @@
     font-size: 16px !important;
   }
 
-  .h-broker-date {
-    font-size: 11px !important;
-  }
-
   .h-balance {
-    font-size: 22px !important;
-    letter-spacing: -0.2px;
+    font-size: 25px !important;
+    letter-spacing: -0.3px;
   }
 
   .h-cable-val {
@@ -567,8 +626,7 @@
   }
 
   .h-broker-pct {
-    font-size: 14px !important;
-    margin-top: 3px !important;
+    font-size: 13px !important;
   }
 
   .h-progress-track {

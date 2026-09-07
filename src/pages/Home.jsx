@@ -306,16 +306,6 @@ export default function Home() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const formatSubDate = (date) => {
-    if (!date) return 'Sin datos';
-    return (
-      date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) +
-      ' ' +
-      date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) +
-      ' hs'
-    );
-  };
-
   const brokers = BROKERS.map((broker) => ({ ...broker, ...brokerData[broker.id] }));
 
   const tickerTapeItems = tickerTape.length > 0 ? [...tickerTape, ...tickerTape] : [];
@@ -550,44 +540,50 @@ export default function Home() {
           return (
             <Link key={b.id} to={`/broker/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
               <div className="h-broker-card bg-[#122329] border border-teal-400/10 hover:border-teal-400/25 rounded-2xl transition-colors">
-                <div className="h-card-inner">
-                  <div className="h-card-left flex items-center gap-3">
-                    <div className="h-card-logo-wrap rounded-xl flex items-center justify-center shrink-0">
-                      <img
-                        src={b.logo}
-                        alt={`${b.name} logo`}
-                        className="h-broker-logo"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.parentNode.innerHTML = `<span style="font-weight:900;color:#122329;font-size:11px;">${b.name.substring(0, 3).toUpperCase()}</span>`;
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <div className="h-broker-name font-bold text-[#F0FAFA]">{b.name}</div>
-                      <div className="h-broker-date font-mono text-[12px] text-[#5B8A8A] mt-0.5">{formatSubDate(b.updated)}</div>
-                    </div>
+                <div className="h-card-head">
+                  <div className="h-card-logo-wrap rounded-xl flex items-center justify-center shrink-0">
+                    <img
+                      src={b.logo}
+                      alt={`${b.name} logo`}
+                      className="h-broker-logo"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentNode.innerHTML = `<span style="font-weight:900;color:#122329;font-size:11px;">${b.name.substring(0, 3).toUpperCase()}</span>`;
+                      }}
+                    />
                   </div>
-
-                  <div className="h-card-right">
-                    <div className="h-balance font-black text-teal-400">
-                      US$ {b.balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                    </div>
-                    {balanceCCL !== null && (
-                      <div className="h-cable-val font-mono text-[#5B8A8A]">
-                        Cable US$ {balanceCCL.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                      </div>
-                    )}
-                    {b.debt > 0 && (
-                      <div className="h-cable-val font-mono text-red-400">
-                        Deuda US$ {b.debt.toLocaleString('en-US', { maximumFractionDigits: 0 })} ({debtPct.toFixed(1)}%)
-                      </div>
-                    )}
-                    <div className="h-broker-pct font-mono text-teal-400/60">
-                      {percentage}%
-                    </div>
-                  </div>
+                  <div className="h-broker-name font-bold text-[#F0FAFA]">{b.name}</div>
+                  <div className="h-broker-pct font-mono text-teal-400/60">{percentage}%</div>
                 </div>
+
+                <div className="h-card-balance">
+                  <div className="h-balance font-black text-teal-400">
+                    US$ {b.balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  </div>
+                  {balanceCCL !== null && (
+                    <div className="h-cable-val font-mono text-[#5B8A8A]">
+                      Cable US$ {balanceCCL.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    </div>
+                  )}
+                </div>
+
+                {b.debt > 0 && (
+                  <div className="h-card-stats">
+                    <div className="h-stat-row">
+                      <span className="h-stat-label font-mono">Total Activos</span>
+                      <span className="h-stat-value font-bold text-[#F0FAFA]">
+                        US$ {b.assetsTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div className="h-stat-row">
+                      <span className="h-stat-label font-mono is-debt">Deuda</span>
+                      <span className="h-stat-value font-bold text-red-400">
+                        US$ {b.debt.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                        <span className="h-stat-pct">({debtPct.toFixed(1)}%)</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="h-progress-track bg-[#0C1518] rounded-full overflow-hidden">
                   <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: 'rgba(45,212,191,0.4)', borderRadius: '9999px' }} />
