@@ -7,10 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:loans": "vitest run src/features/loans",
     "preview": "vite preview"
   },
   "dependencies": {
     "autoprefixer": "^10.5.0",
+    "decimal.js": "^10.6.0",
     "firebase": "^10.8.0",
     "postcss": "^8.5.15",
     "react": "^18.2.0",
@@ -28,6 +31,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "vitest": "^5.0.0"
   }
 }
