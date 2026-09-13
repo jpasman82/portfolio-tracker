@@ -2,8 +2,123 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isDateOnly(value) {
+      return value is string
+        && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+    }
+
+    function isNonNegativeDecimal(value) {
+      return value is string
+        && value.size() <= 100
+        && value.matches('^(0|[1-9][0-9]*([.][0-9]+)?|0[.][0-9]*[1-9][0-9]*)$');
+    }
+
+    function isPositiveDecimal(value) {
+      return value is string
+        && value.size() <= 100
+        && value.matches('^([1-9][0-9]*([.][0-9]+)?|0[.][0-9]*[1-9][0-9]*)$');
+    }
+
+    function validLoan(data) {
+      return data.keys().hasAll([
+          'type', 'name', 'currency', 'startDate', 'maturityDate', 'rate',
+          'rateType', 'capitalizationFrequency', 'calculationVersion',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'type', 'name', 'currency', 'startDate', 'maturityDate', 'rate',
+          'rateType', 'capitalizationFrequency', 'calculationVersion',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.type == 'loan'
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.currency in ['USD', 'ARS']
+        && isDateOnly(data.startDate)
+        && isDateOnly(data.maturityDate)
+        && data.startDate < data.maturityDate
+        && isNonNegativeDecimal(data.rate)
+        && data.rateType in ['monthly_effective', 'annual_effective']
+        && data.capitalizationFrequency == 'monthly'
+        && data.calculationVersion == 'loan-v1'
+        && data.status in ['active', 'closed', 'cancelled']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validStatusTransition(previous, next) {
+      return previous == next
+        || (previous == 'active' && next in ['closed', 'cancelled']);
+    }
+
+    function validMovement(data) {
+      return data.keys().hasAll(['type', 'effectiveDate', 'amount', 'createdAt'])
+        && data.keys().hasOnly([
+          'type', 'effectiveDate', 'amount', 'note', 'reversesMovementId', 'createdAt'
+        ])
+        && data.type in ['contribution', 'withdrawal']
+        && isDateOnly(data.effectiveDate)
+        && isPositiveDecimal(data.amount)
+        && data.createdAt is timestamp
+        && (!data.keys().hasAny(['note'])
+          || (data.note is string && data.note.size() <= 500))
+        && (!data.keys().hasAny(['reversesMovementId'])
+          || (data.reversesMovementId is string
+            && data.reversesMovementId.size() > 0
+            && data.reversesMovementId.size() <= 128));
+    }
+
+    // Legacy namespaces retain their existing authenticated shared-access model.
+    match /brokerPositions/{document=**} {
+      allow read, write: if signedIn();
+    }
+
+    match /rotations/{document=**} {
+      allow read, write: if signedIn();
+    }
+
+    match /portfolioDailySnapshots/{document=**} {
       allow read, write: if request.auth != null;
+    }
+
+    match /users/{uid}/nonBrokerAssets/{assetId} {
+      allow read: if owns(uid);
+      allow create: if owns(uid)
+        && validLoan(request.resource.data)
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if owns(uid)
+        && validLoan(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'status', 'updatedAt'])
+        && validStatusTransition(resource.data.status, request.resource.data.status)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+
+      match /movements/{movementId} {
+        allow read: if owns(uid);
+        allow create: if owns(uid)
+          && validMovement(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId))
+          && getAfter(/databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)).data.type == 'loan'
+          && getAfter(/databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)).data.status == 'active'
+          && request.resource.data.effectiveDate
+            >= getAfter(/databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)).data.startDate
+          && request.resource.data.effectiveDate
+            <= getAfter(/databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)).data.maturityDate;
+        allow update, delete: if false;
+      }
     }
   }
 }

@@ -45,3 +45,15 @@ These definitions preserve both accounting identities even after withdrawals:
 `value = capitalizedBalance + accruedInterest`
 
 `projectLoanToMaturity` ignores movements dated after `asOfDate`, assumes no new future movements, and returns the projected maturity value plus the additional interest from the current value to maturity.
+
+## Firestore persistence contract
+
+Loan persistence is isolated below `/users/{uid}/nonBrokerAssets/{assetId}` and movements below its `movements` subcollection. The repository requires an explicit non-empty UID, receives the Firestore instance by dependency injection, and never queries a shared top-level loan collection.
+
+Rates and amounts are stored as canonical decimal strings. They use ordinary base-10 notation with no sign, exponent, surrounding whitespace, leading zeroes, or trailing decimal point. A rate may be exactly `"0"`; an amount must be greater than zero. Values such as `"0.0125"`, `"710000"`, and `"1000.50"` are preserved exactly and are never converted to JavaScript `Number`. Contract dates remain strict date-only strings. Application serialization performs full Gregorian validation; Security Rules deliberately validate only ISO-shaped month/day ranges and lexicographic ordering, not full Gregorian calendar validity. Firestore `Timestamp` values are used only for `createdAt` and `updatedAt` audit metadata.
+
+Creating a loan always requires an initial contribution and writes the parent loan plus that contribution atomically in one batch. The contribution is effective on `startDate`; there is no persisted `initialAmount` field. Movements are append-only. Contract fields are immutable after creation; only `name`, `status`, and `updatedAt` may change, with `closed` and `cancelled` terminal in v1.
+
+Before adding a withdrawal, the repository loads the known ledger and asks the L1 engine to value the loan on the withdrawal's effective date. This provides deterministic application validation, but it is not a concurrency lock: two untrusted clients could validate simultaneous withdrawals against the same prior ledger. Security Rules enforce UID ownership, schema, date bounds, parent status, and append-only history; they intentionally do not claim to enforce financial solvency. A future trusted transaction or server-side command is required if hostile concurrent writes must be prevented.
+
+`reversesMovementId` is optional structural metadata only in v1. Rules do not perform referential-integrity reads for it.
