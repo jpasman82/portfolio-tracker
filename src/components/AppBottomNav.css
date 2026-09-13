@@ -1,0 +1,120 @@
+.app-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  z-index: 1000;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  width: 100%;
+  max-width: 1180px;
+  padding: 9px 4px max(10px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  border-top: 1px solid rgba(45, 212, 191, 0.1);
+  background: rgba(12, 21, 24, 0.98);
+  box-sizing: border-box;
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.22);
+  transition: transform 0.28s ease, opacity 0.28s ease;
+  will-change: transform;
+}
+
+.app-bottom-nav.is-hidden {
+  transform: translate(-50%, calc(100% + 8px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-bottom-nav__item {
+  display: flex;
+  min-width: 0;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px;
+  color: #8EB1B1;
+  text-decoration: none;
+  border-radius: 10px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.app-bottom-nav__item:hover,
+.app-bottom-nav__item:focus-visible {
+  color: #A8C8C8;
+  background: rgba(45, 212, 191, 0.06);
+  outline: none;
+}
+
+.app-bottom-nav__item.is-active {
+  color: #2DD4BF;
+}
+
+.app-bottom-nav__item span {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(7px, 2.2vw, 10px);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.app-logout-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid rgba(45, 212, 191, 0.15);
+  border-radius: 12px;
+  background: #122329;
+  color: #8EB1B1;
+  cursor: pointer;
+  font: 700 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.app-logout-button:hover,
+.app-logout-button:focus-visible {
+  color: #2DD4BF;
+  border-color: rgba(45, 212, 191, 0.35);
+  outline: none;
+}
+
+@media (max-width: 520px) {
+  .app-bottom-nav__item svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .app-logout-button {
+    width: 40px;
+    padding: 0;
+  }
+
+  .app-logout-button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 960px) {
+  .app-bottom-nav {
+    padding-inline: 28px;
+  }
+
+  .app-bottom-nav__item span {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+}

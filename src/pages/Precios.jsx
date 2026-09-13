@@ -1,17 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
 import { collection, getDocs } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { db } from '../firebase/config';
+import AppBottomNav from '../components/AppBottomNav';
+import LogoutButton from '../components/LogoutButton';
 import { fetchAllPrices, getPriceRows, getMepRate } from '../utils/priceService';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
-
-const handleLogout = async () => {
-  sessionStorage.removeItem('bioUnlocked');
-  await signOut(auth);
-};
 
 export default function Precios() {
   const [rows, setRows] = useState([]);
@@ -115,6 +110,7 @@ export default function Precios() {
           >
             Bajas
           </button>
+          <LogoutButton />
         </div>
         <div className="flex bg-[#0C1518] border border-teal-400/10 rounded-lg p-0.5 mt-4 w-fit">
           <button
@@ -186,32 +182,7 @@ export default function Precios() {
         )}
       </div>
 
-      <div className={`fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[900px] bg-[#0C1518] border-t border-teal-400/10 flex justify-around px-2 pt-3 pb-6 z-[1000] transition-[transform,opacity] duration-300 ease-out ${bottomNavHidden ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
-        <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#5B8A8A', flex: 1 }}>
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          <span className="font-mono text-[9px] tracking-[0.08em] uppercase">Brokers</span>
-        </Link>
-        <Link to="/unificada" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#5B8A8A', flex: 1 }}>
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
-          <span className="font-mono text-[9px] tracking-[0.08em] uppercase">Cartera</span>
-        </Link>
-        <Link to="/precios" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#2DD4BF', flex: 1 }}>
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-3 3 2 5-7"/></svg>
-          <span className="font-mono text-[9px] tracking-[0.08em] uppercase">Precios</span>
-        </Link>
-        <Link to="/maximos" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#5B8A8A', flex: 1 }}>
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
-          <span className="font-mono text-[9px] tracking-[0.08em] uppercase">Maximos</span>
-        </Link>
-        <Link to="/rotaciones" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#5B8A8A', flex: 1 }}>
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg>
-          <span className="font-mono text-[9px] tracking-[0.08em] uppercase">Estrategias</span>
-        </Link>
-        <button onClick={handleLogout} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: '#5B8A8A', flex: 1, cursor: 'pointer', padding: 0 }}>
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          <span className="font-mono text-[9px] tracking-[0.08em] uppercase">Salir</span>
-        </button>
-      </div>
+      <AppBottomNav hidden={bottomNavHidden} />
     </div>
   );
 }
