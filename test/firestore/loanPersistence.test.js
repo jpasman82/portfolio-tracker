@@ -365,7 +365,7 @@ describe('loan repository and Firestore-to-L1 roundtrip', () => {
       type: 'withdrawal',
       effectiveDate: '2026-09-01',
       amount: '710000.01',
-    })).rejects.toMatchObject({ code: 'WITHDRAWAL_EXCEEDS_VALUE' });
+    })).rejects.toMatchObject({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' });
     expect(await repository.listMovements(USER_A, assetId)).toHaveLength(1);
   });
 
