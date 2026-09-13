@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const sources = [
   new URL('./loanUi.js', import.meta.url),
   new URL('./NewLoanForm.jsx', import.meta.url),
+  new URL('./LoanMovementForm.jsx', import.meta.url),
   new URL('../../pages/Activos.jsx', import.meta.url),
   new URL('../../pages/LoanDetail.jsx', import.meta.url),
 ].map((url) => readFileSync(fileURLToPath(url), 'utf8'));

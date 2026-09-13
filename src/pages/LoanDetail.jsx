@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { db } from '../firebase/config';
 import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
+import LoanMovementForm from '../features/loans/LoanMovementForm';
 import { createLoanRepository } from '../features/loans/loanRepository';
 import {
   formatDateOnly,
@@ -29,7 +30,7 @@ function Metric({ label, value, primary = false, children }) {
   );
 }
 
-function MovementRow({ movement, currency }) {
+function MovementRow({ movement, currency, onEdit }) {
   const withdrawal = movement.type === 'withdrawal';
   return (
     <div className={`loan-movement${withdrawal ? ' loan-movement--withdrawal' : ''}`}>
@@ -45,14 +46,21 @@ function MovementRow({ movement, currency }) {
           {movement.note && <p className="loan-movement__note">{movement.note}</p>}
         </div>
       </div>
-      <p className="loan-movement__amount">
-        {withdrawal ? '−' : '+'} {formatMoney(currency, movement.amount)}
-      </p>
+      <div className="loan-movement__actions">
+        <p className="loan-movement__amount">
+          {withdrawal ? '−' : '+'} {formatMoney(currency, movement.amount)}
+        </p>
+        {onEdit && (
+          <button type="button" className="loan-movement__edit" onClick={() => onEdit(movement)}>
+            Editar
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-export default function LoanDetail({ currentUser }) {
+export default function LoanDetail({ currentUser, repository = loanRepository }) {
   const { loanId } = useParams();
   const uid = currentUser?.uid;
   const [asOfDate] = useState(() => todayDateOnly());
@@ -61,13 +69,14 @@ export default function LoanDetail({ currentUser }) {
   const [error, setError] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [movementDialog, setMovementDialog] = useState(null);
   const bottomNavHidden = useHideBottomNavOnScroll();
 
   useEffect(() => {
     let active = true;
     if (!uid) return () => { active = false; };
 
-    loadLoanDetail({ uid, loanId, repository: loanRepository, asOfDate })
+    loadLoanDetail({ uid, loanId, repository, asOfDate })
       .then((result) => {
         if (!active) return;
         setPresentation(result);
@@ -84,13 +93,18 @@ export default function LoanDetail({ currentUser }) {
       });
 
     return () => { active = false; };
-  }, [uid, loanId, asOfDate, reloadKey]);
+  }, [uid, loanId, repository, asOfDate, reloadKey]);
 
   const retry = () => {
     setLoading(true);
     setError(false);
     setNotFound(false);
     setReloadKey((value) => value + 1);
+  };
+
+  const movementSaved = () => {
+    setMovementDialog(null);
+    retry();
   };
 
   let content;
@@ -125,7 +139,8 @@ export default function LoanDetail({ currentUser }) {
       </div>
     );
   } else {
-    const { loan, valuation, projection, movements, effectiveStatus } = presentation;
+    const { loan, valuation, projection, visibleMovements, effectiveStatus } = presentation;
+    const canManageMovements = loan.status === 'active';
     content = (
       <>
         <div className="loan-detail__title-row">
@@ -177,13 +192,29 @@ export default function LoanDetail({ currentUser }) {
           </section>
 
           <section className="loan-detail-section" aria-labelledby="movements-heading">
-            <h2 id="movements-heading">Movimientos</h2>
-            {movements.length === 0 ? (
+            <div className="loan-detail-section__heading">
+              <h2 id="movements-heading">Movimientos</h2>
+              {canManageMovements && (
+                <button
+                  type="button"
+                  className="loan-button loan-button--primary loan-button--compact"
+                  onClick={() => setMovementDialog({ movement: null })}
+                >
+                  + Movimiento
+                </button>
+              )}
+            </div>
+            {visibleMovements.length === 0 ? (
               <p className="loan-projection-note">No hay movimientos registrados.</p>
             ) : (
               <div className="loan-movements">
-                {movements.map((movement, index) => (
-                  <MovementRow key={movement.id || `${movement.effectiveDate}-${index}`} movement={movement} currency={loan.currency} />
+                {visibleMovements.map((movement, index) => (
+                  <MovementRow
+                    key={movement.id || `${movement.effectiveDate}-${index}`}
+                    movement={movement}
+                    currency={loan.currency}
+                    onEdit={canManageMovements ? (selected) => setMovementDialog({ movement: selected }) : null}
+                  />
                 ))}
               </div>
             )}
@@ -208,6 +239,18 @@ export default function LoanDetail({ currentUser }) {
         </header>
         {content}
       </main>
+      {movementDialog && presentation && (
+        <LoanMovementForm
+          key={movementDialog.movement?.id || 'new-movement'}
+          uid={uid}
+          loanId={loanId}
+          loan={presentation.loan}
+          movement={movementDialog.movement}
+          repository={repository}
+          onCancel={() => setMovementDialog(null)}
+          onSaved={movementSaved}
+        />
+      )}
       <AppBottomNav hidden={bottomNavHidden} />
     </div>
   );

@@ -6,6 +6,7 @@ import {
   toLoanEngineDefinition,
   toLoanEngineMovement,
 } from './loanSerialization';
+import { effectiveMovements } from './loanMovements';
 
 const RATE_TYPE_LABELS = Object.freeze({
   monthly_effective: 'Mensual',
@@ -75,10 +76,14 @@ export function humanPercentToRate(value) {
   return percentage.div(100).toString();
 }
 
-export function humanAmountToCanonical(value) {
-  const amount = normalizeHumanDecimal(value, 'initialAmount', { amount: true });
-  if (amount.lessThanOrEqualTo(0)) formError('initialAmount', 'El monto debe ser mayor que cero.');
+export function humanAmountToCanonical(value, field = 'initialAmount') {
+  const amount = normalizeHumanDecimal(value, field, { amount: true });
+  if (amount.lessThanOrEqualTo(0)) formError(field, 'El monto debe ser mayor que cero.');
   return amount.toString();
+}
+
+export function canonicalAmountToHuman(value) {
+  return new Decimal(value).toString().replace('.', ',');
 }
 
 export function formatRatePercent(rate) {
@@ -137,11 +142,91 @@ export function deriveLoanPresentation({ loan, movements, asOfDate }) {
   return {
     loan,
     movements,
+    visibleMovements: effectiveMovements(movements),
     asOfDate,
     valuation,
     projection,
     effectiveStatus,
   };
+}
+
+export function movementFormValues({ loan, movement, now = new Date() }) {
+  let effectiveDate = todayDateOnly(now);
+  if (compareDateOnly(effectiveDate, loan.startDate) < 0) effectiveDate = loan.startDate;
+  if (compareDateOnly(effectiveDate, loan.maturityDate) > 0) effectiveDate = loan.maturityDate;
+
+  return {
+    type: movement?.type || 'contribution',
+    effectiveDate: movement?.effectiveDate || effectiveDate,
+    amount: movement ? canonicalAmountToHuman(movement.amount) : '',
+    note: movement?.note || '',
+  };
+}
+
+export function buildMovementInput(form, loan) {
+  if (!['contribution', 'withdrawal'].includes(form?.type)) {
+    formError('type', 'Elegí Ingreso o Retiro.');
+  }
+
+  try {
+    parseDateOnly(form.effectiveDate, 'effectiveDate');
+  } catch {
+    formError('effectiveDate', 'Ingresá una fecha válida.');
+  }
+  if (
+    compareDateOnly(form.effectiveDate, loan.startDate) < 0 ||
+    compareDateOnly(form.effectiveDate, loan.maturityDate) > 0
+  ) {
+    formError('effectiveDate', 'La fecha debe estar dentro de la vigencia del préstamo.');
+  }
+
+  const amount = humanAmountToCanonical(form.amount, 'amount');
+  const note = typeof form.note === 'string' ? form.note.trim() : '';
+  if (note.length > 500) formError('note', 'La nota puede tener hasta 500 caracteres.');
+  return {
+    type: form.type,
+    effectiveDate: form.effectiveDate,
+    amount,
+    ...(note ? { note } : {}),
+  };
+}
+
+export async function submitLoanMovement({
+  uid,
+  loanId,
+  loan,
+  movementId,
+  form,
+  repository,
+}) {
+  if (!uid) formError('auth', 'La sesión no está disponible. Volvé a ingresar.');
+  if (!loanId) formError('loan', 'No pudimos identificar el préstamo.');
+  const movement = buildMovementInput(form, loan);
+
+  if (movementId) {
+    return repository.correctMovement(uid, loanId, movementId, movement);
+  }
+  return repository.addMovement(uid, loanId, movement);
+}
+
+export function movementSaveErrorMessage(error) {
+  if (error instanceof LoanFormValidationError) return error.message;
+  if (error?.code === 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE') {
+    return 'El retiro supera el valor disponible en alguna fecha del préstamo.';
+  }
+  if (error?.code === 'MOVEMENT_NOT_FOUND') {
+    return 'El movimiento ya no está disponible. Actualizá la página e intentá nuevamente.';
+  }
+  if (error?.code === 'TECHNICAL_REVERSAL_IMMUTABLE') {
+    return 'Este movimiento forma parte del historial de auditoría y no puede editarse.';
+  }
+  if (error?.code === 'MOVEMENT_ALREADY_REVERSED') {
+    return 'El movimiento ya fue corregido. Actualizá la página para ver la versión vigente.';
+  }
+  if (/status (closed|cancelled)/i.test(error?.message || '')) {
+    return 'El préstamo está cerrado o cancelado y no admite nuevos movimientos.';
+  }
+  return 'No pudimos guardar el movimiento. Revisá los datos e intentá nuevamente.';
 }
 
 export function buildLoanCreationInput(form) {

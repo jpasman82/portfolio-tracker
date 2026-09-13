@@ -3,6 +3,8 @@ import Decimal from 'decimal.js';
 import {
   LoanFormValidationError,
   buildLoanCreationInput,
+  buildMovementInput,
+  canonicalAmountToHuman,
   deriveLoanPresentation,
   effectiveLoanStatus,
   formatRatePercent,
@@ -10,7 +12,10 @@ import {
   humanPercentToRate,
   loadLoanCards,
   loadLoanDetail,
+  movementFormValues,
+  movementSaveErrorMessage,
   submitLoanCreation,
+  submitLoanMovement,
   todayDateOnly,
 } from './loanUi';
 
@@ -57,6 +62,7 @@ describe('loan UI decimal and date-only helpers', () => {
     expect(humanAmountToCanonical('710.000')).toBe('710000');
     expect(humanAmountToCanonical('1.234,50')).toBe('1234.5');
     expect(humanAmountToCanonical('1000.50')).toBe('1000.5');
+    expect(canonicalAmountToHuman('1000.50')).toBe('1000,5');
   });
 
   it('builds today from the local calendar rather than a UTC slice', () => {
@@ -74,12 +80,148 @@ describe('Activos financial derivation', () => {
 
     expect(result.valuation.value).toBe('718875');
     expect(new Decimal(result.projection.projectedMaturityValue).toFixed(2)).toBe('824135.71');
+    expect(result.visibleMovements).toEqual(reclusMovements);
   });
 
   it('derives maturity while preserving stored terminal statuses', () => {
     expect(effectiveLoanStatus(reclusLoan, '2027-09-01')).toBe('matured');
     expect(effectiveLoanStatus({ ...reclusLoan, status: 'closed' }, '2027-09-02')).toBe('closed');
     expect(effectiveLoanStatus({ ...reclusLoan, status: 'cancelled' }, '2026-10-01')).toBe('cancelled');
+  });
+});
+
+describe('movement form contract', () => {
+  const movementForm = Object.freeze({
+    type: 'withdrawal',
+    effectiveDate: '2026-10-15',
+    amount: '1.234,50',
+    note: ' Corrección ',
+  });
+
+  it('calculates with the full audit ledger but exposes only the effective replacement', () => {
+    const movements = [
+      reclusMovements[0],
+      {
+        id: 'reverse-initial',
+        type: 'withdrawal',
+        effectiveDate: '2026-09-01',
+        amount: '710000',
+        reversesMovementId: 'initial-contribution',
+      },
+      {
+        id: 'replacement',
+        type: 'contribution',
+        effectiveDate: '2026-09-01',
+        amount: '700000',
+      },
+    ];
+    const result = deriveLoanPresentation({ loan: reclusLoan, movements, asOfDate: '2026-10-01' });
+    const equivalent = deriveLoanPresentation({
+      loan: reclusLoan,
+      movements: [movements[2]],
+      asOfDate: '2026-10-01',
+    });
+
+    expect(result.valuation.value).toBe(equivalent.valuation.value);
+    expect(result.movements).toHaveLength(3);
+    expect(result.visibleMovements.map((movement) => movement.id)).toEqual(['replacement']);
+  });
+
+  it('maps human Ingreso/Retiro data to a canonical movement', () => {
+    expect(buildMovementInput(movementForm, reclusLoan)).toEqual({
+      type: 'withdrawal',
+      effectiveDate: '2026-10-15',
+      amount: '1234.5',
+      note: 'Corrección',
+    });
+    expect(buildMovementInput({ ...movementForm, type: 'contribution', note: ' ' }, reclusLoan))
+      .toEqual({ type: 'contribution', effectiveDate: '2026-10-15', amount: '1234.5' });
+  });
+
+  it('prefills edit values without converting money through Number', () => {
+    expect(movementFormValues({
+      loan: reclusLoan,
+      movement: { ...reclusMovements[0], amount: '710000.50', note: 'Inicial' },
+    })).toEqual({
+      type: 'contribution',
+      effectiveDate: '2026-09-01',
+      amount: '710000,5',
+      note: 'Inicial',
+    });
+  });
+
+  it('clamps the default date to the contractual range', () => {
+    expect(movementFormValues({ loan: reclusLoan, now: new Date(2026, 7, 1) }).effectiveDate)
+      .toBe('2026-09-01');
+    expect(movementFormValues({ loan: reclusLoan, now: new Date(2027, 9, 1) }).effectiveDate)
+      .toBe('2027-09-01');
+  });
+
+  it.each([
+    [{ type: 'interest' }, 'type'],
+    [{ effectiveDate: '2026-08-31' }, 'effectiveDate'],
+    [{ effectiveDate: '2027-09-02' }, 'effectiveDate'],
+    [{ effectiveDate: '' }, 'effectiveDate'],
+    [{ amount: '0' }, 'amount'],
+    [{ note: 'x'.repeat(501) }, 'note'],
+  ])('rejects invalid movement form data %#', (changes, field) => {
+    expect(() => buildMovementInput({ ...movementForm, ...changes }, reclusLoan))
+      .toThrowError(expect.objectContaining({ field }));
+  });
+
+  it('routes add and edit through the authenticated repository contract', async () => {
+    const repository = {
+      addMovement: vi.fn().mockResolvedValue('movement-new'),
+      correctMovement: vi.fn().mockResolvedValue({ replacementMovementId: 'movement-b' }),
+    };
+
+    await submitLoanMovement({
+      uid: 'user-123',
+      loanId: 'reclus-id',
+      loan: reclusLoan,
+      form: movementForm,
+      repository,
+    });
+    await submitLoanMovement({
+      uid: 'user-123',
+      loanId: 'reclus-id',
+      loan: reclusLoan,
+      movementId: 'movement-a',
+      form: movementForm,
+      repository,
+    });
+
+    expect(repository.addMovement).toHaveBeenCalledWith(
+      'user-123',
+      'reclus-id',
+      expect.objectContaining({ type: 'withdrawal', amount: '1234.5' }),
+    );
+    expect(repository.correctMovement).toHaveBeenCalledWith(
+      'user-123',
+      'reclus-id',
+      'movement-a',
+      expect.objectContaining({ note: 'Corrección' }),
+    );
+  });
+
+  it('never calls the repository without UID', async () => {
+    const repository = { addMovement: vi.fn(), correctMovement: vi.fn() };
+    await expect(submitLoanMovement({
+      uid: '',
+      loanId: 'reclus-id',
+      loan: reclusLoan,
+      form: movementForm,
+      repository,
+    })).rejects.toMatchObject({ field: 'auth' });
+    expect(repository.addMovement).not.toHaveBeenCalled();
+    expect(repository.correctMovement).not.toHaveBeenCalled();
+  });
+
+  it('maps deterministic operation errors to human messages', () => {
+    expect(movementSaveErrorMessage({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' }))
+      .toMatch(/supera el valor disponible/i);
+    expect(movementSaveErrorMessage(new Error('Cannot add movements to a loan with status closed')))
+      .toMatch(/cerrado o cancelado/i);
   });
 });
 

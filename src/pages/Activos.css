@@ -109,6 +109,11 @@
   color: #A8C8C8;
 }
 
+.loan-button--compact {
+  min-height: 38px;
+  padding-inline: 12px;
+}
+
 .loan-button:disabled,
 .loan-icon-button:disabled {
   cursor: default;
@@ -443,6 +448,14 @@
   font-size: 13px;
 }
 
+.loan-form__audit-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #6F9696;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .loan-dialog__actions {
   display: flex;
   justify-content: flex-end;
@@ -520,6 +533,18 @@
   margin-bottom: 18px;
 }
 
+.loan-detail-section__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.loan-detail-section__heading h2 {
+  margin-bottom: 0;
+}
+
 .loan-conditions {
   display: grid;
   gap: 0;
@@ -583,6 +608,34 @@
   font-weight: 650;
 }
 
+.loan-movement__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.loan-movement__edit {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(45, 212, 191, 0.15);
+  border-radius: 9px;
+  background: rgba(45, 212, 191, 0.05);
+  color: #8EB1B1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.loan-movement__edit:hover,
+.loan-movement__edit:focus-visible {
+  border-color: rgba(45, 212, 191, 0.35);
+  color: #2DD4BF;
+  outline: none;
+}
+
 .loan-movement__date,
 .loan-movement__note {
   margin: 2px 0 0;
@@ -620,5 +673,7 @@
   .loan-detail__title-row { align-items: flex-start; }
   .loan-card { padding: 18px; }
   .loan-movement { grid-template-columns: minmax(0, 1fr); }
-  .loan-movement__amount { padding-left: 47px; text-align: left; }
+  .loan-movement__actions { justify-content: space-between; padding-left: 47px; }
+  .loan-movement__amount { text-align: left; }
+  .loan-detail-section__heading { align-items: flex-start; }
 }
