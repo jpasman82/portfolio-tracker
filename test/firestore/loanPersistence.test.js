@@ -369,6 +369,184 @@ describe('loan repository and Firestore-to-L1 roundtrip', () => {
     expect(await repository.listMovements(USER_A, assetId)).toHaveLength(1);
   });
 
+  it('rejects a backdated withdrawal that makes a later existing withdrawal insolvent', async () => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    await repository.addMovement(USER_A, assetId, {
+      type: 'withdrawal',
+      effectiveDate: '2026-12-01',
+      amount: '500000',
+    });
+
+    await expect(repository.addMovement(USER_A, assetId, {
+      type: 'withdrawal',
+      effectiveDate: '2026-10-15',
+      amount: '300000',
+    })).rejects.toMatchObject({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' });
+    expect(await repository.listMovements(USER_A, assetId)).toHaveLength(2);
+  });
+
+  it('creates an append-only amount correction as exactly one reversal and one replacement', async () => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    const originalMovementId = await repository.addMovement(USER_A, assetId, {
+      type: 'contribution',
+      effectiveDate: '2026-10-15',
+      amount: '100000',
+      note: 'Monto incorrecto',
+    });
+
+    const result = await repository.correctMovement(USER_A, assetId, originalMovementId, {
+      type: 'contribution',
+      effectiveDate: '2026-10-15',
+      amount: '80000',
+      note: 'Monto corregido',
+    });
+    const movements = await repository.listMovements(USER_A, assetId);
+    const original = movements.find((movement) => movement.id === originalMovementId);
+    const reversal = movements.find((movement) => movement.id === result.reversalMovementId);
+    const replacement = movements.find((movement) => movement.id === result.replacementMovementId);
+
+    expect(movements).toHaveLength(4);
+    expect(original).toMatchObject({ amount: '100000', note: 'Monto incorrecto' });
+    expect(reversal).toMatchObject({
+      type: 'withdrawal',
+      effectiveDate: '2026-10-15',
+      amount: '100000',
+      reversesMovementId: originalMovementId,
+    });
+    expect(replacement).toMatchObject({
+      type: 'contribution',
+      effectiveDate: '2026-10-15',
+      amount: '80000',
+      note: 'Monto corregido',
+    });
+    expect(replacement.reversesMovementId).toBeUndefined();
+  });
+
+  it('corrects date, type, and note without updating the original document', async () => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    const originalMovementId = await repository.addMovement(USER_A, assetId, {
+      type: 'contribution',
+      effectiveDate: '2026-10-10',
+      amount: '1000',
+      note: 'Antes',
+    });
+
+    const result = await repository.correctMovement(USER_A, assetId, originalMovementId, {
+      type: 'withdrawal',
+      effectiveDate: '2026-10-15',
+      amount: '900',
+      note: 'Después',
+    });
+    const movements = await repository.listMovements(USER_A, assetId);
+    const original = movements.find((movement) => movement.id === originalMovementId);
+    const reversal = movements.find((movement) => movement.id === result.reversalMovementId);
+    const replacement = movements.find((movement) => movement.id === result.replacementMovementId);
+
+    expect(original).toMatchObject({
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '1000', note: 'Antes',
+    });
+    expect(reversal).toMatchObject({
+      type: 'withdrawal', effectiveDate: '2026-10-10', amount: '1000',
+      reversesMovementId: originalMovementId,
+    });
+    expect(replacement).toMatchObject({
+      type: 'withdrawal', effectiveDate: '2026-10-15', amount: '900', note: 'Después',
+    });
+  });
+
+  it('supports correcting a prior replacement while preserving the full chain', async () => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    const originalMovementId = await repository.addMovement(USER_A, assetId, {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '1000',
+    });
+    const first = await repository.correctMovement(USER_A, assetId, originalMovementId, {
+      type: 'contribution', effectiveDate: '2026-10-11', amount: '900',
+    });
+    const second = await repository.correctMovement(USER_A, assetId, first.replacementMovementId, {
+      type: 'contribution', effectiveDate: '2026-10-12', amount: '800',
+    });
+    const movements = await repository.listMovements(USER_A, assetId);
+
+    expect(movements).toHaveLength(6);
+    expect(movements.find((movement) => movement.id === second.reversalMovementId))
+      .toMatchObject({ reversesMovementId: first.replacementMovementId });
+    expect(movements.find((movement) => movement.id === second.replacementMovementId))
+      .toMatchObject({ effectiveDate: '2026-10-12', amount: '800' });
+  });
+
+  it('rejects correcting an original that was already neutralized', async () => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    const originalMovementId = await repository.addMovement(USER_A, assetId, {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '1000',
+    });
+    await repository.correctMovement(USER_A, assetId, originalMovementId, {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '900',
+    });
+
+    await expect(repository.correctMovement(USER_A, assetId, originalMovementId, {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '800',
+    })).rejects.toMatchObject({ code: 'MOVEMENT_ALREADY_REVERSED' });
+  });
+
+  it('rejects unknown and technical reversal edits without adding partial documents', async () => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    await expect(repository.correctMovement(USER_A, assetId, 'missing', {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '1',
+    })).rejects.toMatchObject({ code: 'MOVEMENT_NOT_FOUND' });
+
+    const originalMovementId = await repository.addMovement(USER_A, assetId, {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '1000',
+    });
+    const correction = await repository.correctMovement(USER_A, assetId, originalMovementId, {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '900',
+    });
+    const before = await repository.listMovements(USER_A, assetId);
+
+    await expect(repository.correctMovement(USER_A, assetId, correction.reversalMovementId, {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '1',
+    })).rejects.toMatchObject({ code: 'TECHNICAL_REVERSAL_IMMUTABLE' });
+    expect(await repository.listMovements(USER_A, assetId)).toHaveLength(before.length);
+  });
+
+  it('keeps correction writes atomic when the resulting ledger is invalid', async () => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    const originalMovementId = await repository.addMovement(USER_A, assetId, {
+      type: 'contribution', effectiveDate: '2026-10-10', amount: '1000',
+    });
+
+    await expect(repository.correctMovement(USER_A, assetId, originalMovementId, {
+      type: 'withdrawal', effectiveDate: '2026-10-10', amount: '800000',
+    })).rejects.toMatchObject({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' });
+    const movements = await repository.listMovements(USER_A, assetId);
+    expect(movements).toHaveLength(2);
+    expect(movements.some((movement) => movement.reversesMovementId)).toBe(false);
+  });
+
+  it.each(['closed', 'cancelled'])('rejects corrections on a %s loan', async (status) => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    const { assetId, movementId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    await repository.updateLoanMetadata(USER_A, assetId, { status });
+
+    await expect(repository.correctMovement(USER_A, assetId, movementId, {
+      type: 'contribution', effectiveDate: '2026-09-01', amount: '700000',
+    })).rejects.toThrow(new RegExp(`status ${status}`));
+    expect(await repository.listMovements(USER_A, assetId)).toHaveLength(1);
+  });
+
+  it('requires UID before attempting a correction query', async () => {
+    const repository = createLoanRepository(authenticatedDb(USER_A));
+    await expect(repository.correctMovement('', 'loan-1', 'movement-1', {
+      type: 'contribution', effectiveDate: '2026-09-01', amount: '1',
+    })).rejects.toThrow(/uid/);
+  });
+
   it('enforces repository status transitions and blocks movements on terminal loans', async () => {
     const repository = createLoanRepository(authenticatedDb(USER_A));
     const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');

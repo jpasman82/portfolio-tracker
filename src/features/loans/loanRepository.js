@@ -10,16 +10,17 @@ import {
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
-import { calculateLoanAtDate } from './loanEngine.js';
 import {
   deserializeLoanFromFirestore,
   deserializeMovementFromFirestore,
   normalizeLoanMetadataUpdate,
   serializeLoanForFirestore,
   serializeMovementForFirestore,
-  toLoanEngineDefinition,
-  toLoanEngineMovement,
 } from './loanSerialization.js';
+import {
+  prepareMovementCorrection,
+  validateCompleteLoanLedger,
+} from './loanMovements.js';
 
 const TERMINAL_STATUSES = new Set(['closed', 'cancelled']);
 
@@ -165,20 +166,46 @@ export function createLoanRepository(db) {
       createdAt: serverTimestamp(),
     });
     const knownMovements = await listMovements(uid, assetId);
-    const engineMovements = [
-      ...knownMovements.map(toLoanEngineMovement),
-      toLoanEngineMovement(serialized),
-    ];
-
-    calculateLoanAtDate({
-      loan: toLoanEngineDefinition(loan),
-      movements: engineMovements,
-      asOfDate: serialized.effectiveDate,
-    });
+    validateCompleteLoanLedger({ loan, movements: [...knownMovements, serialized] });
 
     const reference = doc(movementsCollection(db, uid, assetId));
     await setDoc(reference, serialized);
     return reference.id;
+  }
+
+  async function correctMovement(uid, assetId, movementId, correctedData) {
+    const loan = requireExistingLoan(
+      await getDoc(loanDocument(db, uid, assetId)),
+      assetId,
+    );
+
+    if (loan.status !== 'active') {
+      throw new Error(`Cannot correct movements on a loan with status ${loan.status}`);
+    }
+
+    const knownMovements = await listMovements(uid, assetId);
+    const correction = prepareMovementCorrection({
+      movements: knownMovements,
+      movementId: requirePathSegment(movementId, 'movementId'),
+      correctedData,
+    });
+    validateCompleteLoanLedger({ loan, movements: correction.resultingMovements });
+
+    const timestamp = serverTimestamp();
+    const reversal = serializeMovementForFirestore(correction.reversal, { createdAt: timestamp });
+    const replacement = serializeMovementForFirestore(correction.replacement, { createdAt: timestamp });
+    const reversalRef = doc(movementsCollection(db, uid, assetId));
+    const replacementRef = doc(movementsCollection(db, uid, assetId));
+    const batch = writeBatch(db);
+
+    batch.set(reversalRef, reversal);
+    batch.set(replacementRef, replacement);
+    await batch.commit();
+
+    return {
+      reversalMovementId: reversalRef.id,
+      replacementMovementId: replacementRef.id,
+    };
   }
 
   return {
@@ -188,5 +215,6 @@ export function createLoanRepository(db) {
     updateLoanMetadata,
     listMovements,
     addMovement,
+    correctMovement,
   };
 }
