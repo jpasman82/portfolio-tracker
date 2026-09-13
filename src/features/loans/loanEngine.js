@@ -90,7 +90,6 @@ function calculateNormalizedLoanAtDate({ loan, movements, asOfDate }) {
   let movementIndex = 0;
   let capitalizedBalance = ZERO;
   let netCashFlow = ZERO;
-  let accruedInterestWithdrawn = ZERO;
   let tranches = [];
   let lastCapitalizationDate = null;
 
@@ -101,57 +100,47 @@ function calculateNormalizedLoanAtDate({ loan, movements, asOfDate }) {
     periodicRate,
   });
 
-  const applyMovement = (movement) => {
-    const amount = asDecimal(movement.amount);
-    if (movement.type === LOAN_MOVEMENT_TYPES.CONTRIBUTION) {
-      capitalizedBalance = capitalizedBalance.plus(amount);
-      netCashFlow = netCashFlow.plus(amount);
-      tranches.push({
-        amount,
-        effectiveDate: movement.effectiveDate,
-        periodStart,
-      });
-      return;
-    }
+  const applyMovementBatch = (date) => {
+    let contributions = ZERO;
+    let withdrawals = ZERO;
 
-    const grossAccrued = grossAccruedAt(movement.effectiveDate);
-    const accruedAvailable = grossAccrued.minus(accruedInterestWithdrawn);
-    const totalAvailable = capitalizedBalance.plus(accruedAvailable);
-    if (amount.greaterThan(totalAvailable)) {
-      throw new LoanValidationError(
-        'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE',
-        `Withdrawal on ${movement.effectiveDate} exceeds the available loan value`
-      );
-    }
-
-    const interestWithdrawal = LoanDecimal.min(amount, accruedAvailable);
-    const principalWithdrawal = amount.minus(interestWithdrawal);
-    accruedInterestWithdrawn = accruedInterestWithdrawn.plus(interestWithdrawal);
-    netCashFlow = netCashFlow.minus(amount);
-
-    if (principalWithdrawal.greaterThan(0)) {
-      capitalizedBalance = capitalizedBalance.minus(principalWithdrawal);
-      tranches.push({
-        amount: principalWithdrawal.negated(),
-        effectiveDate: movement.effectiveDate,
-        periodStart,
-      });
-    }
-  };
-
-  const applyMovementsOn = (date) => {
     while (
       movementIndex < activeMovements.length &&
       activeMovements[movementIndex].effectiveDate === date
     ) {
-      applyMovement(activeMovements[movementIndex]);
+      const movement = activeMovements[movementIndex];
+      const amount = asDecimal(movement.amount);
+      if (movement.type === LOAN_MOVEMENT_TYPES.CONTRIBUTION) {
+        contributions = contributions.plus(amount);
+      } else {
+        withdrawals = withdrawals.plus(amount);
+      }
       movementIndex += 1;
+    }
+
+    const valueBeforeBatch = capitalizedBalance.plus(grossAccruedAt(date));
+    if (withdrawals.greaterThan(valueBeforeBatch.plus(contributions))) {
+      throw new LoanValidationError(
+        'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE',
+        `Withdrawals on ${date} exceed the available loan value after same-day contributions`
+      );
+    }
+
+    const netMovement = contributions.minus(withdrawals);
+    capitalizedBalance = capitalizedBalance.plus(netMovement);
+    netCashFlow = netCashFlow.plus(netMovement);
+
+    if (!netMovement.isZero()) {
+      tranches.push({
+        amount: netMovement,
+        effectiveDate: date,
+        periodStart,
+      });
     }
   };
 
   const buildResult = () => {
-    const grossAccrued = grossAccruedAt(valuationDate);
-    const accruedInterest = grossAccrued.minus(accruedInterestWithdrawn);
+    const accruedInterest = grossAccruedAt(valuationDate);
     const value = capitalizedBalance.plus(accruedInterest);
     const totalInterestGenerated = value.minus(netCashFlow);
     const nextCapitalizationDate = !matured && periodEnd <= loan.maturityDate
@@ -174,7 +163,7 @@ function calculateNormalizedLoanAtDate({ loan, movements, asOfDate }) {
   };
 
   while (true) {
-    applyMovementsOn(periodStart);
+    applyMovementBatch(periodStart);
 
     if (valuationDate === periodStart) return buildResult();
 
@@ -186,26 +175,24 @@ function calculateNormalizedLoanAtDate({ loan, movements, asOfDate }) {
       activeMovements[movementIndex].effectiveDate < stopDate
     ) {
       const movementDate = activeMovements[movementIndex].effectiveDate;
-      applyMovementsOn(movementDate);
+      applyMovementBatch(movementDate);
     }
 
     if (stopDate === periodEnd) {
-      const grossAccrued = grossAccruedAt(periodEnd);
-      const accruedInterest = grossAccrued.minus(accruedInterestWithdrawn);
+      const accruedInterest = grossAccruedAt(periodEnd);
       capitalizedBalance = capitalizedBalance.plus(accruedInterest);
       lastCapitalizationDate = periodEnd;
 
       periodStart = periodEnd;
       periodIndex += 1;
       periodEnd = addMonthsAnchored(loan.startDate, periodIndex, anchorDay);
-      accruedInterestWithdrawn = ZERO;
       tranches = capitalizedBalance.isZero()
         ? []
         : [{ amount: capitalizedBalance, effectiveDate: periodStart, periodStart }];
       continue;
     }
 
-    applyMovementsOn(stopDate);
+    applyMovementBatch(stopDate);
     return buildResult();
   }
 }

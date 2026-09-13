@@ -95,11 +95,6 @@ export function normalizeLoanInputs({ loan, movements, asOfDate }) {
     calculationVersion: loan.calculationVersion,
   };
 
-  const typePriority = {
-    [LOAN_MOVEMENT_TYPES.CONTRIBUTION]: 0,
-    [LOAN_MOVEMENT_TYPES.WITHDRAWAL]: 1,
-  };
-
   const normalizedMovements = movements.map((movement, index) => {
     if (!movement || typeof movement !== 'object' || Array.isArray(movement)) {
       fail('INVALID_MOVEMENT', `movement at index ${index} must be an object`);
@@ -128,19 +123,15 @@ export function normalizeLoanInputs({ loan, movements, asOfDate }) {
   normalizedMovements.sort((left, right) => {
     const dateOrder = compareDateOnly(left.effectiveDate, right.effectiveDate);
     if (dateOrder !== 0) return dateOrder;
-    const typeOrder = typePriority[left.type] - typePriority[right.type];
-    if (typeOrder !== 0) return typeOrder;
-    const amountOrder = new Decimal(left.amount).comparedTo(right.amount);
-    return amountOrder !== 0 ? amountOrder : left._inputIndex - right._inputIndex;
+    return left._inputIndex - right._inputIndex;
   });
 
-  const firstMovement = normalizedMovements[0];
-  if (
-    !firstMovement ||
-    firstMovement.effectiveDate !== startDate ||
-    firstMovement.type !== LOAN_MOVEMENT_TYPES.CONTRIBUTION
-  ) {
-    fail('MISSING_INITIAL_CONTRIBUTION', 'The first financial movement must be a contribution on startDate');
+  const hasInitialContribution = normalizedMovements.some(
+    (movement) => movement.effectiveDate === startDate &&
+      movement.type === LOAN_MOVEMENT_TYPES.CONTRIBUTION
+  );
+  if (!hasInitialContribution) {
+    fail('MISSING_INITIAL_CONTRIBUTION', 'At least one contribution is required on startDate');
   }
 
   return {

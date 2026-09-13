@@ -127,7 +127,7 @@ describe('Reclus acceptance fixture', () => {
       asOfDate: '2027-09-01',
     });
 
-    expectDecimal(result.value, '824135.7075833290873995619767811149358748');
+    expect(result.value).toBe('824135.707583329087399561976781114935875');
     expect(new Decimal(result.value).toDecimalPlaces(2).toFixed(2)).toBe('824135.71');
     expect(result.capitalizedBalance).toBe(result.value);
     expect(result.accruedInterest).toBe('0');
@@ -144,10 +144,8 @@ describe('Reclus acceptance fixture', () => {
       asOfDate: '2026-09-16',
     });
 
-    expectDecimal(
-      projection.projectedMaturityValue,
-      '824135.7075833290873995619767811149358748'
-    );
+    expect(projection.projectedMaturityValue)
+      .toBe('824135.707583329087399561976781114935875');
     expect(projection.maturityDate).toBe('2027-09-01');
   });
 });
@@ -180,21 +178,54 @@ describe('movements', () => {
     expectAccountingIdentities(onDate);
   });
 
-  it('uses accrued interest before principal when applying a withdrawal', () => {
+  it('reduces the return-generating balance from the withdrawal date', () => {
+    const result = calculateLoanAtDate({
+      loan: loan(),
+      movements: [contribution('1000'), withdrawal('100', '2026-09-16')],
+      asOfDate: '2026-10-01',
+    });
+    const remainingPeriodFactor = new Decimal('1.0125').pow(new Decimal(15).div(30));
+    const expected = new Decimal('1000').times('1.0125')
+      .minus(new Decimal('100').times(remainingPeriodFactor));
+
+    expectDecimal(result.value, expected);
+    expectAccountingIdentities(result);
+  });
+
+  it('allows withdrawing exactly the available value without later negative accrual', () => {
+    const available = calculateLoanAtDate({
+      loan: loan(),
+      movements: [contribution('1000')],
+      asOfDate: '2026-09-16',
+    }).value;
+    const movements = [contribution('1000'), withdrawal(available, '2026-09-16')];
+    const onWithdrawal = calculateLoanAtDate({ loan: loan(), movements, asOfDate: '2026-09-16' });
+    const atCapitalization = calculateLoanAtDate({ loan: loan(), movements, asOfDate: '2026-10-01' });
+
+    expect(onWithdrawal.value).toBe('0');
+    expectDecimal(atCapitalization.value, '0');
+    expect(new Decimal(atCapitalization.value).isNegative()).toBe(false);
+    expectAccountingIdentities(onWithdrawal);
+    expectAccountingIdentities(atCapitalization);
+  });
+
+  it('does not allocate a withdrawal between interest and principal', () => {
     const beforeWithdrawal = calculateLoanAtDate({
       loan: loan(),
       movements: [contribution('1000')],
       asOfDate: '2026-09-16',
     });
-    const interestWithdrawal = new Decimal(beforeWithdrawal.accruedInterest).div(2);
+    const withdrawalAmount = new Decimal(beforeWithdrawal.accruedInterest).div(2);
     const result = calculateLoanAtDate({
       loan: loan(),
-      movements: [contribution('1000'), withdrawal(interestWithdrawal.toString(), '2026-09-16')],
+      movements: [contribution('1000'), withdrawal(withdrawalAmount.toString(), '2026-09-16')],
       asOfDate: '2026-09-16',
     });
 
-    expect(result.capitalizedBalance).toBe('1000');
-    expectDecimal(result.accruedInterest, interestWithdrawal);
+    expectDecimal(result.capitalizedBalance, new Decimal('1000').minus(withdrawalAmount));
+    expect(result.accruedInterest).toBe(beforeWithdrawal.accruedInterest);
+    expect(result.totalInterestGenerated).toBe(beforeWithdrawal.totalInterestGenerated);
+    expectDecimal(result.value, new Decimal(beforeWithdrawal.value).minus(withdrawalAmount));
     expectAccountingIdentities(result);
   });
 
@@ -223,8 +254,8 @@ describe('movements', () => {
       .toEqual(calculateLoanAtDate({ loan: loan(), movements: ordered, asOfDate: '2026-11-01' }));
   });
 
-  it('processes same-day contributions before withdrawals deterministically', () => {
-    const result = calculateLoanAtDate({
+  it('batches a same-day contribution and withdrawal independently of input order', () => {
+    const firstOrder = calculateLoanAtDate({
       loan: loan(),
       movements: [
         withdrawal('300', '2026-09-10'),
@@ -233,11 +264,65 @@ describe('movements', () => {
       ],
       asOfDate: '2026-09-10',
     });
+    const secondOrder = calculateLoanAtDate({
+      loan: loan(),
+      movements: [
+        contribution('200', '2026-09-10'),
+        contribution('1000'),
+        withdrawal('300', '2026-09-10'),
+      ],
+      asOfDate: '2026-09-10',
+    });
 
-    expect(result.netCashFlow).toBe('900');
-    expectDecimal(result.value, new Decimal('1000')
+    expect(secondOrder).toEqual(firstOrder);
+    expect(firstOrder.netCashFlow).toBe('900');
+    expectDecimal(firstOrder.value, new Decimal('1000')
       .times(new Decimal('1.0125').pow(new Decimal(9).div(30)))
       .minus('100'));
+  });
+
+  it('batches several same-day contributions and withdrawals in any order', () => {
+    const movements = [
+      contribution('1000'),
+      contribution('200', '2026-09-10'),
+      withdrawal('75', '2026-09-10'),
+      contribution('50', '2026-09-10'),
+      withdrawal('125', '2026-09-10'),
+    ];
+    const permutation = [movements[4], movements[2], movements[0], movements[3], movements[1]];
+    const first = calculateLoanAtDate({ loan: loan(), movements, asOfDate: '2026-11-01' });
+    const second = calculateLoanAtDate({
+      loan: loan(),
+      movements: permutation,
+      asOfDate: '2026-11-01',
+    });
+
+    expect(second).toEqual(first);
+    expect(first.netCashFlow).toBe('1050');
+    expectAccountingIdentities(first);
+  });
+
+  it('allows same-day contributions to cover the total withdrawal batch', () => {
+    const sameDayMovements = [
+      contribution('1000'),
+      withdrawal('1200', '2026-09-10'),
+      contribution('250', '2026-09-10'),
+    ];
+    const reversedBatch = [sameDayMovements[2], sameDayMovements[1], sameDayMovements[0]];
+    const first = calculateLoanAtDate({
+      loan: loan(),
+      movements: sameDayMovements,
+      asOfDate: '2026-09-10',
+    });
+    const second = calculateLoanAtDate({
+      loan: loan(),
+      movements: reversedBatch,
+      asOfDate: '2026-09-10',
+    });
+
+    expect(second).toEqual(first);
+    expect(first.netCashFlow).toBe('50');
+    expect(new Decimal(first.value).greaterThanOrEqualTo(0)).toBe(true);
   });
 
   it('capitalizes before applying a movement on the capitalization date', () => {
@@ -250,6 +335,27 @@ describe('movements', () => {
     expect(result.value).toBe('1512.5');
     expect(result.capitalizedBalance).toBe('1512.5');
     expect(result.accruedInterest).toBe('0');
+  });
+
+  it('batches capitalization-date movements independently of input order', () => {
+    const movements = [
+      contribution('1000'),
+      withdrawal('600', '2026-10-01'),
+      contribution('500', '2026-10-01'),
+      withdrawal('25', '2026-10-01'),
+    ];
+    const permutation = [movements[3], movements[2], movements[1], movements[0]];
+    const first = calculateLoanAtDate({ loan: loan(), movements, asOfDate: '2026-10-01' });
+    const second = calculateLoanAtDate({
+      loan: loan(),
+      movements: permutation,
+      asOfDate: '2026-10-01',
+    });
+
+    expect(second).toEqual(first);
+    expect(first.value).toBe('887.5');
+    expect(first.capitalizedBalance).toBe('887.5');
+    expect(first.accruedInterest).toBe('0');
   });
 
   it('ignores future movements in a historical valuation', () => {
