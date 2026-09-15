@@ -1,0 +1,68 @@
+import { readFileSync } from 'node:fs';
+import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createRepository, createRestStore } from '../../server/closing/repository.js';
+import { runClose } from '../../server/closing/pipeline.js';
+import { fixtureContract, fixtureByma, position, DATE, NOW } from '../../server/closing/testSupport.js';
+
+const PROJECT = 'demo-b1-close';
+let environment;
+let store;
+beforeAll(async () => {
+  const host = process.env.FIRESTORE_EMULATOR_HOST;
+  if (!host || !/^127\.0\.0\.1:\d+$/.test(host)) throw new Error('Local Firestore emulator required; production forbidden');
+  environment = await initializeTestEnvironment({ projectId: PROJECT,
+    firestore: { rules: readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8') } });
+  store = createRestStore({ projectId: PROJECT, emulatorHost: host, getToken: async () => 'owner' });
+});
+beforeEach(async () => { await environment.clearFirestore(); });
+afterAll(async () => { await environment?.cleanup(); });
+
+describe('B1 real Firestore REST/CAS and rules (emulator only)', () => {
+  it('server publishes atomically through the production REST adapter', async () => {
+    const repo = createRepository(store, () => NOW);
+    const state = await runClose({ date: DATE, repo, byma: fixtureByma(), loadPositions: async () => [position()],
+      contract: fixtureContract, publish: true, now: () => NOW, log: () => {} });
+    expect(state.status).toBe('COMPLETE');
+    expect((await store.get(`portfolioDailySnapshots/${DATE}`)).data.b1BuildId).toBe(state.b1BuildId);
+    expect((await repo.observations(DATE)).length).toBeGreaterThan(0);
+  });
+  it('actual concurrent CAS acquisition has one winner and fences the old worker', async () => {
+    let clock = NOW;
+    const repo = createRepository(store, () => clock);
+    const results = await Promise.allSettled([repo.acquire(DATE, 'a'), repo.acquire(DATE, 'b')]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const old = results.find((r) => r.status === 'fulfilled').value.lease;
+    clock = '2026-09-15T22:02:00.000Z';
+    await repo.acquire(DATE, 'new');
+    await expect(repo.publish(DATE, old, { b1BuildId: 'bad' }, {})).rejects.toMatchObject({ code: 'LEASE_LOST' });
+    expect(await store.get(`portfolioDailySnapshots/${DATE}`)).toBeNull();
+  });
+  it('failed precondition on snapshot rolls back the entire atomic commit', async () => {
+    await store.commit([{ path: `portfolioDailySnapshots/${DATE}`, data: { source: 'manual' } }]);
+    await expect(store.commit([
+      { path: `marketPriceRuns/${DATE}`, data: { status: 'COMPLETE' } },
+      { path: `portfolioDailySnapshots/${DATE}`, data: { source: 'b1' } },
+    ])).rejects.toThrow();
+    expect(await store.get(`marketPriceRuns/${DATE}`)).toBeNull();
+    expect((await store.get(`portfolioDailySnapshots/${DATE}`)).data.source).toBe('manual');
+  });
+  it('normal authenticated and anonymous clients cannot read or mutate internal runs/observations/inputs', async () => {
+    for (const context of [environment.authenticatedContext('ordinary'), environment.unauthenticatedContext()]) {
+      const db = context.firestore();
+      for (const path of [`marketPriceRuns/${DATE}`, `marketPriceRuns/${DATE}/observations/a`, `marketPriceRuns/${DATE}/inputs/frozen`]) {
+        const ref = doc(db, path);
+        await assertFails(setDoc(ref, { status: 'COMPLETE' }));
+        await assertFails(getDoc(ref));
+        await assertFails(deleteDoc(ref));
+      }
+    }
+  });
+  it('legacy authenticated frontend history and positions permissions remain unchanged', async () => {
+    const db = environment.authenticatedContext('ordinary').firestore();
+    await assertSucceeds(setDoc(doc(db, 'brokerPositions/one'), { assets: [] }));
+    await assertSucceeds(setDoc(doc(db, `portfolioDailySnapshots/${DATE}`), { source: 'manual' }));
+    await assertSucceeds(getDoc(doc(db, `portfolioDailySnapshots/${DATE}`)));
+  });
+});

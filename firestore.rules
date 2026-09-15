@@ -77,6 +77,12 @@ service cloud.firestore {
             && data.reversesMovementId.size() <= 128));
     }
 
+    // B1 is server-only. IAM-authorized server REST writes bypass these rules.
+    // No frontend reads are currently required, including nested observations.
+    match /marketPriceRuns/{document=**} {
+      allow read, write: if false;
+    }
+
     // Legacy namespaces retain their existing authenticated shared-access model.
     match /brokerPositions/{document=**} {
       allow read, write: if signedIn();
