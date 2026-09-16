@@ -263,6 +263,39 @@ describe('audited loan terms repository orchestration', () => {
     expect(applied.continuesAccrualAfterOriginalMaturity).toBe(true);
     expect(await repository.listMovements(uid, assetId)).toEqual(before);
   });
+
+  it('moves the initial contribution forward and then applies an audited startDate correction', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId, movementId } = await repository.createLoan(uid, loan, '710000');
+    await repository.correctMovement(uid, assetId, movementId, {
+      type: 'contribution', effectiveDate: '2026-09-15', amount: '710000',
+    });
+
+    const request = {
+      kind: 'correction',
+      changes: { startDate: '2026-09-15' },
+      asOfDate: '2026-09-16',
+    };
+    const preview = await repository.previewLoanTermsChange(uid, assetId, request);
+    const applied = await repository.applyLoanTermsChange(uid, assetId, {
+      ...request,
+      reason: 'La fecha contractual original era incorrecta',
+      expectedRevision: preview.revision,
+    });
+
+    expect(applied.proposedValue).toEqual(preview.proposedValue);
+    expect(await repository.getLoan(uid, assetId)).toMatchObject({
+      startDate: '2026-09-15', revision: 1,
+    });
+    expect(await repository.listTermsChanges(uid, assetId)).toEqual([
+      expect.objectContaining({
+        before: expect.objectContaining({ startDate: '2026-09-01' }),
+        after: expect.objectContaining({ startDate: '2026-09-15' }),
+        fromRevision: 0,
+        toRevision: 1,
+      }),
+    ]);
+  });
 });
 
 describe('auditable movement deletion repository orchestration', () => {
@@ -312,7 +345,17 @@ describe('auditable movement deletion repository orchestration', () => {
     const repository = createLoanRepository(db);
     const { assetId, movementId } = await repository.createLoan(uid, loan, '710000');
     await expect(repository.deleteMovement(uid, assetId, movementId, 'Alta equivocada'))
-      .rejects.toMatchObject({ code: 'INITIAL_CONTRIBUTION_REQUIRED' });
+      .rejects.toMatchObject({ code: 'CONTRIBUTION_REQUIRED' });
+  });
+
+  it('deletes the first contribution when a later contribution remains', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId, movementId } = await repository.createLoan(uid, loan, '710000');
+    await repository.addMovement(uid, assetId, {
+      type: 'contribution', effectiveDate: '2026-09-15', amount: '1000',
+    });
+    await expect(repository.deleteMovement(uid, assetId, movementId, 'Alta equivocada'))
+      .resolves.toEqual({ reversalMovementId: `void-${movementId}` });
   });
 
   it('allows exactly one of two concurrent deletes of the same movement', async () => {

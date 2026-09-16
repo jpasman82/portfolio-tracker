@@ -227,6 +227,8 @@ describe('movement form contract', () => {
       .toMatch(/supera el valor disponible/i);
     expect(movementSaveErrorMessage(new Error('Cannot add movements to a loan with status closed')))
       .toMatch(/cerrado o cancelado/i);
+    expect(movementSaveErrorMessage({ code: 'MISSING_CONTRIBUTION' }))
+      .toMatch(/al menos un ingreso/i);
   });
 
   it('requires an audit reason and routes deletion through the authenticated repository', async () => {
@@ -256,8 +258,8 @@ describe('movement form contract', () => {
   });
 
   it('maps deletion failures without exposing internal codes', () => {
-    expect(movementDeleteErrorMessage({ code: 'INITIAL_CONTRIBUTION_REQUIRED' }))
-      .toMatch(/aporte efectivo/i);
+    expect(movementDeleteErrorMessage({ code: 'CONTRIBUTION_REQUIRED' }))
+      .toMatch(/al menos un ingreso/i);
     expect(movementDeleteErrorMessage({ code: 'MOVEMENT_ALREADY_REVERSED' }))
       .toMatch(/ya fue eliminado o corregido/i);
   });
@@ -327,12 +329,14 @@ describe('audited loan terms UI contract', () => {
     })).toThrowError(expect.objectContaining({ field: 'reason' }));
     expect(loanTermsErrorMessage({ code: 'STALE_LOAN_TERMS_REVISION' }))
       .toMatch(/otra sesión/i);
-    expect(loanTermsErrorMessage({ code: 'START_DATE_REQUIRES_CONTRIBUTION' }))
-      .toMatch(/primero corregí la fecha del ingreso inicial/i);
+    expect(loanTermsErrorMessage({ code: 'MOVEMENT_BEFORE_START_DATE' }))
+      .toMatch(/movimientos anteriores/i);
     expect(loanTermsErrorMessage({ code: 'MOVEMENT_AFTER_MATURITY' }))
       .toMatch(/fuera de la vigencia/i);
     expect(loanTermsErrorMessage({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' }))
       .toMatch(/sin saldo suficiente/i);
+    expect(loanTermsErrorMessage({ code: 'MISSING_CONTRIBUTION' }))
+      .toMatch(/al menos un ingreso/i);
   });
 });
 

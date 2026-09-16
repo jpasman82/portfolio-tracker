@@ -242,6 +242,25 @@ describe('auditable movement deletion', () => {
     expect(effectiveMovements(deletion.resultingMovements).map(({ id }) => id)).toEqual(['initial']);
   });
 
+  it('moves the initial contribution forward while the loan remains valid', () => {
+    const correction = prepareMovementCorrection({
+      movements: [initial],
+      movementId: initial.id,
+      correctedData: {
+        type: 'contribution',
+        effectiveDate: '2026-09-15',
+        amount: initial.amount,
+      },
+    });
+
+    expect(() => validateCompleteLoanLedger({
+      loan,
+      movements: correction.resultingMovements,
+    })).not.toThrow();
+    expect(valueAt(correction.resultingMovements, '2026-09-14')).toBe('0');
+    expect(valueAt(correction.resultingMovements, '2026-09-15')).toBe(initial.amount);
+  });
+
   it('deletes a backdated contribution only when the complete future ledger remains solvent', () => {
     const contribution = { id: 'backdated', type: 'contribution', effectiveDate: '2026-10-01', amount: '1000' };
     const deletion = prepareMovementDeletion({
@@ -264,14 +283,31 @@ describe('auditable movement deletion', () => {
       .toThrowError(expect.objectContaining({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' }));
   });
 
-  it('rejects deleting the only initial contribution', () => {
+  it('allows deleting the first contribution when another effective contribution remains', () => {
+    const later = {
+      id: 'later-contribution',
+      type: 'contribution',
+      effectiveDate: '2026-09-15',
+      amount: '1000',
+    };
+    const deletion = prepareMovementDeletion({
+      movements: [initial, later],
+      movementId: initial.id,
+      reason: 'Alta equivocada',
+    });
+    expect(() => validateMovementDeletionLedger({ loan, movements: deletion.resultingMovements }))
+      .not.toThrow();
+    expect(valueAt(deletion.resultingMovements, '2026-09-14')).toBe('0');
+  });
+
+  it('rejects deleting the only effective contribution', () => {
     const deletion = prepareMovementDeletion({
       movements: [initial],
       movementId: initial.id,
       reason: 'Alta equivocada',
     });
     expect(() => validateMovementDeletionLedger({ loan, movements: deletion.resultingMovements }))
-      .toThrowError(expect.objectContaining({ code: 'INITIAL_CONTRIBUTION_REQUIRED' }));
+      .toThrowError(expect.objectContaining({ code: 'CONTRIBUTION_REQUIRED' }));
   });
 
   it('deletes the current replacement while preserving the correction chain', () => {

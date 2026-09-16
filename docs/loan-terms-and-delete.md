@@ -23,8 +23,11 @@ arbitrary hostile client created the unique semantically correct reversal, so
 the deterministic-ID and full-ledger guarantees belong to the normal
 repository path, not to an untrusted direct writer.
 
-Changing `startDate` never moves movements automatically. The candidate ledger
-must contain an effective contribution on the proposed date and remain valid
-under the unchanged L1 engine. With the current UI date bounds and append-only
-audit history, some real-world start-date corrections require a coordinated
-movement workflow that is outside this block.
+Changing `startDate` never moves movements automatically. A loan needs at least
+one effective contribution inside its contractual period, but that contribution
+may occur after `startDate`; value and interest remain zero until it occurs.
+Financial validation derives from effective movements, while originals and
+technical reversals remain physically available for audit. A later `startDate`
+is rejected while any effective movement precedes it, so the supported workflow
+is to correct or neutralize those movements first and apply the audited terms
+change separately.

@@ -134,7 +134,8 @@ export function statusLabel(status) {
 
 export function deriveLoanPresentation({ loan, movements, asOfDate }) {
   const engineLoan = toLoanEngineDefinition(loan);
-  const engineMovements = movements.map(toLoanEngineMovement);
+  const visibleMovements = effectiveMovements(movements);
+  const engineMovements = visibleMovements.map(toLoanEngineMovement);
   const valuation = calculateLoanAtDate({ loan: engineLoan, movements: engineMovements, asOfDate });
   const projection = projectLoanToMaturity({ loan: engineLoan, movements: engineMovements, asOfDate });
   const effectiveStatus = effectiveLoanStatus(loan, asOfDate);
@@ -142,7 +143,7 @@ export function deriveLoanPresentation({ loan, movements, asOfDate }) {
   return {
     loan,
     movements,
-    visibleMovements: effectiveMovements(movements),
+    visibleMovements,
     asOfDate,
     valuation,
     projection,
@@ -223,6 +224,9 @@ export function movementSaveErrorMessage(error) {
   if (error?.code === 'MOVEMENT_ALREADY_REVERSED') {
     return 'El movimiento ya fue corregido. Actualizá la página para ver la versión vigente.';
   }
+  if (error?.code === 'MISSING_CONTRIBUTION') {
+    return 'El préstamo debe conservar al menos un ingreso.';
+  }
   if (/status (closed|cancelled)/i.test(error?.message || '')) {
     return 'El préstamo está cerrado o cancelado y no admite nuevos movimientos.';
   }
@@ -252,8 +256,8 @@ export function movementDeleteErrorMessage(error) {
   if (error?.code === 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE') {
     return 'No se puede eliminar: un retiro posterior quedaría sin saldo suficiente.';
   }
-  if (error?.code === 'INITIAL_CONTRIBUTION_REQUIRED') {
-    return 'No se puede eliminar el ingreso inicial mientras sea el único aporte efectivo en la fecha de inicio.';
+  if (error?.code === 'CONTRIBUTION_REQUIRED' || error?.code === 'MISSING_CONTRIBUTION') {
+    return 'El préstamo debe conservar al menos un ingreso.';
   }
   if (error?.code === 'MOVEMENT_ALREADY_REVERSED') {
     return 'El movimiento ya fue eliminado o corregido. Actualizá la página.';
@@ -338,20 +342,23 @@ export function loanTermsErrorMessage(error) {
   if (error?.code === 'STALE_LOAN_TERMS_REVISION') {
     return 'Las condiciones cambiaron en otra sesión. Actualizá el préstamo y volvé a intentarlo.';
   }
-  if (error?.code === 'START_DATE_REQUIRES_CONTRIBUTION') {
-    return 'Para cambiar la fecha inicial, primero corregí la fecha del ingreso inicial.';
-  }
   if (error?.code === 'MOVEMENT_AFTER_MATURITY') {
     return 'El nuevo vencimiento dejaría movimientos fuera de la vigencia del préstamo.';
   }
-  if (error?.code === 'MOVEMENT_BEFORE_START') {
-    return 'La nueva fecha inicial dejaría movimientos anteriores fuera del contrato.';
+  if (
+    error?.code === 'MOVEMENT_BEFORE_START_DATE'
+    || error?.code === 'MOVEMENT_BEFORE_START'
+  ) {
+    return 'Hay movimientos anteriores a la nueva fecha inicial. Corregilos o anulalos antes de cambiar la fecha.';
   }
   if (error?.code === 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE') {
     return 'El cambio dejaría el historial del préstamo sin saldo suficiente.';
   }
   if (error?.code === 'LOAN_STATUS_NOT_ACTIVE') {
     return 'El préstamo está cerrado o cancelado y no admite cambios.';
+  }
+  if (error?.code === 'MISSING_CONTRIBUTION') {
+    return 'El préstamo debe conservar al menos un ingreso.';
   }
   if (error?.code === 'INVALID_RATE' || error?.code === 'INVALID_RATE_DECIMAL') {
     return 'Ingresá una tasa válida.';

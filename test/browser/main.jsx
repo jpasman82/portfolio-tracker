@@ -29,8 +29,8 @@ let loan = {
 let nextMovementId = 4;
 let movements = [
   { id: 'movement-1', type: 'contribution', effectiveDate: '2026-09-01', amount: '710000', note: 'Ingreso inicial' },
-  { id: 'movement-2', type: 'contribution', effectiveDate: '2026-09-10', amount: '20000', note: 'Aporte adicional' },
-  { id: 'movement-3', type: 'withdrawal', effectiveDate: '2026-09-12', amount: '5000', note: 'Retiro de prueba' },
+  { id: 'movement-2', type: 'contribution', effectiveDate: '2026-10-01', amount: '20000', note: 'Aporte adicional' },
+  { id: 'movement-3', type: 'withdrawal', effectiveDate: '2026-10-05', amount: '5000', note: 'Retiro de prueba' },
 ];
 
 const clone = (value) => structuredClone(value);
@@ -43,7 +43,9 @@ const repository = {
   },
   async listMovements() {
     await pause();
-    return clone(movements);
+    return clone(movements).sort((left, right) => (
+      left.effectiveDate.localeCompare(right.effectiveDate)
+    ));
   },
   async addMovement(_uid, _loanId, input) {
     const movement = { id: `movement-${nextMovementId}`, ...input };
@@ -99,7 +101,13 @@ createRoot(document.getElementById('root')).render(
       <Routes>
         <Route
           path="/activos/:loanId"
-          element={<LoanDetail currentUser={{ uid: 'fixture-user' }} repository={repository} />}
+          element={(
+            <LoanDetail
+              currentUser={{ uid: 'fixture-user' }}
+              repository={repository}
+              initialAsOfDate="2026-08-20"
+            />
+          )}
         />
       </Routes>
     </MemoryRouter>

@@ -60,38 +60,66 @@ describe('retroactive loan terms correction', () => {
     expect(result.currentValue.value).not.toBe(result.proposedValue.value);
   });
 
-  it('builds a valid startDate candidate but requires a contribution on the corrected date', () => {
+  it('moves startDate earlier and keeps value at zero before the first contribution', () => {
     expect(buildLoanTermsCandidate({
       loan,
       kind: 'correction',
       changes: { startDate: '2026-08-15' },
     }).startDate).toBe('2026-08-15');
-    expect(() => preview({ changes: { startDate: '2026-08-15' } }))
-      .toThrowError(expect.objectContaining({ code: 'START_DATE_REQUIRES_CONTRIBUTION' }));
+    const result = preview({
+      changes: { startDate: '2026-08-15' },
+      asOfDate: '2026-08-31',
+    });
+    expect(result.proposedValue.value).toBe('0');
+    expect(result.proposedProjection.projectedMaturityValue).toBe('0');
   });
 
-  it('does not count a neutralized contribution as the required corrected startDate contribution', () => {
-    const auditLedger = [
-      ...movements,
-      {
-        id: 'candidate-start',
-        effectiveDate: '2026-08-15',
+  it('rejects a later startDate while an effective movement remains before it', () => {
+    expect(() => preview({ changes: { startDate: '2026-09-15' } }))
+      .toThrowError(expect.objectContaining({ code: 'MOVEMENT_BEFORE_START_DATE' }));
+  });
+
+  it('allows a later startDate when no effective movement remains before it', () => {
+    const result = preview({
+      movements: [{
+        id: 'first-effective',
+        effectiveDate: '2026-09-15',
         type: 'contribution',
-        amount: '1000',
+        amount: '710000',
+      }],
+      changes: { startDate: '2026-09-15' },
+      asOfDate: '2026-09-16',
+    });
+    expect(result.proposedTerms.startDate).toBe('2026-09-15');
+  });
+
+  it('supports moving the initial contribution forward and then moving startDate', () => {
+    const auditLedger = [
+      {
+        ...movements[0],
       },
       {
-        id: 'candidate-start-reversal',
-        effectiveDate: '2026-08-15',
+        id: 'initial-reversal',
+        effectiveDate: '2026-09-01',
         type: 'withdrawal',
-        amount: '1000',
-        reversesMovementId: 'candidate-start',
+        amount: '710000',
+        reversesMovementId: 'initial',
+      },
+      {
+        id: 'initial-replacement',
+        effectiveDate: '2026-09-15',
+        type: 'contribution',
+        amount: '710000',
       },
     ];
 
-    expect(() => preview({
+    const result = preview({
       movements: auditLedger,
-      changes: { startDate: '2026-08-15' },
-    })).toThrowError(expect.objectContaining({ code: 'START_DATE_REQUIRES_CONTRIBUTION' }));
+      changes: { startDate: '2026-09-15' },
+      asOfDate: '2026-09-16',
+    });
+    expect(result.proposedTerms.startDate).toBe('2026-09-15');
+    expect(result.proposedValue.value).not.toBe('0');
   });
 
   it('accepts a valid maturity correction and rejects one before an existing movement', () => {

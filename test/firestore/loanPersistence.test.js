@@ -304,6 +304,35 @@ describe('audited loan terms security and concurrency', () => {
     expect(await repository.listMovements(USER_A, 'loan-1')).toEqual(beforeMovements);
   });
 
+  it('supports the audited two-step movement and startDate correction workflow', async () => {
+    const db = await seedLoanWithInitialMovement();
+    const repository = createLoanRepository(db);
+    await repository.correctMovement(USER_A, 'loan-1', 'initial', {
+      type: 'contribution', effectiveDate: '2026-09-15', amount: '710000',
+    });
+
+    const request = {
+      kind: 'correction', changes: { startDate: '2026-09-15' }, asOfDate: '2026-09-16',
+    };
+    const preview = await repository.previewLoanTermsChange(USER_A, 'loan-1', request);
+    const applied = await repository.applyLoanTermsChange(USER_A, 'loan-1', {
+      ...request,
+      expectedRevision: preview.revision,
+      reason: 'Corrección de fecha contractual',
+    });
+
+    expect(applied.proposedValue).toEqual(preview.proposedValue);
+    expect(await repository.getLoan(USER_A, 'loan-1')).toMatchObject({
+      startDate: '2026-09-15', revision: 1, latestTermsChangeId: applied.changeId,
+    });
+    expect(await repository.listTermsChanges(USER_A, 'loan-1')).toEqual([
+      expect.objectContaining({
+        before: expect.objectContaining({ startDate: '2026-09-01' }),
+        after: expect.objectContaining({ startDate: '2026-09-15' }),
+      }),
+    ]);
+  });
+
   it('rejects direct contractual updates without a linked audit', async () => {
     const db = await seedLoanWithInitialMovement();
     const reference = loanRef(db, USER_A);
@@ -767,7 +796,7 @@ describe('auditable movement deletion through Firestore', () => {
     const repository = createLoanRepository(db);
     const { assetId, movementId: initialId } = await repository.createLoan(USER_A, loanInput(), '710000');
     await expect(repository.deleteMovement(USER_A, assetId, initialId, 'Alta incorrecta'))
-      .rejects.toMatchObject({ code: 'INITIAL_CONTRIBUTION_REQUIRED' });
+      .rejects.toMatchObject({ code: 'CONTRIBUTION_REQUIRED' });
 
     const movementId = await repository.addMovement(USER_A, assetId, {
       type: 'withdrawal', effectiveDate: '2026-10-01', amount: '1000',
@@ -779,6 +808,22 @@ describe('auditable movement deletion through Firestore', () => {
     expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
     expect(results.find(({ status }) => status === 'rejected').reason)
       .toMatchObject({ code: 'MOVEMENT_ALREADY_REVERSED' });
+  });
+
+  it('allows deleting the first contribution when another one remains in the term', async () => {
+    const db = authenticatedDb(USER_A);
+    const repository = createLoanRepository(db);
+    const { assetId, movementId: initialId } = await repository.createLoan(
+      USER_A,
+      loanInput(),
+      '710000',
+    );
+    await repository.addMovement(USER_A, assetId, {
+      type: 'contribution', effectiveDate: '2026-09-15', amount: '1000',
+    });
+
+    await expect(repository.deleteMovement(USER_A, assetId, initialId, 'Alta incorrecta'))
+      .resolves.toEqual({ reversalMovementId: `void-${initialId}` });
   });
 
   it('keeps delete ownership scoped to the authenticated UID', async () => {

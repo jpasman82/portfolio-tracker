@@ -151,6 +151,59 @@ describe('Reclus acceptance fixture', () => {
 });
 
 describe('movements', () => {
+  it('keeps value and projection at zero before a later first contribution', () => {
+    const deferredLoan = loan({ startDate: '2026-08-15' });
+    const deferredContribution = contribution('1000', '2026-09-01');
+    const result = calculateLoanAtDate({
+      loan: deferredLoan,
+      movements: [deferredContribution],
+      asOfDate: '2026-08-31',
+    });
+    const projection = projectLoanToMaturity({
+      loan: deferredLoan,
+      movements: [deferredContribution],
+      asOfDate: '2026-08-31',
+    });
+
+    expect(result).toMatchObject({
+      value: '0',
+      netCashFlow: '0',
+      totalInterestGenerated: '0',
+      accruedInterest: '0',
+    });
+    expect(projection.projectedMaturityValue).toBe('0');
+    expect(projection.projectedFutureInterest).toBe('0');
+  });
+
+  it('accrues only from a first contribution later than startDate', () => {
+    const deferredLoan = loan({ startDate: '2026-08-15' });
+    const movements = [contribution('1000', '2026-09-01')];
+    const result = calculateLoanAtDate({
+      loan: deferredLoan,
+      movements,
+      asOfDate: '2026-09-16',
+    });
+    const expected = new Decimal('1000').times(
+      new Decimal('1.0125').pow(
+        new Decimal(14).div(31).plus(new Decimal(1).div(30)),
+      ),
+    );
+    const projection = projectLoanToMaturity({
+      loan: deferredLoan,
+      movements,
+      asOfDate: '2026-09-16',
+    });
+    const directProjection = calculateLoanAtDate({
+      loan: deferredLoan,
+      movements,
+      asOfDate: deferredLoan.maturityDate,
+    });
+
+    expectDecimal(result.value, expected);
+    expect(result.netCashFlow).toBe('1000');
+    expect(projection.projectedMaturityValue).toBe(directProjection.value);
+  });
+
   it('applies a contribution on its effective date and accrues from that date', () => {
     const movements = [
       contribution('1000'),
@@ -585,7 +638,7 @@ describe('validation errors', () => {
     ['INVALID_CURRENCY', (input) => { input.loan.currency = 'BTC'; }],
     ['INVALID_RATE', (input) => { input.loan.rate = '-0.01'; }],
     ['INVALID_MATURITY_DATE', (input) => { input.loan.maturityDate = input.loan.startDate; }],
-    ['MOVEMENT_BEFORE_START', (input) => { input.movements[0].effectiveDate = '2026-08-31'; }],
+    ['MOVEMENT_BEFORE_START_DATE', (input) => { input.movements[0].effectiveDate = '2026-08-31'; }],
     ['MOVEMENT_AFTER_MATURITY', (input) => { input.movements.push(contribution('1', '2027-09-02')); }],
     ['INVALID_MOVEMENT_AMOUNT', (input) => { input.movements[0].amount = '0'; }],
     ['INVALID_MOVEMENT_TYPE', (input) => { input.movements[0].type = 'payment'; }],
@@ -605,11 +658,16 @@ describe('validation errors', () => {
     }
   });
 
-  it('requires the initial contribution on startDate', () => {
+  it('allows the first contribution after startDate but rejects a loan without any contribution', () => {
     expect(() => calculateLoanAtDate({
       loan: loan(),
       movements: [contribution('1000', '2026-09-02')],
       asOfDate: '2026-09-02',
-    })).toThrowError(expect.objectContaining({ code: 'MISSING_INITIAL_CONTRIBUTION' }));
+    })).not.toThrow();
+    expect(() => calculateLoanAtDate({
+      loan: loan(),
+      movements: [withdrawal('1', '2026-09-02')],
+      asOfDate: '2026-09-02',
+    })).toThrowError(expect.objectContaining({ code: 'MISSING_CONTRIBUTION' }));
   });
 });

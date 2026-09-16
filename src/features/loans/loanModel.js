@@ -105,7 +105,7 @@ export function normalizeLoanInputs({ loan, movements, asOfDate }) {
 
     const effectiveDate = validatedDate(movement.effectiveDate, `movements[${index}].effectiveDate`);
     if (compareDateOnly(effectiveDate, startDate) < 0) {
-      fail('MOVEMENT_BEFORE_START', `Movement at index ${index} is before startDate`);
+      fail('MOVEMENT_BEFORE_START_DATE', `Movement at index ${index} is before startDate`);
     }
     if (compareDateOnly(effectiveDate, maturityDate) > 0) {
       fail('MOVEMENT_AFTER_MATURITY', `Movement at index ${index} is after maturityDate`);
@@ -126,12 +126,11 @@ export function normalizeLoanInputs({ loan, movements, asOfDate }) {
     return left._inputIndex - right._inputIndex;
   });
 
-  const hasInitialContribution = normalizedMovements.some(
-    (movement) => movement.effectiveDate === startDate &&
-      movement.type === LOAN_MOVEMENT_TYPES.CONTRIBUTION
+  const hasContribution = normalizedMovements.some(
+    (movement) => movement.type === LOAN_MOVEMENT_TYPES.CONTRIBUTION
   );
-  if (!hasInitialContribution) {
-    fail('MISSING_INITIAL_CONTRIBUTION', 'At least one contribution is required on startDate');
+  if (!hasContribution) {
+    fail('MISSING_CONTRIBUTION', 'At least one contribution is required within the loan term');
   }
 
   return {

@@ -67,10 +67,14 @@ function MovementRow({ movement, currency, onEdit, onDelete }) {
   );
 }
 
-export default function LoanDetail({ currentUser, repository = loanRepository }) {
+export default function LoanDetail({
+  currentUser,
+  repository = loanRepository,
+  initialAsOfDate,
+}) {
   const { loanId } = useParams();
   const uid = currentUser?.uid;
-  const [asOfDate] = useState(() => todayDateOnly());
+  const [asOfDate] = useState(() => initialAsOfDate || todayDateOnly());
   const [presentation, setPresentation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

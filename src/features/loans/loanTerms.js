@@ -116,22 +116,9 @@ export function buildLoanTermsCandidate({ loan, kind, changes }) {
  */
 export function calculateLoanTermsChangePreview({ loan, movements, kind, changes, asOfDate }) {
   const candidateLoan = buildLoanTermsCandidate({ loan, kind, changes });
-  if (
-    candidateLoan.startDate !== loan.startDate
-    && !effectiveMovements(movements).some(
-      (movement) => movement.type === 'contribution'
-        && movement.effectiveDate === candidateLoan.startDate,
-    )
-  ) {
-    fail(
-      'START_DATE_REQUIRES_CONTRIBUTION',
-      'The corrected startDate requires an effective contribution on that exact date',
-    );
-  }
-
   const currentEngineLoan = toLoanEngineDefinition(loan);
   const proposedEngineLoan = toLoanEngineDefinition(candidateLoan);
-  const engineMovements = movements.map(toLoanEngineMovement);
+  const engineMovements = effectiveMovements(movements).map(toLoanEngineMovement);
 
   validateCompleteLoanLedger({ loan, movements });
   validateCompleteLoanLedger({ loan: candidateLoan, movements });

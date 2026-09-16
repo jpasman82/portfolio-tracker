@@ -29,9 +29,10 @@ export function oppositeMovementType(type) {
 }
 
 export function validateCompleteLoanLedger({ loan, movements }) {
+  const financialMovements = effectiveMovements(movements);
   return calculateLoanAtDate({
     loan: toLoanEngineDefinition(loan),
-    movements: movements.map(toLoanEngineMovement),
+    movements: financialMovements.map(toLoanEngineMovement),
     asOfDate: loan.maturityDate,
   });
 }
@@ -68,18 +69,16 @@ export function prepareMovementCorrection({ movements, movementId, correctedData
 }
 
 export function validateMovementDeletionLedger({ loan, movements }) {
-  const valuation = validateCompleteLoanLedger({ loan, movements });
-  const hasEffectiveInitialContribution = effectiveMovements(movements).some(
-    (movement) => movement.type === LOAN_MOVEMENT_TYPES.CONTRIBUTION
-      && movement.effectiveDate === loan.startDate,
+  const hasEffectiveContribution = effectiveMovements(movements).some(
+    (movement) => movement.type === LOAN_MOVEMENT_TYPES.CONTRIBUTION,
   );
-  if (!hasEffectiveInitialContribution) {
+  if (!hasEffectiveContribution) {
     operationError(
-      'INITIAL_CONTRIBUTION_REQUIRED',
-      'The loan must retain an effective contribution on startDate',
+      'CONTRIBUTION_REQUIRED',
+      'The loan must retain at least one effective contribution within its term',
     );
   }
-  return valuation;
+  return validateCompleteLoanLedger({ loan, movements });
 }
 
 export function prepareMovementDeletion({ movements, movementId, reason }) {
