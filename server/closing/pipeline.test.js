@@ -61,6 +61,64 @@ describe('B1 required failure scenarios', () => {
     expect(result.endpointResults.acciones.error.stage).toBe('BYMA:acciones');
     expect((await s.repo.observations(DATE)).some((o) => o.providerSymbol === 'AL30')).toBe(true);
   });
+  it('6a one failed candidate group blocks only dependent requirements and retry preserves healthy selections', async () => {
+    let cedearsAvailable = false;
+    const byma = fixtureByma({ cedears: async () => {
+      if (!cedearsAvailable) throw Object.assign(new Error('No CEDEARs'), { code: 'BYMA_GROUP_FAILED' });
+      return { result: [] };
+    } });
+    const s = setup({ byma, publish: false });
+    const first = await s.run();
+    expect(first.status).toBe('PARTIAL');
+    expect(first.missing).toEqual(['acciones+cedears:GGAL']);
+    expect(first.valid.sort()).toEqual(['fx:MEP:ARS', 'fx:MEP:USD']);
+    expect(first.selected).toMatchObject({
+      'fx:MEP:ARS': expect.any(String), 'fx:MEP:USD': expect.any(String),
+    });
+    expect(first.selected).not.toHaveProperty('acciones+cedears:GGAL');
+    expect((await s.repo.observations(DATE)).filter((o) => o.status === 'VALID')
+      .map((o) => o.providerSymbol)).toEqual(expect.arrayContaining(['GGAL', 'AL30', 'AL30D']));
+    const healthy = { ...first.selected };
+    cedearsAvailable = true;
+    const second = await s.run();
+    expect(second.status).toBe('COMPLETE');
+    expect(second.selected).toMatchObject(healthy);
+    expect(second.selected['acciones+cedears:GGAL']).toEqual(expect.any(String));
+  });
+  it('6b a prior healthy-group selection survives an unrelated group failure on reconciliation', async () => {
+    let failCedears = false;
+    const byma = fixtureByma({ cedears: async () => {
+      if (failCedears) throw Object.assign(new Error('No CEDEARs'), { code: 'BYMA_GROUP_FAILED' });
+      return { result: [] };
+    } });
+    const s = setup({ byma, publish: false });
+    const first = await s.run();
+    const arsId = first.selected['fx:MEP:ARS'];
+    const usdId = first.selected['fx:MEP:USD'];
+    const equityId = first.selected['acciones+cedears:GGAL'];
+    failCedears = true;
+    const second = await s.run();
+    expect(second.status).toBe('PARTIAL');
+    expect(second.selected).toMatchObject({
+      'fx:MEP:ARS': arsId, 'fx:MEP:USD': usdId, 'acciones+cedears:GGAL': equityId,
+    });
+    expect(second.valid.sort()).toEqual(['fx:MEP:ARS', 'fx:MEP:USD']);
+    expect(second.missing).toEqual(['acciones+cedears:GGAL']);
+    expect(second.reconciliation['fx:MEP:ARS'].lastOutcome).toBe('UNCHANGED');
+    expect(second.reconciliation['acciones+cedears:GGAL'].lastOutcome).toBe('GROUP_UNAVAILABLE');
+  });
+  it('6c a missing equity candidate group fails closed for that ticker without blocking independent bonds', async () => {
+    const s = setup({ publish: false, byma: fixtureByma({ cedears: async () => {
+      throw Object.assign(new Error('No CEDEARs'), { code: 'BYMA_GROUP_FAILED' });
+    } }) });
+    const result = await s.run();
+    const input = await s.repo.input(DATE);
+    expect(input.requirements.find((r) => r.key === 'acciones+cedears:GGAL').groups).toEqual(['acciones', 'cedears']);
+    expect(result.rejected).toContainEqual({ key: 'acciones+cedears:GGAL', reason: 'GROUP_UNAVAILABLE' });
+    expect(result.rejected.some((r) => r.key === 'fx:MEP:ARS' || r.key === 'fx:MEP:USD')).toBe(false);
+    expect(result.selected['fx:MEP:ARS']).toEqual(expect.any(String));
+    expect(result.selected['fx:MEP:USD']).toEqual(expect.any(String));
+  });
   it('7 retry completes PARTIAL, retains previous valid observations and frozen inputs', async () => {
     const s = setup();
     s.byma.responses.acciones = [];
