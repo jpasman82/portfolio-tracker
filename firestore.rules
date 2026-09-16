@@ -93,7 +93,14 @@ service cloud.firestore {
     }
 
     match /portfolioDailySnapshots/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // Manual references are intentionally separate from the server-owned
+    // official daily close and cannot overwrite it.
+    match /portfolioManualBaselines/{document=**} {
+      allow read, write: if signedIn();
     }
 
     match /users/{uid}/nonBrokerAssets/{assetId} {

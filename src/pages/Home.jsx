@@ -8,7 +8,7 @@ import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker, get
 import { fetchRiskCountry } from '../utils/riskCountryService';
 import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
-import { fetchPortfolioSnapshots, saveDailyPortfolioSnapshot } from '../utils/portfolioSnapshots';
+import { fetchPortfolioSnapshots } from '../utils/portfolioSnapshots';
 import { parseNum } from '../utils/numberFormat';
 import {
   actualizacionCercaDelCierre,
@@ -158,7 +158,9 @@ export default function Home() {
     }
   };
 
-  fetchBalancesRef.current = fetchBalances;
+  useEffect(() => {
+    fetchBalancesRef.current = fetchBalances;
+  });
 
   const handleUpdatePrices = async (silencioso = false, options = {}) => {
     const ahora = new Date();
@@ -222,13 +224,6 @@ export default function Home() {
         }
       }
       await fetchBalancesRef.current();
-      if (options.captureSnapshot) {
-        await saveDailyPortfolioSnapshot({
-          source: options.snapshotSource || 'post-close',
-          refreshPrices: false,
-        });
-        await refreshSnapshotHistory();
-      }
       return true;
     } catch (error) {
       if (!silencioso) alert(`Error al actualizar: ${error.message}`);
@@ -258,8 +253,6 @@ export default function Home() {
         if (necesitaFotoCierre) {
           const updated = await handleUpdatePrices(true, {
             allowClosedRefresh: true,
-            captureSnapshot: true,
-            snapshotSource: 'post-close',
           });
           if (updated) sessionStorage.setItem(closeRefreshKey, 'done');
         } else if (
@@ -267,11 +260,6 @@ export default function Home() {
           sessionStorage.getItem(closeRefreshKey) !== 'done' &&
           (actualizacionPosteriorAlCierre(latestTimestamp, ahora) || actualizacionCercaDelCierre(latestTimestamp, ahora))
         ) {
-          await saveDailyPortfolioSnapshot({
-            source: actualizacionPosteriorAlCierre(latestTimestamp, ahora) ? 'post-close' : 'near-close',
-            refreshPrices: false,
-          });
-          await refreshSnapshotHistory();
           sessionStorage.setItem(closeRefreshKey, 'done');
         }
       }
@@ -300,7 +288,7 @@ export default function Home() {
       clearInterval(estadoMercado);
       clearTimeout(refreshTimer);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const brokers = BROKERS.map((broker) => ({ ...broker, ...brokerData[broker.id] }));
 

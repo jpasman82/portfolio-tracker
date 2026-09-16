@@ -123,10 +123,15 @@ describe('B1 real Firestore REST/CAS and rules (emulator only)', () => {
       }
     }
   });
-  it('legacy authenticated frontend history and positions permissions remain unchanged', async () => {
+  it('authenticated clients can read official history but cannot overwrite it', async () => {
     const db = environment.authenticatedContext('ordinary').firestore();
     await assertSucceeds(setDoc(doc(db, 'brokerPositions/one'), { assets: [] }));
-    await assertSucceeds(setDoc(doc(db, `portfolioDailySnapshots/${DATE}`), { source: 'manual' }));
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `portfolioDailySnapshots/${DATE}`), { source: 'b1' });
+    });
     await assertSucceeds(getDoc(doc(db, `portfolioDailySnapshots/${DATE}`)));
+    await assertFails(setDoc(doc(db, `portfolioDailySnapshots/${DATE}`), { source: 'manual' }));
+    await assertFails(deleteDoc(doc(db, `portfolioDailySnapshots/${DATE}`)));
+    await assertSucceeds(setDoc(doc(db, `portfolioManualBaselines/${DATE}`), { source: 'manual-baseline' }));
   });
 });

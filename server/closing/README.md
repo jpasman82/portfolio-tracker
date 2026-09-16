@@ -1,9 +1,7 @@
 # B1 — captura durable de daily last traded price
 
-Baseline exclusivo: `20b3980288dc7d65b52c36098b528194c0532c3f`.
-Rama: `codex/b1-durable-close-capture`. Sin merge, push, deploy ni backfill.
-El commit local de préstamos `5656e44` y el WIP del repositorio original no
-fueron incorporados. No hay nuevas dependencias npm ni infraestructura cloud.
+Integrado en `main` desde el baseline `20b3980288dc7d65b52c36098b528194c0532c3f`.
+No hay backfill automático, nuevas dependencias npm ni infraestructura cloud.
 
 ## Alcance y límite de activación
 
@@ -22,8 +20,7 @@ PORTFOLIO_CAPTURE_CUTOFF_ART. Sin precio/operaciones: NO_TRADE y PARTIAL si requ
 CLOSING_PRICE y PREVIOUS_CLOSE son referencias rechazadas, sin sustitución.
 
 La publicación se identifica como BYMA_SNAPSHOT_LAST_TRADE / daily last traded
-price. EOD: NOT REQUIRED FOR CURRENT BUSINESS POLICY. No hay deploy ni activación
-de publish; estos cambios quedan para revisión. Los tests usan la política real,
+price. EOD: NOT REQUIRED FOR CURRENT BUSINESS POLICY. Los tests usan la política real,
 sin resolver fechas con un contrato sintético. Las fixtures reales son intradiarias;
 las pruebas post-cutoff están marcadas explícitamente como simuladas.
 
@@ -31,29 +28,34 @@ Se conserva la investigación previa B1A/B1B en LAST_TRADE_POLICY.md: el contrat
 de closing_price no fue homologado y el acceso EOD no fue concedido. La nueva
 política no convierte esas conclusiones en falsas ni presenta TRADE como cierre BYMA.
 
-## Flujo y modos
+## Flujo productivo
 
-La ruta y las dos ventanas cron de `vercel.json` no cambian; `maxDuration` sigue en
-60 segundos. Cada invocación fija la fecha argentina al inicio, verifica el cutoff, adquiere lease,
+`vercel.json` define dos rutas server-side distintas, ambas con `maxDuration` de
+60 segundos:
+
+| Hora ART | Ruta | Fase |
+| --- | --- | --- |
+| 18:10 | `/api/portfolio-snapshot-capture` | Captura durable y congela insumos; nunca publica. |
+| 19:35 | `/api/portfolio-snapshot-publish` | Recaptura, reconcilia y publica sólo un resultado COMPLETE. |
+
+Cada invocación fija la fecha argentina al inicio, verifica su propio cutoff, adquiere lease,
 lee/congela insumos, vuelve a descargar todos los grupos requeridos concurrentemente y persiste cada
 respuesta relevante antes del archivo raw opcional. Después reconcilia lo durable,
-valida, calcula y, sólo si está habilitado, publica atómicamente.
+valida, calcula y la segunda fase publica atómicamente. No existe selector público
+de modo, política ni fecha, ni fallback automático al writer legacy.
 
-`PORTFOLIO_CLOSE_MODE` es una variable **server-only**:
-
-| Modo | Comportamiento |
-| --- | --- |
-| `capture` (default) | Captura durable; nunca escribe `portfolioDailySnapshots`. |
-| `publish` | Captura y publica únicamente con todos los TRADE diarios requeridos válidos. No habilitado por este cambio. |
-| `off` | No ejecuta captura ni publicación. |
-| `legacy` | Rollback explícito al handler baseline; recupera también sus limitaciones conocidas. |
-
-No hay fallback automático a legacy ante fallas. `CRON_SECRET` es obligatorio en
-todos los modos; faltante/incorrecto da 401. Sólo GET/POST. B1 no permite `force`,
-fecha arbitraria ni backfill; fines de semana se omiten. No hay calendario de
+Si `CRON_SECRET` existe se exige exactamente `Authorization: Bearer <CRON_SECRET>`.
+Configurar ese secreto es la opción recomendada. Si falta, el único fallback
+aceptado exige simultáneamente `VERCEL_ENV=production`, una de las dos rutas exactas
+y `User-Agent: vercel-cron/1.0`; además registra `CRON_SECRET_MISSING` como warning
+estructurado. Sólo se acepta GET. B1 no permite `force`, fecha arbitraria ni
+backfill; fines de semana se omiten. No hay calendario de
 feriados nuevo. Un resultado parcial devuelve 503 con estado explícito; lease
 ocupado devuelve 409. HTTP 200 en captura no significa snapshot UI publicado:
 `publicationStatus` lo distingue.
+
+Vercel Hobby puede invocar tarde: una corrida posterior al cutoff sigue siendo
+válida, pero nunca se acepta una corrida temprana.
 
 Las peticiones BYMA tienen timeout (token 6 s, grupo 10 s), Firestore 8 s y Google
 OAuth 6 s. Se chequea presupuesto antes de construir. No se extiende el runtime
@@ -165,37 +167,22 @@ no se implementó un sistema distribuido de gran escala.
 Las nuevas rutas bajo `marketPriceRuns/**` deniegan read/write a clientes, incluso
 autenticados. El servidor opera con OAuth de service account e IAM; el emulador
 verifica reglas, pero **no acredita permisos IAM actuales de producción**.
-No se cambiaron permisos legacy, credenciales remotas, frontend ni posiciones
-productivas. El código B1 no ejecuta los callbacks positionUpdates del baseline.
-Writers cliente permanecen y todavía pueden modificar la colección histórica.
-`src/utils/portfolioSnapshots.js` expone `saveDailyPortfolioSnapshot` y
-`saveManualPortfolioSnapshot`, ambas con `setDoc(..., { merge: true })`. Se invocan
-desde el auto-refresh/post-close de `src/pages/Home.jsx` y desde las acciones
-manuales de `src/pages/PortfolioHistory.jsx`. `firestore.rules` permite hoy
-read/write de `portfolioDailySnapshots/**` a cualquier usuario autenticado.
-Antes de habilitar publish hay que migrar/deshabilitar esos writers y cambiar las
-reglas para que clientes no puedan crear/actualizar/borrar la colección, conservando
-las lecturas estrictamente necesarias. También debe asegurarse que el primer cron
-sea capture-only y que sólo una invocación final reconciliada solicite publicación;
-el modo global actual no distingue los dos cron. Nada de esto bloquea capture-only.
+El código B1 no ejecuta los callbacks positionUpdates del baseline. El frontend ya
+no expone ni invoca `saveDailyPortfolioSnapshot`: `portfolioDailySnapshots/**` es
+server-owned y las reglas conservan lectura autenticada pero deniegan create,
+update y delete de clientes. Las referencias manuales se guardan separadamente en
+`portfolioManualBaselines/**`, sin posibilidad de pisar un cierre oficial.
 
-El servidor puede reutilizar las credenciales existentes. No hacer env pull ni
-subir `.env`; ningún secreto nuevo pertenece a este cambio. El wrapper legacy
-conserva el cálculo/flujo anterior, salvo auth fail-closed y timeout/sanitización
-del token Google compartido. Volver a legacy reactiva riesgos conocidos de ese flujo.
+El servidor reutiliza las credenciales existentes. No subir `.env`. Agregar
+`CRON_SECRET` en Production sigue siendo recomendado aun cuando existe el fallback
+acotado para Vercel Cron.
 
-## Revisión y eventual rollout (NO ejecutado)
+## Rollout
 
-1. Revisar este diff, aceptar la política last-trade y confirmar ventana/mapeos antes de publicación.
-2. Verificar IAM/CRON_SECRET y aplicar rules aditivas mediante una autorización futura.
-3. Desplegar en capture y validar datos/volumen con autorización futura; no hay escrituras de prueba productivas en B1.
-4. Habilitar publish sólo después de cerrar writers/reglas cliente y separar de
-   forma verificable la captura inicial de la invocación final que publica.
-5. Rollback: off detiene B1; legacy restaura el flujo anterior de manera explícita.
-   No borrar observaciones para revertir. Cambiar configuración no cancela una
-   invocación ya iniciada: esperar su fin/maxDuration antes de activar otro writer.
-
-No desplegar esta rama a través de un push accidental si GitHub dispara previews.
+El flujo se activa al desplegar `main`; no requiere `PORTFOLIO_CLOSE_MODE`.
+No invocar manualmente las rutas para probar producción porque escriben estado
+durable. Un rollback debe hacerse mediante una revisión de código explícita, sin
+borrar observaciones ni reescribir historia.
 
 ## Verificación local
 
@@ -205,7 +192,7 @@ Desde el clon B1:
 npm ci --ignore-scripts --no-audit --no-fund
 npm run test:b1
 npm test
-npx eslint api/portfolio-snapshot.js server/closing scripts/b1-byma-readonly.mjs test/b1/firestore.test.js
+npx eslint api/portfolio-snapshot-capture.js api/portfolio-snapshot-publish.js server/closing src/utils/portfolioSnapshots.js src/utils/portfolioSnapshots.test.js src/pages/Home.jsx src/pages/PortfolioHistory.jsx scripts/b1-byma-readonly.mjs test/b1/firestore.test.js
 npm run build
 git diff --check
 ```
@@ -238,5 +225,4 @@ su fecha exacta tampoco está probada. Cero escrituras de producción.
 
 Calendario completo, monitor/alertas externos, Cloud Scheduler/Tasks, proveedor
 histórico, backfill, reconstrucción histórica, versionado completo de posiciones,
-migración de Home/PortfolioHistory, prohibición definitiva de writers cliente,
 archivo raw implementado y nuevo motor de valuación permanecen fuera de alcance.

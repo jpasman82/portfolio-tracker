@@ -103,7 +103,7 @@ afterAll(async () => {
 });
 
 describe('security baseline compatibility and deny-by-default', () => {
-  it.each(['brokerPositions', 'rotations', 'portfolioDailySnapshots'])(
+  it.each(['brokerPositions', 'rotations'])(
     'preserves authenticated shared access to %s',
     async (path) => {
       const db = authenticatedDb(USER_A);
@@ -112,6 +112,16 @@ describe('security baseline compatibility and deny-by-default', () => {
       await assertSucceeds(getDoc(reference));
     },
   );
+
+  it('preserves authenticated read access but blocks client writes to official daily snapshots', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'portfolioDailySnapshots', '2026-09-15'), { source: 'b1' });
+    });
+    const db = authenticatedDb(USER_A);
+    const reference = doc(db, 'portfolioDailySnapshots', '2026-09-15');
+    await assertSucceeds(getDoc(reference));
+    await assertFails(setDoc(reference, { source: 'manual' }));
+  });
 
   it('rejects anonymous legacy and loan reads and writes', async () => {
     const db = anonymousDb();

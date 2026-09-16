@@ -132,15 +132,13 @@ The legacy UI payload/calculations and its source field remain compatible. Exist
 history is neither rewritten nor relabeled. The UI may still display 'cierre', but
 the metadata and documentation unambiguously describe daily last traded price.
 
-Explicit legacy mode remains a rollback outside this policy; no automatic fallback
-exists. Off is the safe stop. Existing client writers and permissions are unchanged:
-`src/utils/portfolioSnapshots.js` writes through `saveDailyPortfolioSnapshot` and
-`saveManualPortfolioSnapshot`; Home invokes the first from its post-close refresh,
-and PortfolioHistory invokes both manual paths. Firestore currently allows every
-authenticated client to write `portfolioDailySnapshots/**`. Publish remains HOLD
-until those writers are migrated/disabled, client writes are denied by rules, and
-the two identical cron paths are orchestrated so the first remains capture-only and
-only a final reconciled invocation can publish. Capture-only is not blocked.
+There is no automatic or request-selectable legacy fallback. Production uses two
+explicit routes: the 18:10 ART route always passes `publish: false`; the 19:35 ART
+route reconciles again and passes `publish: true`. The client no longer exports or
+invokes `saveDailyPortfolioSnapshot`. Authenticated users retain read access to
+`portfolioDailySnapshots/**`, but Firestore rules deny client create/update/delete.
+Manual references use the separate `portfolioManualBaselines/**` collection and
+cannot overwrite the official daily document.
 
 ## Preserved B1A/B1B findings / EOD
 

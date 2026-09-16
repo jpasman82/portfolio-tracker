@@ -3,17 +3,20 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "functions": {
-    "api/portfolio-snapshot.js": {
+    "api/portfolio-snapshot-capture.js": {
+      "maxDuration": 60
+    },
+    "api/portfolio-snapshot-publish.js": {
       "maxDuration": 60
     }
   },
   "crons": [
     {
-      "path": "/api/portfolio-snapshot",
+      "path": "/api/portfolio-snapshot-capture",
       "schedule": "10 21 * * 1-5"
     },
     {
-      "path": "/api/portfolio-snapshot",
+      "path": "/api/portfolio-snapshot-publish",
       "schedule": "35 22 * * 1-5"
     }
   ],

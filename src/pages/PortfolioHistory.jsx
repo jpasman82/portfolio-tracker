@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
-import { fetchPortfolioSnapshots, saveDailyPortfolioSnapshot, saveManualPortfolioSnapshot } from '../utils/portfolioSnapshots';
+import { fetchPortfolioSnapshots, saveManualPortfolioSnapshot } from '../utils/portfolioSnapshots';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import { parseNum } from '../utils/numberFormat';
 
@@ -114,7 +114,6 @@ function EvolutionChart({ rows, currency }) {
 export default function PortfolioHistory() {
   const [snapshots, setSnapshots] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [savingBaseline, setSavingBaseline] = useState(false);
   const [currency, setCurrency] = useState('USD');
   const [range, setRange] = useState('30D');
@@ -156,19 +155,6 @@ export default function PortfolioHistory() {
     };
   }, [filteredSnapshots]);
 
-  const captureToday = async () => {
-    setSaving(true);
-    setError('');
-    try {
-      await saveDailyPortfolioSnapshot({ source: 'manual', refreshPrices: true });
-      await loadSnapshots();
-    } catch (err) {
-      setError(`No se pudo guardar la foto diaria: ${err.message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const saveBaseline = async () => {
     setSavingBaseline(true);
     setError('');
@@ -203,13 +189,6 @@ export default function PortfolioHistory() {
               {snapshots.length} registros diarios · {summary?.count || 0} en vista
             </p>
           </div>
-          <button
-            onClick={captureToday}
-            disabled={saving}
-            className="font-mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 bg-teal-400 hover:bg-teal-300 text-[#080F12] rounded-lg transition-colors font-bold disabled:opacity-60"
-          >
-            {saving ? 'Guardando...' : 'Capturar Hoy'}
-          </button>
           <LogoutButton />
         </div>
       </div>
@@ -271,7 +250,7 @@ export default function PortfolioHistory() {
         ) : snapshots.length === 0 ? (
           <div className="bg-[#122329] border border-teal-400/15 rounded-2xl p-8 text-center">
             <p className="font-bold text-[#F0FAFA] mb-2">Todavía no hay registros.</p>
-            <p className="font-mono text-[12px] tracking-[0.12em] uppercase text-[#5B8A8A]">Usá Capturar Hoy para crear el primero.</p>
+            <p className="font-mono text-[12px] tracking-[0.12em] uppercase text-[#5B8A8A]">El cierre oficial se genera automáticamente; también podés guardar una referencia manual.</p>
           </div>
         ) : (
           <>
