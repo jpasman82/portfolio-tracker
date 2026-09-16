@@ -4,6 +4,7 @@ const fakeFirestore = vi.hoisted(() => ({
   documents: new Map(),
   nextId: 1,
   batchCommits: [],
+  transactionQueue: Promise.resolve(),
 }));
 
 vi.mock('firebase/firestore', () => {
@@ -34,6 +35,28 @@ vi.mock('firebase/firestore', () => {
     },
     orderBy: () => ({}),
     query: (ref) => ref,
+    runTransaction: (_db, callback) => {
+      const execute = async () => {
+        const writes = [];
+        const transaction = {
+          get: async (ref) => snapshot(ref),
+          set: (ref, data) => writes.push({ type: 'set', ref, data }),
+          update: (ref, data) => writes.push({ type: 'update', ref, data }),
+        };
+        const result = await callback(transaction);
+        writes.forEach(({ type, ref, data }) => {
+          fakeFirestore.documents.set(
+            ref.path,
+            type === 'update' ? { ...fakeFirestore.documents.get(ref.path), ...data } : data,
+          );
+        });
+        fakeFirestore.batchCommits.push(writes.map(({ ref }) => ref.path));
+        return result;
+      };
+      const pending = fakeFirestore.transactionQueue.then(execute, execute);
+      fakeFirestore.transactionQueue = pending.catch(() => {});
+      return pending;
+    },
     serverTimestamp: () => ({ toDate: () => new Date('2026-09-01T00:00:00.000Z') }),
     setDoc: async (ref, data) => fakeFirestore.documents.set(ref.path, data),
     updateDoc: async (ref, changes) => {
@@ -73,6 +96,7 @@ beforeEach(() => {
   fakeFirestore.documents.clear();
   fakeFirestore.nextId = 1;
   fakeFirestore.batchCommits = [];
+  fakeFirestore.transactionQueue = Promise.resolve();
 });
 
 describe('loan movement repository orchestration', () => {
@@ -143,5 +167,178 @@ describe('loan movement repository orchestration', () => {
     })).rejects.toMatchObject({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' });
     expect(fakeFirestore.batchCommits).toHaveLength(commitsBeforeCorrection);
     expect(await repository.listMovements(uid, assetId)).toHaveLength(2);
+  });
+});
+
+describe('audited loan terms repository orchestration', () => {
+  it('previews without writes and applies the exact same L1-backed correction atomically', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(uid, loan, '710000');
+    const request = {
+      kind: 'correction',
+      changes: { rate: '0.01', name: 'Reclus corregido' },
+      asOfDate: '2027-03-01',
+    };
+    const commitsBeforePreview = fakeFirestore.batchCommits.length;
+    const preview = await repository.previewLoanTermsChange(uid, assetId, request);
+    expect(fakeFirestore.batchCommits).toHaveLength(commitsBeforePreview);
+    expect(await repository.listTermsChanges(uid, assetId)).toHaveLength(0);
+    expect(await repository.getLoan(uid, assetId)).toMatchObject({ rate: '0.0125', revision: 0 });
+
+    const applied = await repository.applyLoanTermsChange(uid, assetId, {
+      ...request,
+      reason: 'Tasa y nombre cargados incorrectamente',
+      expectedRevision: preview.revision,
+    });
+    const restored = await repository.getLoan(uid, assetId);
+    const audits = await repository.listTermsChanges(uid, assetId);
+
+    expect(applied.currentValue).toEqual(preview.currentValue);
+    expect(applied.proposedValue).toEqual(preview.proposedValue);
+    expect(applied.proposedProjection).toEqual(preview.proposedProjection);
+    expect(restored).toMatchObject({ name: 'Reclus corregido', rate: '0.01', revision: 1 });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      id: applied.changeId,
+      kind: 'correction',
+      reason: 'Tasa y nombre cargados incorrectamente',
+      fromRevision: 0,
+      toRevision: 1,
+      before: preview.currentTerms,
+      after: preview.proposedTerms,
+    });
+    expect(fakeFirestore.batchCommits.at(-1)).toEqual([
+      `users/${uid}/nonBrokerAssets/${assetId}/termsChanges/${applied.changeId}`,
+      `users/${uid}/nonBrokerAssets/${assetId}`,
+    ]);
+  });
+
+  it('is atomic when reason validation fails', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(uid, loan, '710000');
+    const commitsBefore = fakeFirestore.batchCommits.length;
+    await expect(repository.applyLoanTermsChange(uid, assetId, {
+      kind: 'correction',
+      changes: { rate: '0.01' },
+      asOfDate: '2027-03-01',
+      reason: ' ',
+      expectedRevision: 0,
+    })).rejects.toMatchObject({ code: 'INVALID_REASON' });
+    expect(fakeFirestore.batchCommits).toHaveLength(commitsBefore);
+    expect(await repository.getLoan(uid, assetId)).toMatchObject({ rate: '0.0125', revision: 0 });
+    expect(await repository.listTermsChanges(uid, assetId)).toHaveLength(0);
+  });
+
+  it('allows only one of two terms writers using the same revision', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(uid, loan, '710000');
+    const base = {
+      kind: 'correction',
+      asOfDate: '2027-03-01',
+      reason: 'Corrección concurrente',
+      expectedRevision: 0,
+    };
+    const results = await Promise.allSettled([
+      repository.applyLoanTermsChange(uid, assetId, { ...base, changes: { rate: '0.01' } }),
+      repository.applyLoanTermsChange(uid, assetId, { ...base, changes: { rate: '0.02' } }),
+    ]);
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(results.find(({ status }) => status === 'rejected').reason)
+      .toMatchObject({ code: 'STALE_LOAN_TERMS_REVISION' });
+    expect(await repository.listTermsChanges(uid, assetId)).toHaveLength(1);
+    expect(await repository.getLoan(uid, assetId)).toMatchObject({ revision: 1 });
+  });
+
+  it('extends maturity without writing any movement', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(uid, loan, '710000');
+    const before = await repository.listMovements(uid, assetId);
+    const applied = await repository.applyLoanTermsChange(uid, assetId, {
+      kind: 'maturity_extension',
+      changes: { maturityDate: '2028-09-01' },
+      asOfDate: '2027-10-01',
+      reason: 'Prórroga acordada',
+      expectedRevision: 0,
+    });
+    expect(applied.continuesAccrualAfterOriginalMaturity).toBe(true);
+    expect(await repository.listMovements(uid, assetId)).toEqual(before);
+  });
+});
+
+describe('auditable movement deletion repository orchestration', () => {
+  it('appends one deterministic reversal and never mutates the original', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(uid, loan, '710000');
+    const movementId = await repository.addMovement(uid, assetId, {
+      type: 'contribution', effectiveDate: '2026-10-01', amount: '1000',
+    });
+    const originalBefore = fakeFirestore.documents.get(
+      `users/${uid}/nonBrokerAssets/${assetId}/movements/${movementId}`,
+    );
+
+    const result = await repository.deleteMovement(uid, assetId, movementId, 'Carga duplicada');
+    const movements = await repository.listMovements(uid, assetId);
+
+    expect(result.reversalMovementId).toBe(`void-${movementId}`);
+    expect(fakeFirestore.documents.get(
+      `users/${uid}/nonBrokerAssets/${assetId}/movements/${movementId}`,
+    )).toEqual(originalBefore);
+    expect(movements.find(({ id }) => id === result.reversalMovementId)).toMatchObject({
+      type: 'withdrawal',
+      effectiveDate: '2026-10-01',
+      amount: '1000',
+      note: 'Carga duplicada',
+      reversesMovementId: movementId,
+    });
+  });
+
+  it('rejects deleting a contribution required by a later withdrawal without writing', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(uid, loan, '710000');
+    const contributionId = await repository.addMovement(uid, assetId, {
+      type: 'contribution', effectiveDate: '2026-10-01', amount: '100000',
+    });
+    await repository.addMovement(uid, assetId, {
+      type: 'withdrawal', effectiveDate: '2026-10-02', amount: '800000',
+    });
+    const before = await repository.listMovements(uid, assetId);
+
+    await expect(repository.deleteMovement(uid, assetId, contributionId, 'Duplicado'))
+      .rejects.toMatchObject({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' });
+    expect(await repository.listMovements(uid, assetId)).toEqual(before);
+  });
+
+  it('rejects deletion of the only initial contribution', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId, movementId } = await repository.createLoan(uid, loan, '710000');
+    await expect(repository.deleteMovement(uid, assetId, movementId, 'Alta equivocada'))
+      .rejects.toMatchObject({ code: 'INITIAL_CONTRIBUTION_REQUIRED' });
+  });
+
+  it('allows exactly one of two concurrent deletes of the same movement', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(uid, loan, '710000');
+    const movementId = await repository.addMovement(uid, assetId, {
+      type: 'contribution', effectiveDate: '2026-10-01', amount: '1000',
+    });
+    const results = await Promise.allSettled([
+      repository.deleteMovement(uid, assetId, movementId, 'Duplicado'),
+      repository.deleteMovement(uid, assetId, movementId, 'Duplicado'),
+    ]);
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(results.find(({ status }) => status === 'rejected').reason)
+      .toMatchObject({ code: 'MOVEMENT_ALREADY_REVERSED' });
+  });
+
+  it('requires a reason before opening a transaction', async () => {
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(uid, loan, '710000');
+    const movementId = await repository.addMovement(uid, assetId, {
+      type: 'withdrawal', effectiveDate: '2026-10-01', amount: '1000',
+    });
+    const commitsBefore = fakeFirestore.batchCommits.length;
+    await expect(repository.deleteMovement(uid, assetId, movementId, ' '))
+      .rejects.toMatchObject({ code: 'DELETE_REASON_REQUIRED' });
+    expect(fakeFirestore.batchCommits).toHaveLength(commitsBefore);
   });
 });

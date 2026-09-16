@@ -3,7 +3,9 @@ import { calculateLoanAtDate } from './loanEngine';
 import {
   effectiveMovements,
   prepareMovementCorrection,
+  prepareMovementDeletion,
   validateCompleteLoanLedger,
+  validateMovementDeletionLedger,
 } from './loanMovements';
 import { toLoanEngineDefinition, toLoanEngineMovement } from './loanSerialization';
 
@@ -214,5 +216,89 @@ describe('effective movement projection', () => {
 
     expect(effectiveMovements(ledger).map((movement) => movement.id)).toEqual(['replacement-c']);
     expect(valueAt(ledger, '2027-09-01')).toBe(valueAt([...ledger].reverse(), '2027-09-01'));
+  });
+});
+
+describe('auditable movement deletion', () => {
+  it.each([
+    ['contribution', { id: 'target', type: 'contribution', effectiveDate: '2026-10-01', amount: '1000' }],
+    ['withdrawal', { id: 'target', type: 'withdrawal', effectiveDate: '2026-10-01', amount: '1000' }],
+  ])('neutralizes a %s with an opposite append-only movement', (_label, target) => {
+    const ledger = [initial, target];
+    const deletion = prepareMovementDeletion({
+      movements: ledger,
+      movementId: target.id,
+      reason: 'Carga duplicada',
+    });
+    expect(deletion.reversal).toEqual({
+      type: target.type === 'contribution' ? 'withdrawal' : 'contribution',
+      effectiveDate: target.effectiveDate,
+      amount: target.amount,
+      note: 'Carga duplicada',
+      reversesMovementId: target.id,
+    });
+    expect(valueAt(deletion.resultingMovements, '2027-09-01'))
+      .toBe(valueAt([initial], '2027-09-01'));
+    expect(effectiveMovements(deletion.resultingMovements).map(({ id }) => id)).toEqual(['initial']);
+  });
+
+  it('deletes a backdated contribution only when the complete future ledger remains solvent', () => {
+    const contribution = { id: 'backdated', type: 'contribution', effectiveDate: '2026-10-01', amount: '1000' };
+    const deletion = prepareMovementDeletion({
+      movements: [initial, contribution],
+      movementId: contribution.id,
+      reason: 'Duplicado',
+    });
+    expect(() => validateCompleteLoanLedger({ loan, movements: deletion.resultingMovements })).not.toThrow();
+  });
+
+  it('rejects deleting a contribution when a later withdrawal becomes insolvent', () => {
+    const contribution = { id: 'needed', type: 'contribution', effectiveDate: '2026-10-01', amount: '100000' };
+    const withdrawal = { id: 'later-withdrawal', type: 'withdrawal', effectiveDate: '2026-10-02', amount: '800000' };
+    const deletion = prepareMovementDeletion({
+      movements: [initial, contribution, withdrawal],
+      movementId: contribution.id,
+      reason: 'Anulación solicitada',
+    });
+    expect(() => validateMovementDeletionLedger({ loan, movements: deletion.resultingMovements }))
+      .toThrowError(expect.objectContaining({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' }));
+  });
+
+  it('rejects deleting the only initial contribution', () => {
+    const deletion = prepareMovementDeletion({
+      movements: [initial],
+      movementId: initial.id,
+      reason: 'Alta equivocada',
+    });
+    expect(() => validateMovementDeletionLedger({ loan, movements: deletion.resultingMovements }))
+      .toThrowError(expect.objectContaining({ code: 'INITIAL_CONTRIBUTION_REQUIRED' }));
+  });
+
+  it('deletes the current replacement while preserving the correction chain', () => {
+    const ledger = [
+      initial,
+      { id: 'reverse-a', type: 'withdrawal', effectiveDate: '2026-09-01', amount: '710000', reversesMovementId: 'initial' },
+      { id: 'replacement-b', type: 'contribution', effectiveDate: '2026-09-01', amount: '700000' },
+    ];
+    const deletion = prepareMovementDeletion({
+      movements: ledger,
+      movementId: 'replacement-b',
+      reason: 'Operación inexistente',
+    });
+    expect(effectiveMovements(deletion.resultingMovements)).toEqual([]);
+  });
+
+  it('rejects neutralized originals, technical reversals, duplicate deletes, and missing reasons', () => {
+    const reversal = {
+      id: 'reverse-a', type: 'withdrawal', effectiveDate: '2026-09-01',
+      amount: '710000', reversesMovementId: 'initial',
+    };
+    const ledger = [initial, reversal];
+    expect(() => prepareMovementDeletion({ movements: ledger, movementId: 'initial', reason: 'x' }))
+      .toThrowError(expect.objectContaining({ code: 'MOVEMENT_ALREADY_REVERSED' }));
+    expect(() => prepareMovementDeletion({ movements: ledger, movementId: 'reverse-a', reason: 'x' }))
+      .toThrowError(expect.objectContaining({ code: 'TECHNICAL_REVERSAL_IMMUTABLE' }));
+    expect(() => prepareMovementDeletion({ movements: [initial], movementId: 'initial', reason: ' ' }))
+      .toThrowError(expect.objectContaining({ code: 'DELETE_REASON_REQUIRED' }));
   });
 });

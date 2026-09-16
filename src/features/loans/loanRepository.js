@@ -22,7 +22,9 @@ import {
 } from './loanSerialization.js';
 import {
   prepareMovementCorrection,
+  prepareMovementDeletion,
   validateCompleteLoanLedger,
+  validateMovementDeletionLedger,
 } from './loanMovements.js';
 import { calculateLoanTermsChangePreview } from './loanTerms.js';
 
@@ -235,6 +237,60 @@ export function createLoanRepository(db) {
     };
   }
 
+  async function deleteMovement(uid, assetId, movementId, reason) {
+    const ownerUid = requirePathSegment(uid, 'uid');
+    const loanAssetId = requirePathSegment(assetId, 'assetId');
+    const targetMovementId = requirePathSegment(movementId, 'movementId');
+    const reference = loanDocument(db, ownerUid, loanAssetId);
+    const loan = requireExistingLoan(await getDoc(reference), loanAssetId);
+
+    if (loan.status !== 'active') {
+      throw new Error(`Cannot delete movements on a loan with status ${loan.status}`);
+    }
+
+    const knownMovements = await listMovements(ownerUid, loanAssetId);
+    const deletion = prepareMovementDeletion({
+      movements: knownMovements,
+      movementId: targetMovementId,
+      reason,
+    });
+    validateMovementDeletionLedger({ loan, movements: deletion.resultingMovements });
+
+    const reversalRef = doc(
+      movementsCollection(db, ownerUid, loanAssetId),
+      `void-${targetMovementId}`,
+    );
+    const originalRef = doc(movementsCollection(db, ownerUid, loanAssetId), targetMovementId);
+    const reversal = serializeMovementForFirestore(deletion.reversal, {
+      createdAt: serverTimestamp(),
+    });
+
+    await runTransaction(db, async (transaction) => {
+      const [latestLoanSnapshot, latestOriginalSnapshot, existingReversalSnapshot] = await Promise.all([
+        transaction.get(reference),
+        transaction.get(originalRef),
+        transaction.get(reversalRef),
+      ]);
+      const latestLoan = requireExistingLoan(latestLoanSnapshot, loanAssetId);
+      if (latestLoan.status !== 'active') {
+        throw new Error(`Cannot delete movements on a loan with status ${latestLoan.status}`);
+      }
+      if (!latestOriginalSnapshot.exists()) {
+        const error = new Error(`Movement ${targetMovementId} does not exist`);
+        error.code = 'MOVEMENT_NOT_FOUND';
+        throw error;
+      }
+      if (existingReversalSnapshot.exists()) {
+        const error = new Error('The movement has already been neutralized');
+        error.code = 'MOVEMENT_ALREADY_REVERSED';
+        throw error;
+      }
+      transaction.set(reversalRef, reversal);
+    });
+
+    return { reversalMovementId: reversalRef.id };
+  }
+
   async function previewLoanTermsChange(uid, assetId, input) {
     const loan = requireExistingLoan(
       await getDoc(loanDocument(db, uid, assetId)),
@@ -337,6 +393,7 @@ export function createLoanRepository(db) {
     listTermsChanges,
     addMovement,
     correctMovement,
+    deleteMovement,
     previewLoanTermsChange,
     applyLoanTermsChange,
   };

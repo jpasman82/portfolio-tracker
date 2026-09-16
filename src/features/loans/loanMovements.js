@@ -67,6 +67,54 @@ export function prepareMovementCorrection({ movements, movementId, correctedData
   };
 }
 
+export function validateMovementDeletionLedger({ loan, movements }) {
+  const valuation = validateCompleteLoanLedger({ loan, movements });
+  const hasEffectiveInitialContribution = effectiveMovements(movements).some(
+    (movement) => movement.type === LOAN_MOVEMENT_TYPES.CONTRIBUTION
+      && movement.effectiveDate === loan.startDate,
+  );
+  if (!hasEffectiveInitialContribution) {
+    operationError(
+      'INITIAL_CONTRIBUTION_REQUIRED',
+      'The loan must retain an effective contribution on startDate',
+    );
+  }
+  return valuation;
+}
+
+export function prepareMovementDeletion({ movements, movementId, reason }) {
+  const original = movements.find((movement) => movement.id === movementId);
+  if (!original) {
+    operationError('MOVEMENT_NOT_FOUND', `Movement ${movementId} does not exist`);
+  }
+  if (original.reversesMovementId) {
+    operationError('TECHNICAL_REVERSAL_IMMUTABLE', 'Technical reversal movements cannot be deleted');
+  }
+  if (movements.some((movement) => movement.reversesMovementId === original.id)) {
+    operationError('MOVEMENT_ALREADY_REVERSED', 'The movement has already been neutralized');
+  }
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    operationError('DELETE_REASON_REQUIRED', 'A reason is required to delete a movement');
+  }
+  if (reason.trim().length > 500) {
+    operationError('DELETE_REASON_TOO_LONG', 'The delete reason can contain at most 500 characters');
+  }
+
+  const reversal = normalizeMovementForPersistence({
+    type: oppositeMovementType(original.type),
+    effectiveDate: original.effectiveDate,
+    amount: original.amount,
+    note: reason.trim(),
+    reversesMovementId: original.id,
+  });
+
+  return {
+    original,
+    reversal,
+    resultingMovements: [...movements, reversal],
+  };
+}
+
 export function effectiveMovements(movements) {
   const reversedMovementIds = new Set(
     movements

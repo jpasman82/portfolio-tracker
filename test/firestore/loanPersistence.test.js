@@ -81,6 +81,37 @@ function movementRef(db, uid, assetId = 'loan-1', movementId = 'movement-1') {
   return doc(db, 'users', uid, 'nonBrokerAssets', assetId, 'movements', movementId);
 }
 
+function termsChangeRef(db, uid, assetId = 'loan-1', changeId = 'change-1') {
+  return doc(db, 'users', uid, 'nonBrokerAssets', assetId, 'termsChanges', changeId);
+}
+
+function termsSnapshot(overrides = {}) {
+  return {
+    name: 'Reclus',
+    currency: 'USD',
+    startDate: '2026-09-01',
+    maturityDate: '2027-09-01',
+    rate: '0.0125',
+    rateType: 'monthly_effective',
+    capitalizationFrequency: 'monthly',
+    calculationVersion: 'loan-v1',
+    ...overrides,
+  };
+}
+
+function termsChangeData(overrides = {}) {
+  return {
+    kind: 'correction',
+    before: termsSnapshot(),
+    after: termsSnapshot({ rate: '0.01' }),
+    reason: 'Carga original incorrecta',
+    fromRevision: 0,
+    toRevision: 1,
+    createdAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
 async function seedLoan(uid, assetId = 'loan-1', overrides = {}) {
   const db = authenticatedDb(uid);
   await assertSucceeds(setDoc(loanRef(db, uid, assetId), loanData(overrides)));
@@ -138,15 +169,14 @@ describe('security baseline compatibility and deny-by-default', () => {
   });
 });
 
-describe('loan ownership, schema, and immutable contract', () => {
-  it('lets an owner create, read, list, rename, and close a valid loan', async () => {
+describe('loan ownership, schema, and audited contract', () => {
+  it('lets an owner create, read, list, and close a valid loan', async () => {
     const db = authenticatedDb(USER_A);
     const reference = loanRef(db, USER_A);
 
     await assertSucceeds(setDoc(reference, loanData()));
     await assertSucceeds(getDoc(reference));
     await assertSucceeds(getDocs(collection(db, 'users', USER_A, 'nonBrokerAssets')));
-    await assertSucceeds(updateDoc(reference, { name: 'Reclus actualizado', updatedAt: serverTimestamp() }));
     await assertSucceeds(updateDoc(reference, { status: 'closed', updatedAt: serverTimestamp() }));
   });
 
@@ -209,6 +239,130 @@ describe('loan ownership, schema, and immutable contract', () => {
   it('denies deletion of loan history', async () => {
     const db = await seedLoan(USER_A);
     await assertFails(deleteDoc(loanRef(db, USER_A)));
+  });
+});
+
+describe('audited loan terms security and concurrency', () => {
+  async function seedLoanWithInitialMovement(assetId = 'loan-1', loanOverrides = {}) {
+    const db = await seedLoan(USER_A, assetId, loanOverrides);
+    await assertSucceeds(setDoc(
+      movementRef(db, USER_A, assetId, 'initial'),
+      movementData(),
+    ));
+    return db;
+  }
+
+  it('applies one correction with exact audit snapshots and matching preview', async () => {
+    const db = await seedLoanWithInitialMovement();
+    const repository = createLoanRepository(db);
+    const request = {
+      kind: 'correction',
+      changes: { rate: '0.01', rateType: 'annual_effective', name: 'Reclus corregido' },
+      asOfDate: '2027-03-01',
+    };
+    const preview = await repository.previewLoanTermsChange(USER_A, 'loan-1', request);
+    expect(await repository.listTermsChanges(USER_A, 'loan-1')).toHaveLength(0);
+    const applied = await repository.applyLoanTermsChange(USER_A, 'loan-1', {
+      ...request,
+      expectedRevision: preview.revision,
+      reason: 'Corrección documentada',
+    });
+    const persisted = await repository.getLoan(USER_A, 'loan-1');
+    const audits = await repository.listTermsChanges(USER_A, 'loan-1');
+
+    expect(applied.proposedValue).toEqual(preview.proposedValue);
+    expect(persisted).toMatchObject({
+      name: 'Reclus corregido', rate: '0.01', rateType: 'annual_effective', revision: 1,
+      latestTermsChangeId: applied.changeId,
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      id: applied.changeId,
+      before: preview.currentTerms,
+      after: preview.proposedTerms,
+      reason: 'Corrección documentada',
+      fromRevision: 0,
+      toRevision: 1,
+    });
+  });
+
+  it('extends an expired loan while keeping its rate and movements', async () => {
+    const db = await seedLoanWithInitialMovement();
+    const repository = createLoanRepository(db);
+    const beforeMovements = await repository.listMovements(USER_A, 'loan-1');
+    const result = await repository.applyLoanTermsChange(USER_A, 'loan-1', {
+      kind: 'maturity_extension',
+      changes: { maturityDate: '2028-09-01' },
+      asOfDate: '2027-10-01',
+      expectedRevision: 0,
+      reason: 'Prórroga acordada',
+    });
+    const persisted = await repository.getLoan(USER_A, 'loan-1');
+    expect(result.continuesAccrualAfterOriginalMaturity).toBe(true);
+    expect(result.proposedProjection.maturityDate).toBe('2028-09-01');
+    expect(persisted.rate).toBe('0.0125');
+    expect(await repository.listMovements(USER_A, 'loan-1')).toEqual(beforeMovements);
+  });
+
+  it('rejects direct contractual updates without a linked audit', async () => {
+    const db = await seedLoanWithInitialMovement();
+    const reference = loanRef(db, USER_A);
+    await assertFails(updateDoc(reference, {
+      rate: '0.01', revision: 1, latestTermsChangeId: 'missing-audit', updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(reference, {
+      name: 'Renombre directo', revision: 1, latestTermsChangeId: 'missing-audit', updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it('rejects orphan, cross-user, malformed, updated, and deleted terms audits', async () => {
+    const db = await seedLoanWithInitialMovement();
+    await assertFails(setDoc(termsChangeRef(db, USER_A), termsChangeData()));
+    await assertFails(setDoc(
+      termsChangeRef(db, USER_A, 'loan-1', 'unknown-field'),
+      termsChangeData({ derivedValue: '999' }),
+    ));
+    const dbB = authenticatedDb(USER_B);
+    await assertFails(getDoc(termsChangeRef(dbB, USER_A)));
+
+    const repository = createLoanRepository(db);
+    const result = await repository.applyLoanTermsChange(USER_A, 'loan-1', {
+      kind: 'correction', changes: { rate: '0.01' }, asOfDate: '2027-03-01',
+      expectedRevision: 0, reason: 'Corrección documentada',
+    });
+    const reference = termsChangeRef(db, USER_A, 'loan-1', result.changeId);
+    await assertFails(updateDoc(reference, { reason: 'Alterado' }));
+    await assertFails(deleteDoc(reference));
+  });
+
+  it('keeps currency, capitalization, and calculationVersion immutable', async () => {
+    const db = await seedLoanWithInitialMovement();
+    for (const changes of [
+      { currency: 'ARS' },
+      { capitalizationFrequency: 'daily' },
+      { calculationVersion: 'loan-v2' },
+    ]) {
+      await assertFails(updateDoc(loanRef(db, USER_A), {
+        ...changes, revision: 1, latestTermsChangeId: 'change-1', updatedAt: serverTimestamp(),
+      }));
+    }
+  });
+
+  it('allows only one writer from the same revision', async () => {
+    const db = await seedLoanWithInitialMovement();
+    const repository = createLoanRepository(db);
+    const input = {
+      kind: 'correction', asOfDate: '2027-03-01', expectedRevision: 0,
+      reason: 'Corrección concurrente',
+    };
+    const results = await Promise.allSettled([
+      repository.applyLoanTermsChange(USER_A, 'loan-1', { ...input, changes: { rate: '0.01' } }),
+      repository.applyLoanTermsChange(USER_A, 'loan-1', { ...input, changes: { rate: '0.02' } }),
+    ]);
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(results.find(({ status }) => status === 'rejected').reason)
+      .toMatchObject({ code: 'STALE_LOAN_TERMS_REVISION' });
+    expect(await repository.listTermsChanges(USER_A, 'loan-1')).toHaveLength(1);
   });
 });
 
@@ -583,5 +737,60 @@ describe('loan repository and Firestore-to-L1 roundtrip', () => {
     });
 
     expect(result.value).toBe('824135.707583329087399561976781114935875');
+  });
+});
+
+describe('auditable movement deletion through Firestore', () => {
+  it('creates one append-only reversal that neutralizes an effective movement', async () => {
+    const db = authenticatedDb(USER_A);
+    const repository = createLoanRepository(db);
+    const { assetId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    const movementId = await repository.addMovement(USER_A, assetId, {
+      type: 'contribution', effectiveDate: '2026-10-01', amount: '1000',
+    });
+    const result = await repository.deleteMovement(USER_A, assetId, movementId, 'Carga duplicada');
+    const original = await getDoc(movementRef(db, USER_A, assetId, movementId));
+    const reversal = await getDoc(movementRef(db, USER_A, assetId, result.reversalMovementId));
+
+    expect(original.exists()).toBe(true);
+    expect(reversal.data()).toMatchObject({
+      type: 'withdrawal', effectiveDate: '2026-10-01', amount: '1000',
+      note: 'Carga duplicada', reversesMovementId: movementId,
+    });
+    await assertFails(updateDoc(reversal.ref, { note: 'Alterado' }));
+    await assertFails(deleteDoc(original.ref));
+    await assertFails(deleteDoc(reversal.ref));
+  });
+
+  it('rejects initial contribution deletion and duplicate concurrent deletes', async () => {
+    const db = authenticatedDb(USER_A);
+    const repository = createLoanRepository(db);
+    const { assetId, movementId: initialId } = await repository.createLoan(USER_A, loanInput(), '710000');
+    await expect(repository.deleteMovement(USER_A, assetId, initialId, 'Alta incorrecta'))
+      .rejects.toMatchObject({ code: 'INITIAL_CONTRIBUTION_REQUIRED' });
+
+    const movementId = await repository.addMovement(USER_A, assetId, {
+      type: 'withdrawal', effectiveDate: '2026-10-01', amount: '1000',
+    });
+    const results = await Promise.allSettled([
+      repository.deleteMovement(USER_A, assetId, movementId, 'Duplicado'),
+      repository.deleteMovement(USER_A, assetId, movementId, 'Duplicado'),
+    ]);
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(results.find(({ status }) => status === 'rejected').reason)
+      .toMatchObject({ code: 'MOVEMENT_ALREADY_REVERSED' });
+  });
+
+  it('keeps delete ownership scoped to the authenticated UID', async () => {
+    const dbA = authenticatedDb(USER_A);
+    const repositoryA = createLoanRepository(dbA);
+    const dbB = authenticatedDb(USER_B);
+    const repositoryB = createLoanRepository(dbB);
+    const { assetId } = await repositoryB.createLoan(USER_B, loanInput(), '710000');
+    const movementId = await repositoryB.addMovement(USER_B, assetId, {
+      type: 'withdrawal', effectiveDate: '2026-10-01', amount: '1000',
+    });
+    await expect(repositoryA.deleteMovement(USER_B, assetId, movementId, 'No autorizado'))
+      .rejects.toBeTruthy();
   });
 });
