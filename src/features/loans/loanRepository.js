@@ -5,6 +5,7 @@ import {
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -13,14 +14,17 @@ import {
 import {
   deserializeLoanFromFirestore,
   deserializeMovementFromFirestore,
+  deserializeTermsChangeFromFirestore,
   normalizeLoanMetadataUpdate,
   serializeLoanForFirestore,
   serializeMovementForFirestore,
+  serializeTermsChangeForFirestore,
 } from './loanSerialization.js';
 import {
   prepareMovementCorrection,
   validateCompleteLoanLedger,
 } from './loanMovements.js';
+import { calculateLoanTermsChangePreview } from './loanTerms.js';
 
 const TERMINAL_STATUSES = new Set(['closed', 'cancelled']);
 
@@ -44,6 +48,10 @@ function movementsCollection(db, uid, assetId) {
   return collection(loanDocument(db, uid, assetId), 'movements');
 }
 
+function termsChangesCollection(db, uid, assetId) {
+  return collection(loanDocument(db, uid, assetId), 'termsChanges');
+}
+
 function withId(snapshot, deserialize) {
   return {
     id: snapshot.id,
@@ -63,6 +71,17 @@ function validateStatusTransition(currentStatus, nextStatus) {
   if (TERMINAL_STATUSES.has(currentStatus) && nextStatus !== currentStatus) {
     throw new Error(`Loan status cannot transition from terminal status ${currentStatus}`);
   }
+}
+
+function staleTermsRevisionError(expectedRevision, currentRevision) {
+  const error = new Error(
+    `Loan terms revision is stale: expected ${expectedRevision}, current ${currentRevision}`,
+  );
+  error.name = 'StaleLoanTermsRevisionError';
+  error.code = 'STALE_LOAN_TERMS_REVISION';
+  error.expectedRevision = expectedRevision;
+  error.currentRevision = currentRevision;
+  return error;
 }
 
 function createInitialMovement(loan, initialContribution) {
@@ -108,6 +127,14 @@ export function createLoanRepository(db) {
     );
 
     return snapshot.docs.map((item) => withId(item, deserializeMovementFromFirestore));
+  }
+
+  async function listTermsChanges(uid, assetId) {
+    const snapshot = await getDocs(
+      query(termsChangesCollection(db, uid, assetId), orderBy('createdAt')),
+    );
+
+    return snapshot.docs.map((item) => withId(item, deserializeTermsChangeFromFirestore));
   }
 
   async function createLoan(uid, loanInput, initialContribution) {
@@ -208,13 +235,109 @@ export function createLoanRepository(db) {
     };
   }
 
+  async function previewLoanTermsChange(uid, assetId, input) {
+    const loan = requireExistingLoan(
+      await getDoc(loanDocument(db, uid, assetId)),
+      assetId,
+    );
+    const movements = await listMovements(uid, assetId);
+    return {
+      revision: loan.revision,
+      ...calculateLoanTermsChangePreview({
+        loan,
+        movements,
+        kind: input?.kind,
+        changes: input?.changes,
+        asOfDate: input?.asOfDate,
+      }),
+    };
+  }
+
+  async function applyLoanTermsChange(uid, assetId, input) {
+    requirePathSegment(uid, 'uid');
+    requirePathSegment(assetId, 'assetId');
+    if (!Number.isSafeInteger(input?.expectedRevision) || input.expectedRevision < 0) {
+      throw new Error('expectedRevision must be a non-negative safe integer');
+    }
+
+    const reference = loanDocument(db, uid, assetId);
+    const changeRef = doc(termsChangesCollection(db, uid, assetId));
+
+    try {
+      return await runTransaction(db, async (transaction) => {
+        const current = requireExistingLoan(await transaction.get(reference), assetId);
+        if (current.revision !== input.expectedRevision) {
+          throw staleTermsRevisionError(input.expectedRevision, current.revision);
+        }
+
+        // Firestore's client transaction cannot atomically query an unbounded
+        // subcollection. Loading the ledger here narrows, but does not close,
+        // the race with a concurrent movement write. The parent revision still
+        // serializes all terms writers.
+        const movements = await listMovements(uid, assetId);
+        const preview = calculateLoanTermsChangePreview({
+          loan: current,
+          movements,
+          kind: input.kind,
+          changes: input.changes,
+          asOfDate: input.asOfDate,
+        });
+        const timestamp = serverTimestamp();
+        const nextRevision = current.revision + 1;
+        const audit = serializeTermsChangeForFirestore(
+          {
+            kind: input.kind,
+            before: preview.currentTerms,
+            after: preview.proposedTerms,
+            reason: input.reason,
+            fromRevision: current.revision,
+            toRevision: nextRevision,
+          },
+          { createdAt: timestamp },
+        );
+
+        transaction.set(changeRef, audit);
+        transaction.update(reference, {
+          name: preview.candidateLoan.name,
+          startDate: preview.candidateLoan.startDate,
+          maturityDate: preview.candidateLoan.maturityDate,
+          rate: preview.candidateLoan.rate,
+          rateType: preview.candidateLoan.rateType,
+          revision: nextRevision,
+          latestTermsChangeId: changeRef.id,
+          updatedAt: timestamp,
+        });
+
+        return {
+          changeId: changeRef.id,
+          revision: nextRevision,
+          ...preview,
+        };
+      });
+    } catch (error) {
+      if (error?.code === 'STALE_LOAN_TERMS_REVISION') throw error;
+
+      const latestSnapshot = await getDoc(reference);
+      if (latestSnapshot.exists()) {
+        const latest = withId(latestSnapshot, deserializeLoanFromFirestore);
+        if (latest.revision !== input.expectedRevision) {
+          throw staleTermsRevisionError(input.expectedRevision, latest.revision);
+        }
+      }
+      throw error;
+    }
+  }
+
   return {
     listLoans,
     getLoan,
     createLoan,
     updateLoanMetadata,
     listMovements,
+    listTermsChanges,
     addMovement,
     correctMovement,
+    previewLoanTermsChange,
+    applyLoanTermsChange,
   };
 }

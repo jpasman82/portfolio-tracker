@@ -36,7 +36,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'type', 'name', 'currency', 'startDate', 'maturityDate', 'rate',
           'rateType', 'capitalizationFrequency', 'calculationVersion',
-          'status', 'createdAt', 'updatedAt'
+          'status', 'revision', 'latestTermsChangeId', 'createdAt', 'updatedAt'
         ])
         && data.type == 'loan'
         && data.name is string
@@ -51,8 +51,84 @@ service cloud.firestore {
         && data.capitalizationFrequency == 'monthly'
         && data.calculationVersion == 'loan-v1'
         && data.status in ['active', 'closed', 'cancelled']
+        && (!data.keys().hasAny(['revision'])
+          || (data.revision is int && data.revision >= 0))
+        && (!data.keys().hasAny(['latestTermsChangeId'])
+          || (data.latestTermsChangeId is string
+            && data.latestTermsChangeId.size() > 0
+            && data.latestTermsChangeId.size() <= 128))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function revisionOf(data) {
+      return data.keys().hasAny(['revision']) ? data.revision : 0;
+    }
+
+    function validTermsSnapshot(data) {
+      return data.keys().hasAll([
+          'name', 'currency', 'startDate', 'maturityDate', 'rate', 'rateType',
+          'capitalizationFrequency', 'calculationVersion'
+        ])
+        && data.keys().hasOnly([
+          'name', 'currency', 'startDate', 'maturityDate', 'rate', 'rateType',
+          'capitalizationFrequency', 'calculationVersion'
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.currency in ['USD', 'ARS']
+        && isDateOnly(data.startDate)
+        && isDateOnly(data.maturityDate)
+        && data.startDate < data.maturityDate
+        && isNonNegativeDecimal(data.rate)
+        && data.rateType in ['monthly_effective', 'annual_effective']
+        && data.capitalizationFrequency == 'monthly'
+        && data.calculationVersion == 'loan-v1';
+    }
+
+    function snapshotMatchesLoan(snapshot, loan) {
+      return snapshot.name == loan.name
+        && snapshot.currency == loan.currency
+        && snapshot.startDate == loan.startDate
+        && snapshot.maturityDate == loan.maturityDate
+        && snapshot.rate == loan.rate
+        && snapshot.rateType == loan.rateType
+        && snapshot.capitalizationFrequency == loan.capitalizationFrequency
+        && snapshot.calculationVersion == loan.calculationVersion;
+    }
+
+    function validTermsChange(data) {
+      return data.keys().hasAll([
+          'kind', 'before', 'after', 'reason', 'fromRevision', 'toRevision',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'kind', 'before', 'after', 'reason', 'fromRevision', 'toRevision',
+          'createdAt'
+        ])
+        && data.kind in ['correction', 'maturity_extension']
+        && validTermsSnapshot(data.before)
+        && validTermsSnapshot(data.after)
+        && data.before != data.after
+        && data.reason is string
+        && data.reason.size() > 0
+        && data.reason.size() <= 1000
+        && data.fromRevision is int
+        && data.fromRevision >= 0
+        && data.toRevision is int
+        && data.toRevision == data.fromRevision + 1
+        && data.createdAt is timestamp
+        && (data.kind != 'maturity_extension'
+          || (data.after.maturityDate > data.before.maturityDate
+            && data.after.name == data.before.name
+            && data.after.startDate == data.before.startDate
+            && data.after.rate == data.before.rate
+            && data.after.rateType == data.before.rateType
+            && data.after.capitalizationFrequency
+              == data.before.capitalizationFrequency
+            && data.after.currency == data.before.currency
+            && data.after.calculationVersion == data.before.calculationVersion));
     }
 
     function validStatusTransition(previous, next) {
@@ -75,6 +151,49 @@ service cloud.firestore {
           || (data.reversesMovementId is string
             && data.reversesMovementId.size() > 0
             && data.reversesMovementId.size() <= 128));
+    }
+
+    function validAuditedTermsUpdate(uid, assetId) {
+      let changeId = request.resource.data.latestTermsChangeId;
+      let change = getAfter(
+        /databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)/termsChanges/$(changeId)
+      ).data;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'startDate', 'maturityDate', 'rate', 'rateType',
+          'revision', 'latestTermsChangeId', 'updatedAt'
+        ])
+        && revisionOf(request.resource.data) == revisionOf(resource.data) + 1
+        && validTermsChange(change)
+        && change.fromRevision == revisionOf(resource.data)
+        && change.toRevision == revisionOf(request.resource.data)
+        && snapshotMatchesLoan(change.before, resource.data)
+        && snapshotMatchesLoan(change.after, request.resource.data)
+        && request.resource.data.currency == resource.data.currency
+        && request.resource.data.calculationVersion == resource.data.calculationVersion
+        && request.resource.data.capitalizationFrequency
+          == resource.data.capitalizationFrequency
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function validLinkedTermsChange(uid, assetId, changeId) {
+      let previous = get(
+        /databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)
+      ).data;
+      let next = getAfter(
+        /databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)
+      ).data;
+      return validTermsChange(request.resource.data)
+        && next.latestTermsChangeId == changeId
+        && revisionOf(next) == revisionOf(previous) + 1
+        && request.resource.data.fromRevision == revisionOf(previous)
+        && request.resource.data.toRevision == revisionOf(next)
+        && snapshotMatchesLoan(request.resource.data.before, previous)
+        && snapshotMatchesLoan(request.resource.data.after, next)
+        && next.currency == previous.currency
+        && next.calculationVersion == previous.calculationVersion
+        && next.capitalizationFrequency == previous.capitalizationFrequency;
     }
 
     // B1 is server-only. IAM-authorized server REST writes bypass these rules.
@@ -108,14 +227,19 @@ service cloud.firestore {
       allow create: if owns(uid)
         && validLoan(request.resource.data)
         && request.resource.data.status == 'active'
+        && revisionOf(request.resource.data) == 0
+        && !request.resource.data.keys().hasAny(['latestTermsChangeId'])
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if owns(uid)
         && validLoan(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['name', 'status', 'updatedAt'])
-        && validStatusTransition(resource.data.status, request.resource.data.status)
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'updatedAt'])
+            && validStatusTransition(resource.data.status, request.resource.data.status))
+          || validAuditedTermsUpdate(uid, assetId)
+        );
       allow delete: if false;
 
       match /movements/{movementId} {
@@ -130,6 +254,14 @@ service cloud.firestore {
             >= getAfter(/databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)).data.startDate
           && request.resource.data.effectiveDate
             <= getAfter(/databases/$(database)/documents/users/$(uid)/nonBrokerAssets/$(assetId)).data.maturityDate;
+        allow update, delete: if false;
+      }
+
+      match /termsChanges/{changeId} {
+        allow read: if owns(uid);
+        allow create: if owns(uid)
+          && request.resource.data.createdAt == request.time
+          && validLinkedTermsChange(uid, assetId, changeId);
         allow update, delete: if false;
       }
     }

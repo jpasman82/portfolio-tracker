@@ -25,6 +25,17 @@ const LOAN_FIELDS = Object.freeze([
   'calculationVersion',
   'status',
 ]);
+const LOAN_TECHNICAL_FIELDS = Object.freeze(['revision', 'latestTermsChangeId']);
+const TERMS_SNAPSHOT_FIELDS = Object.freeze([
+  'name',
+  'currency',
+  'startDate',
+  'maturityDate',
+  'rate',
+  'rateType',
+  'capitalizationFrequency',
+  'calculationVersion',
+]);
 const MOVEMENT_FIELDS = Object.freeze([
   'type',
   'effectiveDate',
@@ -86,6 +97,13 @@ function requireTimestamp(value, fieldName) {
   return value;
 }
 
+function requireRevision(value, fieldName = 'revision') {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    fail('INVALID_REVISION', `${fieldName} must be a non-negative safe integer`);
+  }
+  return value;
+}
+
 export function requireCanonicalRate(value) {
   if (typeof value !== 'string' || value.length > 100 || !NON_NEGATIVE_DECIMAL_PATTERN.test(value)) {
     fail('INVALID_RATE_DECIMAL', 'rate must be a canonical non-negative decimal string');
@@ -140,18 +158,32 @@ export function normalizeLoanForPersistence(value) {
 
 export function serializeLoanForFirestore(loan, { createdAt, updatedAt }) {
   if (!createdAt || !updatedAt) fail('MISSING_AUDIT_TIMESTAMP', 'Loan audit timestamps are required');
-  return { ...normalizeLoanForPersistence(loan), createdAt, updatedAt };
+  return { ...normalizeLoanForPersistence(loan), revision: 0, createdAt, updatedAt };
 }
 
 export function deserializeLoanFromFirestore(data, { id } = {}) {
   assertRecord(data, 'loan document');
-  assertAllowedKeys(data, [...LOAN_FIELDS, 'createdAt', 'updatedAt'], 'loan document');
+  assertAllowedKeys(
+    data,
+    [...LOAN_FIELDS, ...LOAN_TECHNICAL_FIELDS, 'createdAt', 'updatedAt'],
+    'loan document',
+  );
   const loan = normalizeLoanForPersistence(
     Object.fromEntries(LOAN_FIELDS.map((field) => [field, data[field]]))
   );
   return {
     ...(id === undefined ? {} : { id }),
     ...loan,
+    revision: data.revision === undefined ? 0 : requireRevision(data.revision),
+    ...(data.latestTermsChangeId === undefined
+      ? {}
+      : {
+          latestTermsChangeId: requireString(
+            data.latestTermsChangeId,
+            'latestTermsChangeId',
+            { maxLength: 128 },
+          ),
+        }),
     createdAt: requireTimestamp(data.createdAt, 'createdAt'),
     updatedAt: requireTimestamp(data.updatedAt, 'updatedAt'),
   };
@@ -232,12 +264,11 @@ export function toLoanEngineMovement(movementDocument) {
 
 export function normalizeLoanMetadataUpdate(value, updatedAt) {
   assertRecord(value, 'loan update');
-  assertAllowedKeys(value, ['name', 'status'], 'loan update');
+  assertAllowedKeys(value, ['status'], 'loan update');
   if (Object.keys(value).length === 0) fail('EMPTY_UPDATE', 'Loan update cannot be empty');
   if (!updatedAt) fail('MISSING_AUDIT_TIMESTAMP', 'Loan updatedAt is required');
 
   const update = { updatedAt };
-  if (value.name !== undefined) update.name = requireString(value.name, 'name', { maxLength: 120 });
   if (value.status !== undefined) {
     if (!Object.values(LOAN_STATUSES).includes(value.status)) {
       fail('INVALID_STATUS', 'Unsupported loan status');
@@ -245,4 +276,69 @@ export function normalizeLoanMetadataUpdate(value, updatedAt) {
     update.status = value.status;
   }
   return update;
+}
+
+function normalizeTermsSnapshot(value, label) {
+  assertRecord(value, label);
+  assertAllowedKeys(value, TERMS_SNAPSHOT_FIELDS, label);
+  const missing = TERMS_SNAPSHOT_FIELDS.filter((field) => value[field] === undefined);
+  if (missing.length > 0) fail('INVALID_TERMS_SNAPSHOT', `${label} is missing: ${missing.join(', ')}`);
+
+  const normalized = normalizeLoanForPersistence({
+    type: 'loan',
+    name: value.name,
+    currency: 'USD',
+    startDate: value.startDate,
+    maturityDate: value.maturityDate,
+    rate: value.rate,
+    rateType: value.rateType,
+    capitalizationFrequency: value.capitalizationFrequency,
+    calculationVersion: LOAN_CALCULATION_VERSION,
+    status: LOAN_STATUSES.ACTIVE,
+  });
+  return Object.fromEntries(TERMS_SNAPSHOT_FIELDS.map((field) => [field, normalized[field]]));
+}
+
+export function serializeTermsChangeForFirestore(value, { createdAt }) {
+  assertRecord(value, 'terms change');
+  assertAllowedKeys(
+    value,
+    ['kind', 'before', 'after', 'reason', 'fromRevision', 'toRevision'],
+    'terms change',
+  );
+  if (!['correction', 'maturity_extension'].includes(value.kind)) {
+    fail('INVALID_TERMS_CHANGE_KIND', 'Unsupported terms change kind');
+  }
+  if (typeof value.reason !== 'string' || value.reason.trim() === '' || value.reason.length > 1000) {
+    fail('INVALID_REASON', 'reason must be a non-empty string of at most 1000 characters');
+  }
+  if (!createdAt) fail('MISSING_AUDIT_TIMESTAMP', 'Terms change createdAt is required');
+  const fromRevision = requireRevision(value.fromRevision, 'fromRevision');
+  const toRevision = requireRevision(value.toRevision, 'toRevision');
+  if (toRevision !== fromRevision + 1) {
+    fail('INVALID_REVISION', 'toRevision must increment fromRevision by one');
+  }
+
+  return {
+    kind: value.kind,
+    before: normalizeTermsSnapshot(value.before, 'before'),
+    after: normalizeTermsSnapshot(value.after, 'after'),
+    reason: value.reason.trim(),
+    fromRevision,
+    toRevision,
+    createdAt,
+  };
+}
+
+export function deserializeTermsChangeFromFirestore(data, { id } = {}) {
+  assertRecord(data, 'terms change document');
+  assertAllowedKeys(
+    data,
+    ['kind', 'before', 'after', 'reason', 'fromRevision', 'toRevision', 'createdAt'],
+    'terms change document',
+  );
+  const { createdAt, ...change } = data;
+  const normalized = serializeTermsChangeForFirestore(change, { createdAt });
+  requireTimestamp(normalized.createdAt, 'createdAt');
+  return { ...(id === undefined ? {} : { id }), ...normalized };
 }

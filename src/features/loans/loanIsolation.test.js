@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const featureDirectory = dirname(fileURLToPath(import.meta.url));
-const productionFiles = ['loanDates.js', 'loanModel.js', 'loanEngine.js'];
+const productionFiles = ['loanDates.js', 'loanModel.js', 'loanEngine.js', 'loanTerms.js'];
 const persistenceFiles = ['loanSerialization.js', 'loanMovements.js', 'loanRepository.js'];
 
 describe('loan engine isolation', () => {

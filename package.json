@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest run src server",
+    "test:all": "npm run test && npm run test:firestore && npm run test:b1:firestore",
     "test:b1": "vitest run server/closing",
     "test:b1:firestore": "firebase emulators:exec --only firestore --project demo-b1-close \"vitest run test/b1\"",
     "test:loans": "vitest run src/features/loans",

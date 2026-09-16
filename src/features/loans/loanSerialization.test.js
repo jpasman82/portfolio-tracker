@@ -10,6 +10,7 @@ import {
   requireCanonicalRate,
   serializeLoanForFirestore,
   serializeMovementForFirestore,
+  serializeTermsChangeForFirestore,
   toLoanEngineDefinition,
   toLoanEngineMovement,
 } from './loanSerialization';
@@ -87,7 +88,13 @@ describe('loan serialization', () => {
     });
     const restored = deserializeLoanFromFirestore(serialized, { id: 'loan-1' });
 
-    expect(restored).toEqual({ id: 'loan-1', ...loan(), createdAt: timestamp, updatedAt: timestamp });
+    expect(restored).toEqual({
+      id: 'loan-1',
+      ...loan(),
+      revision: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
     expect(toLoanEngineDefinition(restored)).toEqual({
       name: 'Reclus',
       currency: 'USD',
@@ -122,17 +129,66 @@ describe('loan serialization', () => {
     expectCode(() => deserializeLoanFromFirestore(document), 'INVALID_TIMESTAMP');
   });
 
-  it('restricts metadata updates and always adds updatedAt', () => {
-    expect(normalizeLoanMetadataUpdate({ name: 'Nuevo nombre' }, timestamp)).toEqual({
-      name: 'Nuevo nombre',
-      updatedAt: timestamp,
-    });
+  it('restricts direct metadata updates to status and always adds updatedAt', () => {
     expect(normalizeLoanMetadataUpdate({ status: 'closed' }, timestamp)).toEqual({
       status: 'closed',
       updatedAt: timestamp,
     });
     expectCode(() => normalizeLoanMetadataUpdate({ rate: '0.02' }, timestamp), 'UNEXPECTED_FIELD');
+    expectCode(() => normalizeLoanMetadataUpdate({ name: 'Nuevo nombre' }, timestamp), 'UNEXPECTED_FIELD');
     expectCode(() => normalizeLoanMetadataUpdate({}, timestamp), 'EMPTY_UPDATE');
+  });
+
+  it('reads legacy loans without revision as revision zero', () => {
+    const restored = deserializeLoanFromFirestore({
+      ...loan(), createdAt: timestamp, updatedAt: timestamp,
+    });
+    expect(restored.revision).toBe(0);
+  });
+
+  it('serializes a closed append-only terms audit without derived values', () => {
+    const before = {
+      name: 'Reclus',
+      currency: 'USD',
+      startDate: '2026-09-01',
+      maturityDate: '2027-09-01',
+      rate: '0.0125',
+      rateType: 'monthly_effective',
+      capitalizationFrequency: 'monthly',
+      calculationVersion: 'loan-v1',
+    };
+    expect(serializeTermsChangeForFirestore({
+      kind: 'correction',
+      before,
+      after: { ...before, rate: '0.01' },
+      reason: '  Carga original incorrecta  ',
+      fromRevision: 0,
+      toRevision: 1,
+    }, { createdAt: timestamp })).toEqual({
+      kind: 'correction',
+      before,
+      after: { ...before, rate: '0.01' },
+      reason: 'Carga original incorrecta',
+      fromRevision: 0,
+      toRevision: 1,
+      createdAt: timestamp,
+    });
+  });
+
+  it('requires a reason and one-step revision in terms audits', () => {
+    const snapshot = {
+      name: 'Reclus', currency: 'USD', startDate: '2026-09-01', maturityDate: '2027-09-01',
+      rate: '0.0125', rateType: 'monthly_effective', capitalizationFrequency: 'monthly',
+      calculationVersion: 'loan-v1',
+    };
+    expectCode(() => serializeTermsChangeForFirestore({
+      kind: 'correction', before: snapshot, after: snapshot, reason: ' ',
+      fromRevision: 0, toRevision: 1,
+    }, { createdAt: timestamp }), 'INVALID_REASON');
+    expectCode(() => serializeTermsChangeForFirestore({
+      kind: 'correction', before: snapshot, after: snapshot, reason: 'Corrección',
+      fromRevision: 0, toRevision: 2,
+    }, { createdAt: timestamp }), 'INVALID_REVISION');
   });
 });
 
