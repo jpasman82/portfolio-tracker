@@ -1,16 +1,18 @@
-# B1 daily last traded price - policy v2
+# B1 daily last traded price - policy v3
 
 Status: implementation for review, NOT DEPLOYED. No production writes or new
 provider requests were needed for this policy change. Original checkout untouched.
 
 ## Business contract
 
-The daily price is the last executed price returned by BYMA Snapshot in the first
-eligible post-wheel capture for that instrument and valuationDate. This is NOT a
+The daily price is the eligible trade with the greatest cumulative operation count
+observed by BYMA Snapshot in our post-wheel reconciliation window for that instrument
+and valuationDate. This is NOT a
 BYMA official close/fixing. It is not EOD and is not a carried prior price.
 
 Source: BYMA_SNAPSHOT. Price policy: BYMA_SNAPSHOT_LAST_TRADE.
-Policy/normalizer version: b1-snapshot-last-trade-v2.
+Policy/normalizer version: b1-snapshot-last-trade-v3. Version v2 is rejected rather
+than silently reinterpreted because it selected the first eligible observation.
 
 TRADE is VALID only if all of these hold:
 
@@ -58,8 +60,8 @@ Snapshot Equity and Fixed Income sections, inspected in B1A/B1B.
 
 The policy cannot detect a provider silently misdating a whole row while carrying
 a positive trade AND counter. No separate execution date is present in the inspected
-Snapshot schema. No historical API capability is implied. A later provider correction
-does not automatically overwrite the first accepted daily capture.
+Snapshot schema. No historical API capability is implied. A later capture only
+supersedes the selection when its valid cumulative operation counter is greater.
 
 ## Capture window
 
@@ -101,16 +103,22 @@ commits and atomic publication. Do not delete observations between attempts.
 
 1. Reconcile eligible durable observations with successful group checkpoints
    before requesting the provider again.
-2. Query only groups needed for unselected requirements.
+2. Query every group required by frozen inputs on every reconciliation attempt,
+   including requirements that already have a selection.
 3. Persist each response's observations, then checkpoint its group.
-4. Select the first eligible capture for each unique quote identity. Different
-   identities or simultaneous conflicting prices remain ambiguous.
-5. Existing selected good captures are never replaced by worse or later captures.
+4. For one quote identity, select the eligible observation with greatest `tradeCount`.
+   A later capture replaces the selection only when its positive counter is greater.
+5. Equal counter and equal price is a no-op. A lower later counter is preserved as
+   evidence and classified TRADE_COUNT_REGRESSION without moving backwards.
+   Equal counter with different prices is TRADE_COUNT_PRICE_CONFLICT: retain the
+   prior selection as evidence, mark the requirement missing/PARTIAL and forbid
+   publication until a unique greater counter resolves it. Invalid observations
+   never compete, regardless of their counter.
 6. Missing/no-trade remains PARTIAL; newly eligible missing trades can complete it.
 7. Build from durable evidence, then atomically publish only when all required
    prices (including both same-day MEP legs) and frozen inputs are valid.
 
-The policy version is bumped: v1 runs fail POLICY_VERSION_MISMATCH, not silently
+The policy version is bumped: v1/v2 runs fail POLICY_VERSION_MISMATCH, not silently
 reinterpreted. No data migration or automatic overwrite of old history is included.
 If a process dies before any durable write, that response can still be lost.
 
@@ -125,8 +133,14 @@ history is neither rewritten nor relabeled. The UI may still display 'cierre', b
 the metadata and documentation unambiguously describe daily last traded price.
 
 Explicit legacy mode remains a rollback outside this policy; no automatic fallback
-exists. Off is the safe stop. Existing client writers and permissions are unchanged;
-global single-writer enforcement is still outside this work.
+exists. Off is the safe stop. Existing client writers and permissions are unchanged:
+`src/utils/portfolioSnapshots.js` writes through `saveDailyPortfolioSnapshot` and
+`saveManualPortfolioSnapshot`; Home invokes the first from its post-close refresh,
+and PortfolioHistory invokes both manual paths. Firestore currently allows every
+authenticated client to write `portfolioDailySnapshots/**`. Publish remains HOLD
+until those writers are migrated/disabled, client writes are denied by rules, and
+the two identical cron paths are orchestrated so the first remains capture-only and
+only a final reconciled invocation can publish. Capture-only is not blocked.
 
 ## Preserved B1A/B1B findings / EOD
 
@@ -157,4 +171,5 @@ The localhost demo Firestore suite exercises the real REST/CAS adapter and rules
 fixtures/snapshot-2026-09-15.js contains actual sanitized intraday excerpts for
 GGAL, YPFD, POLL, AAPL, SPY, AL30, AL30D and AL30C. Their actual capture timestamp
 is rejected as pre-cutoff. Tests simulating a post-cutoff timestamp do NOT claim
-that a real post-close capture occurred.
+that a real post-close capture occurred. As of 2026-09-16 12:15 ART, real post-cutoff
+validation for that date is PENDING; this implementation does not wait or fabricate it.

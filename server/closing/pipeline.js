@@ -68,7 +68,6 @@ export async function runClose({ date, repo, byma, loadPositions, publish = fals
         || hash(published.data) !== state.b1SnapshotHash) throw fail('PUBLISHED_SNAPSHOT_CHANGED');
       return state;
     }
-    if (!publish && state.status === 'COMPLETE') return state;
     stage = 'INPUTS';
     await repo.update(date, lease, { stage, lastError: null, pricePolicy: PRICE_POLICY, captureCutoffART: policy.cutoffART });
     let input = await repo.input(date);
@@ -82,16 +81,18 @@ export async function runClose({ date, repo, byma, loadPositions, publish = fals
     state = await repo.update(date, lease, { stage });
     let observations = await repo.observations(date);
     const selected = { ...state.selected };
-    // Reconcile durable captures before refetching: a restart must not depend
-    // on the provider still serving a price already saved and checkpointed.
-    for (const requirement of input.requirements.filter((r) => !selected[r.key])) {
-      const choice = selectRequirement(requirement, observations, date);
-      if (choice.observation && requirement.groups.every((g) => state.endpointResults[g]?.status === 'OK')) {
+    const startingSelected = { ...selected };
+    // Recover a fully checkpointed response before refetching. The current
+    // attempt still queries every required group so a higher cumulative trade
+    // count can supersede the prior selection.
+    for (const requirement of input.requirements) {
+      const choice = selectRequirement(requirement, observations, date, selected[requirement.key]);
+      if (!choice.blocking && choice.observation
+        && requirement.groups.every((g) => state.endpointResults[g]?.status === 'OK')) {
         selected[requirement.key] = choice.observation.id;
       }
     }
-    const pending = input.requirements.filter((r) => !selected[r.key]);
-    const groups = [...new Set(pending.flatMap((r) => r.groups))];
+    const groups = [...new Set(input.requirements.flatMap((r) => r.groups))];
     const results = await Promise.allSettled(groups.map(async (group) => {
       let archiveStatus = archive ? 'FAILED' : 'NOT_CONFIGURED';
       let groupStage = 'BYMA';
@@ -134,17 +135,57 @@ export async function runClose({ date, repo, byma, loadPositions, publish = fals
     state = await repo.update(date, lease, { stage });
     observations = await repo.observations(date);
     const rejected = [];
-    for (const requirement of pending) {
-      const choice = selectRequirement(requirement, observations, date);
-      // Both equity groups must have returned before declaring a symbol unique.
-      const groupsKnown = requirement.groups.every((g) => state.endpointResults[g]?.status === 'OK');
-      if (choice.observation && groupsKnown) selected[requirement.key] = choice.observation.id;
-      else rejected.push({ key: requirement.key, reason: groupsKnown ? choice.reason : 'GROUP_UNAVAILABLE' });
+    const blocked = new Set();
+    const reconciliation = { ...(state.reconciliation || {}) };
+    const reconciledAt = now();
+    const byId = new Map(observations.map((o) => [o.id, o]));
+    for (const requirement of input.requirements) {
+      const choice = selectRequirement(requirement, observations, date, selected[requirement.key]);
+      // Every candidate group must have succeeded in this attempt before the
+      // requirement can be declared final for this reconciliation window.
+      const groupsKnown = requirement.groups.every((g) => state.endpointResults[g]?.status === 'OK'
+        && state.endpointResults[g]?.attemptId === attemptId);
+      const before = startingSelected[requirement.key] || null;
+      if (groupsKnown && !choice.blocking && choice.observation) selected[requirement.key] = choice.observation.id;
+      const after = selected[requirement.key] || null;
+      const beforeObservation = byId.get(before);
+      const afterObservation = byId.get(after);
+      const changed = Boolean(after && after !== before);
+      const lastOutcome = !groupsKnown ? 'GROUP_UNAVAILABLE'
+        : choice.blocking ? choice.outcome
+          : changed && before ? 'UPDATED_MORE_TRADES'
+            : changed ? 'SELECTED_INITIAL' : choice.outcome;
+      reconciliation[requirement.key] = {
+        selectedObservationId: after,
+        selectedTradeCount: afterObservation?.tradeCount ?? null,
+        selectedTrade: afterObservation?.price ?? null,
+        lastOutcome,
+        lastReconciledAt: reconciledAt,
+        lastAttemptId: attemptId,
+        anomalies: choice.anomalies,
+        lastSelectionChange: changed ? {
+          fromObservationId: before,
+          toObservationId: after,
+          fromTradeCount: beforeObservation?.tradeCount ?? null,
+          toTradeCount: afterObservation?.tradeCount ?? null,
+          reason: before ? 'MORE_TRADES' : 'INITIAL_SELECTION',
+          at: reconciledAt,
+          attemptId,
+        } : reconciliation[requirement.key]?.lastSelectionChange || null,
+      };
+      if (changed) event('selection_reconciled', { key: requirement.key,
+        fromTradeCount: beforeObservation?.tradeCount ?? null, toTradeCount: afterObservation?.tradeCount ?? null });
+      if (!groupsKnown || choice.blocking || !after) {
+        blocked.add(requirement.key);
+        rejected.push({ key: requirement.key, reason: groupsKnown ? choice.reason : 'GROUP_UNAVAILABLE' });
+      }
     }
-    const valid = input.requirements.filter((r) => selected[r.key]).map((r) => r.key);
-    const missing = input.requirements.filter((r) => !selected[r.key]).map((r) => r.key);
+    const valid = input.requirements.filter((r) => selected[r.key] && !blocked.has(r.key)).map((r) => r.key);
+    const missing = input.requirements.filter((r) => !selected[r.key] || blocked.has(r.key)).map((r) => r.key);
     const failed = results.find((r) => r.status === 'rejected');
-    const summary = { selected, valid, missing, rejected,
+    const reconciliationAnomalies = Object.entries(reconciliation).flatMap(([key, value]) =>
+      (value.anomalies || []).map((anomaly) => ({ key, ...anomaly })));
+    const summary = { selected, valid, missing, rejected, reconciliation, reconciliationAnomalies,
       status: missing.length ? (valid.length || observations.length ? 'PARTIAL' : 'FAILED') : 'PENDING',
       stage: missing.length ? 'AWAITING_RETRY' : 'BUILD', completedAt: null,
       lastError: failed ? publicError(failed.reason, failed.reason.closeStage || 'CAPTURE', attemptId)

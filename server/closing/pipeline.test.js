@@ -71,7 +71,7 @@ describe('B1 required failure scenarios', () => {
     s.byma.calls.length = 0;
     s.byma.responses.acciones = [row('GGAL', 100)];
     expect((await s.run()).status).toBe('COMPLETE');
-    expect(s.byma.calls.sort()).toEqual(['acciones', 'cedears']);
+    expect(s.byma.calls.sort()).toEqual(['acciones', 'bonosARS', 'bonosUSD', 'cedears']);
     expect((await s.repo.observations(DATE)).map((o) => o.id)).toEqual(expect.arrayContaining(prior));
   });
   it('8 repeat capture is idempotent, with no logical duplicates', async () => {
@@ -95,7 +95,7 @@ describe('B1 required failure scenarios', () => {
     await expect(s.repo.publish(DATE, first.lease, { b1BuildId: 'old' }, {})).rejects.toMatchObject({ code: 'LEASE_LOST' });
     expect(await s.snapshot()).toBeUndefined();
   });
-  it('10 builder failure after durable prices -> persisted observations survive and retry reuses them', async () => {
+  it('10 builder failure after durable prices -> persisted observations survive and retry reconciles them', async () => {
     const s = setup({ build: async () => { throw Object.assign(new Error('Fail'), { code: 'BUILD_FAILED' }); } });
     await expect(s.run()).rejects.toMatchObject({ code: 'BUILD_FAILED' });
     expect((await s.repo.observations(DATE)).filter((o) => o.status === 'VALID')).toHaveLength(3);
@@ -103,7 +103,7 @@ describe('B1 required failure scenarios', () => {
     s.args.build = buildFromDurable;
     s.byma.calls.length = 0;
     expect((await s.run()).status).toBe('COMPLETE');
-    expect(s.byma.calls).toEqual([]);
+    expect(s.byma.calls.sort()).toEqual(['acciones', 'bonosARS', 'bonosUSD', 'cedears']);
   });
   it('11 optional archive failure does not invalidate economic COMPLETE', async () => {
     const s = setup({ archive: { put: async () => { throw new Error('Archive down'); } } });
@@ -215,14 +215,14 @@ describe('B1 additional safety boundaries', () => {
     expect(await s.snapshot()).toEqual({ source: 'manual' });
     expect((await s.repo.observations(DATE)).length).toBeGreaterThan(0);
   });
-  it('capture-only mode does not publish, and later publication needs no BYMA', async () => {
+  it('capture-only mode does not publish, and later publication performs final reconciliation', async () => {
     const s = setup({ publish: false });
     expect((await s.run()).status).toBe('COMPLETE');
     expect(await s.snapshot()).toBeUndefined();
     s.args.publish = true;
     s.byma.calls.length = 0;
     expect((await s.run()).publicationStatus).toBe('PUBLISHED');
-    expect(s.byma.calls).toEqual([]);
+    expect(s.byma.calls.sort()).toEqual(['acciones', 'bonosARS', 'bonosUSD', 'cedears']);
   });
   it('malformed quantities cannot silently become zero', () => {
     for (const quantity of [undefined, NaN, Infinity, 'broken', '']) {

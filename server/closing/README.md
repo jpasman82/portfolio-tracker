@@ -15,7 +15,7 @@ Conserva el cálculo del baseline; no introduce un motor nuevo ni migra el front
 de la rueda, NO el fixing/cierre oficial BYMA. Contrato completo, evidencia y
 límites: [LAST_TRADE_POLICY.md](./LAST_TRADE_POLICY.md).
 
-Política `b1-snapshot-last-trade-v2`: sólo TRADE positivo, contador de operaciones
+Política `b1-snapshot-last-trade-v3`: sólo TRADE positivo, contador de operaciones
 positivo, Date = valuationDate e identidad completa, capturado desde las 18:00 ART
 del mismo día hábil. El cutoff puede retrasarse, nunca adelantarse, mediante
 PORTFOLIO_CAPTURE_CUTOFF_ART. Sin precio/operaciones: NO_TRADE y PARTIAL si requerido.
@@ -35,7 +35,7 @@ política no convierte esas conclusiones en falsas ni presenta TRADE como cierre
 
 La ruta y las dos ventanas cron de `vercel.json` no cambian; `maxDuration` sigue en
 60 segundos. Cada invocación fija la fecha argentina al inicio, verifica el cutoff, adquiere lease,
-lee/congela insumos, descarga grupos pendientes concurrentemente y persiste cada
+lee/congela insumos, vuelve a descargar todos los grupos requeridos concurrentemente y persiste cada
 respuesta relevante antes del archivo raw opcional. Después reconcilia lo durable,
 valida, calcula y, sólo si está habilitado, publica atómicamente.
 
@@ -74,6 +74,8 @@ económicas son `YYYY-MM-DD`. No se mezclan timestamps nativos nuevos y strings.
 - `expectedQuoteKeys`: claves del requerimiento (no confundir con identidad del instrumento).
 - `valid`, `missing`: listas de requerimientos; `rejected`: clave y motivo.
 - `selected`: requerimiento → ID de observación durable elegida.
+- `reconciliation`: selección, contador, último resultado, último cambio de selección
+  y anomalías durables por requerimiento; `reconciliationAnomalies` las resume.
 - `inputHash`, `b1BuildId`, `b1SnapshotHash`, `publicationStatus` (NOT_REQUESTED / PUBLISHED).
 - `endpointResults`: estado, filas, instante e intento más reciente por grupo.
 - `lastError`: código, etapa, intento y HTTP status, sin cuerpo de proveedor/secretos.
@@ -94,9 +96,13 @@ económicas son `YYYY-MM-DD`. No se mezclan timestamps nativos nuevos y strings.
 Se conserva la identidad de respuesta sin sustituir sus códigos por los del
 request: se observó `operativeForm=C`, `market=CT` con queries CONTADO/PPT.
 Identidad completa, categoría, mercado, forma, moneda y plazo incompatibles se
-rechazan. Identidades distintas o precios contradictorios en la primera captura
-elegible son AMBIGUOUS_QUOTE. En retries se conserva la primera captura válida;
-incluso un reinicio previo al checkpoint de selección puede recuperarla del durable.
+rechazan. Identidades distintas son AMBIGUOUS_QUOTE. Para la misma identidad,
+gana la observación elegible con mayor `tradeCount`: una posterior sólo reemplaza
+si el contador acumulado creció. Un contador menor se registra como
+TRADE_COUNT_REGRESSION sin retroceder; igual contador con distinto precio es
+TRADE_COUNT_PRICE_CONFLICT y bloquea COMPLETE/publicación hasta que evidencia
+posterior con contador mayor lo resuelva. Un reinicio puede reconstruir esta
+selección desde observaciones durables.
 
 `marketPriceRuns/{date}/inputs/frozen` (una copia inmutable, no historial completo):
 
@@ -161,8 +167,17 @@ autenticados. El servidor opera con OAuth de service account e IAM; el emulador
 verifica reglas, pero **no acredita permisos IAM actuales de producción**.
 No se cambiaron permisos legacy, credenciales remotas, frontend ni posiciones
 productivas. El código B1 no ejecuta los callbacks positionUpdates del baseline.
-Writers cliente permanecen y todavía pueden modificar la colección histórica:
-la garantía de single-writer global corresponde a otra fase.
+Writers cliente permanecen y todavía pueden modificar la colección histórica.
+`src/utils/portfolioSnapshots.js` expone `saveDailyPortfolioSnapshot` y
+`saveManualPortfolioSnapshot`, ambas con `setDoc(..., { merge: true })`. Se invocan
+desde el auto-refresh/post-close de `src/pages/Home.jsx` y desde las acciones
+manuales de `src/pages/PortfolioHistory.jsx`. `firestore.rules` permite hoy
+read/write de `portfolioDailySnapshots/**` a cualquier usuario autenticado.
+Antes de habilitar publish hay que migrar/deshabilitar esos writers y cambiar las
+reglas para que clientes no puedan crear/actualizar/borrar la colección, conservando
+las lecturas estrictamente necesarias. También debe asegurarse que el primer cron
+sea capture-only y que sólo una invocación final reconciliada solicite publicación;
+el modo global actual no distingue los dos cron. Nada de esto bloquea capture-only.
 
 El servidor puede reutilizar las credenciales existentes. No hacer env pull ni
 subir `.env`; ningún secreto nuevo pertenece a este cambio. El wrapper legacy
@@ -174,7 +189,8 @@ del token Google compartido. Volver a legacy reactiva riesgos conocidos de ese f
 1. Revisar este diff, aceptar la política last-trade y confirmar ventana/mapeos antes de publicación.
 2. Verificar IAM/CRON_SECRET y aplicar rules aditivas mediante una autorización futura.
 3. Desplegar en capture y validar datos/volumen con autorización futura; no hay escrituras de prueba productivas en B1.
-4. Habilitar publish sólo con fechas probadas, mapeos revisados y estrategia para conflictos con writers existentes.
+4. Habilitar publish sólo después de cerrar writers/reglas cliente y separar de
+   forma verificable la captura inicial de la invocación final que publica.
 5. Rollback: off detiene B1; legacy restaura el flujo anterior de manera explícita.
    No borrar observaciones para revertir. Cambiar configuración no cancela una
    invocación ya iniciada: esperar su fin/maxDuration antes de activar otro writer.

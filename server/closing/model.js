@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const VERSION = 'b1-snapshot-last-trade-v2';
+export const VERSION = 'b1-snapshot-last-trade-v3';
 export const TIMEZONE = 'America/Argentina/Buenos_Aires';
 export const PRICE_POLICY = 'BYMA_SNAPSHOT_LAST_TRADE';
 export const TRADE_REFERENCE = 'https://jira-tecval.atlassian.net/wiki/external/NTQ0OTRmYzBlMTUzNGFlOTg1MTFkMzI2OWIzYTM1MTc';
@@ -159,23 +159,56 @@ export function eligibleObservation(o, date) {
     && !captureWindowReason(date, o.capturedAt, { cutoffART: o.captureCutoffART, version: o.dateEvidence.captureWindowVersion }));
 }
 
-export function selectRequirement(requirement, observations, date) {
+export function selectRequirement(requirement, observations, date, selectedId = null) {
   const relevant = observations.filter((o) => requirement.groups.includes(o.group) && requirement.symbols.includes(o.providerSymbol));
   const candidates = relevant.filter((o) => eligibleObservation(o, date));
-  // Preserve the first eligible post-cutoff capture even if the worker died
-  // before checkpointing its selection. Never choose between conflicting identities.
-  if (new Set(candidates.map((o) => o.quoteKey)).size > 1) return { observation: null, reason: 'AMBIGUOUS_QUOTE' };
-  candidates.sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
-  const firstTime = candidates.length ? Date.parse(candidates[0].capturedAt) : null;
-  const quotes = new Map();
-  for (const o of candidates.filter((o) => Date.parse(o.capturedAt) === firstTime)) {
-    // Repeated identical rows are harmless; different values or identities are
-    // ambiguous, even if their symbols happen to match.
-    quotes.set(`${o.quoteKey}:${o.price}`, o);
-  }
-  if (quotes.size !== 1) {
+  const current = selectedId ? candidates.find((o) => o.id === selectedId) : null;
+  if (selectedId && !current) return { observation: null, reason: 'INVALID_SELECTED_OBSERVATION', blocking: true,
+    outcome: 'INVALID_SELECTED_OBSERVATION', anomalies: [] };
+  const quoteKeys = new Set(candidates.map((o) => o.quoteKey));
+  if (quoteKeys.size > 1) return { observation: current, reason: 'AMBIGUOUS_QUOTE', blocking: true,
+    outcome: 'AMBIGUOUS_QUOTE', anomalies: [{ type: 'AMBIGUOUS_QUOTE', observationIds: candidates.map((o) => o.id).sort() }] };
+  if (!candidates.length) {
     const latest = relevant.filter((o) => o.priceType === 'TRADE').sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
-    return { observation: null, reason: quotes.size ? 'AMBIGUOUS_QUOTE' : latest?.reason || 'MISSING_VALID_TRADE' };
+    return { observation: null, reason: latest?.reason || 'MISSING_VALID_TRADE', blocking: true,
+      outcome: latest?.reason || 'MISSING_VALID_TRADE', anomalies: [] };
   }
-  return { observation: [...quotes.values()][0], reason: null };
+
+  const ordered = [...candidates].sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt) || a.id.localeCompare(b.id));
+  const anomalies = [];
+  let priorMax = -1;
+  for (let start = 0; start < ordered.length;) {
+    const capturedAt = ordered[start].capturedAt;
+    const sameCapture = ordered.slice(start).filter((o) => o.capturedAt === capturedAt);
+    for (const observation of sameCapture) {
+      if (observation.tradeCount < priorMax) anomalies.push({ type: 'TRADE_COUNT_REGRESSION',
+        observationId: observation.id, tradeCount: observation.tradeCount, priorMaxTradeCount: priorMax });
+    }
+    priorMax = Math.max(priorMax, ...sameCapture.map((o) => o.tradeCount));
+    start += sameCapture.length;
+  }
+  const byCount = new Map();
+  for (const observation of candidates) {
+    if (!byCount.has(observation.tradeCount)) byCount.set(observation.tradeCount, new Map());
+    const prices = byCount.get(observation.tradeCount);
+    if (!prices.has(observation.price)) prices.set(observation.price, []);
+    prices.get(observation.price).push(observation.id);
+  }
+  for (const [tradeCount, prices] of byCount) {
+    if (prices.size > 1) anomalies.push({ type: 'TRADE_COUNT_PRICE_CONFLICT', tradeCount,
+      prices: [...prices.entries()].sort(([a], [b]) => a - b).map(([price, observationIds]) => ({ price, observationIds: observationIds.sort() })) });
+  }
+
+  const maxTradeCount = Math.max(...candidates.map((o) => o.tradeCount));
+  const leaders = candidates.filter((o) => o.tradeCount === maxTradeCount);
+  const leaderPrices = new Set(leaders.map((o) => o.price));
+  if (leaderPrices.size > 1) return { observation: current, reason: 'TRADE_COUNT_PRICE_CONFLICT', blocking: true,
+    outcome: 'TRADE_COUNT_PRICE_CONFLICT', anomalies };
+  const leaderPrice = leaders[0].price;
+  const observation = current?.tradeCount === maxTradeCount && current.price === leaderPrice ? current
+    : [...leaders].sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt) || a.id.localeCompare(b.id))[0];
+  const outcome = !current ? 'SELECTED_INITIAL'
+    : observation.id === current.id ? 'UNCHANGED'
+      : observation.tradeCount > current.tradeCount ? 'UPDATED_MORE_TRADES' : 'UNCHANGED';
+  return { observation, reason: null, blocking: false, outcome, anomalies };
 }

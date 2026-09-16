@@ -49,6 +49,41 @@ describe('B1 real Firestore REST/CAS and rules (emulator only)', () => {
     expect((await worker).status).toBe('COMPLETE');
     expect(await store.list('portfolioDailySnapshots')).toHaveLength(1);
   });
+  it('two workers cannot race a higher-count reconciliation and publication uses the winner selection', async () => {
+    const firstRepo = createRepository(store, () => NOW);
+    const first = await runClose({ date: DATE, repo: firstRepo, byma: fixtureByma(),
+      loadPositions: async () => [position()], publish: false, now: () => NOW, log: () => {} });
+    const firstId = first.selected['acciones+cedears:GGAL'];
+    const later = '2026-09-15T22:35:00.000Z';
+    let entered;
+    const started = new Promise((resolve) => { entered = resolve; });
+    let release;
+    const hold = new Promise((resolve) => { release = resolve; });
+    const byma = fixtureByma({ acciones: async () => {
+      entered(); await hold;
+      return { result: [row('GGAL', 101, 'ARS', { trades: 11 })] };
+    } });
+    const args = { date: DATE, repo: createRepository(store, () => later), byma,
+      loadPositions: () => { throw new Error('must use frozen inputs'); }, publish: true,
+      now: () => later, log: () => {} };
+    const worker = runClose({ ...args, attemptId: 'reconcile-one' });
+    await started;
+    try {
+      await expect(runClose({ ...args, attemptId: 'reconcile-two' })).rejects.toMatchObject({ code: 'LEASE_BUSY' });
+    } finally { release(); }
+    const result = await worker;
+    const selectedId = result.selected['acciones+cedears:GGAL'];
+    expect(selectedId).not.toBe(firstId);
+    expect(result.reconciliation['acciones+cedears:GGAL']).toMatchObject({
+      selectedObservationId: selectedId, selectedTradeCount: 11, lastOutcome: 'UPDATED_MORE_TRADES',
+    });
+    const snapshot = (await store.get(`portfolioDailySnapshots/${DATE}`)).data;
+    expect(snapshot.priceObservations).toContainEqual(expect.objectContaining({
+      key: 'acciones+cedears:GGAL', observationId: selectedId, tradeCount: 11,
+    }));
+    expect((await firstRepo.observations(DATE)).filter((o) => o.providerSymbol === 'GGAL'
+      && o.priceType === 'TRADE')).toHaveLength(2);
+  });
   it('server publishes atomically through the production REST adapter', async () => {
     const repo = createRepository(store, () => NOW);
     const state = await runClose({ date: DATE, repo, byma: fixtureByma(), loadPositions: async () => [position()],
