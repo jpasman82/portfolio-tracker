@@ -3,6 +3,7 @@ import Decimal from 'decimal.js';
 import {
   LoanFormValidationError,
   buildLoanCreationInput,
+  buildLoanTermsChangeInput,
   buildMovementInput,
   canonicalAmountToHuman,
   deriveLoanPresentation,
@@ -12,10 +13,14 @@ import {
   humanPercentToRate,
   loadLoanCards,
   loadLoanDetail,
+  loanTermsErrorMessage,
+  loanTermsFormValues,
   movementFormValues,
+  movementDeleteErrorMessage,
   movementSaveErrorMessage,
   submitLoanCreation,
   submitLoanMovement,
+  submitLoanMovementDeletion,
   todayDateOnly,
 } from './loanUi';
 
@@ -222,6 +227,112 @@ describe('movement form contract', () => {
       .toMatch(/supera el valor disponible/i);
     expect(movementSaveErrorMessage(new Error('Cannot add movements to a loan with status closed')))
       .toMatch(/cerrado o cancelado/i);
+  });
+
+  it('requires an audit reason and routes deletion through the authenticated repository', async () => {
+    const repository = { deleteMovement: vi.fn().mockResolvedValue({ reversalMovementId: 'void-a' }) };
+
+    await expect(submitLoanMovementDeletion({
+      uid: 'user-123',
+      loanId: 'reclus-id',
+      movementId: 'movement-a',
+      reason: '  Duplicado  ',
+      repository,
+    })).resolves.toEqual({ reversalMovementId: 'void-a' });
+    expect(repository.deleteMovement).toHaveBeenCalledWith(
+      'user-123',
+      'reclus-id',
+      'movement-a',
+      'Duplicado',
+    );
+
+    await expect(submitLoanMovementDeletion({
+      uid: 'user-123',
+      loanId: 'reclus-id',
+      movementId: 'movement-a',
+      reason: ' ',
+      repository,
+    })).rejects.toMatchObject({ field: 'reason' });
+  });
+
+  it('maps deletion failures without exposing internal codes', () => {
+    expect(movementDeleteErrorMessage({ code: 'INITIAL_CONTRIBUTION_REQUIRED' }))
+      .toMatch(/aporte efectivo/i);
+    expect(movementDeleteErrorMessage({ code: 'MOVEMENT_ALREADY_REVERSED' }))
+      .toMatch(/ya fue eliminado o corregido/i);
+  });
+});
+
+describe('audited loan terms UI contract', () => {
+  it('prefills canonical terms as human form values', () => {
+    expect(loanTermsFormValues(reclusLoan)).toEqual({
+      name: 'Reclus',
+      startDate: '2026-09-01',
+      maturityDate: '2027-09-01',
+      rateType: 'monthly_effective',
+      rate: '1,25',
+      newMaturityDate: '2027-09-01',
+      reason: '',
+    });
+  });
+
+  it('builds a trimmed retroactive correction containing only changed fields', () => {
+    const input = buildLoanTermsChangeInput({
+      loan: reclusLoan,
+      mode: 'correction',
+      asOfDate: '2026-10-01',
+      form: {
+        ...loanTermsFormValues(reclusLoan),
+        name: ' Reclus corregido ',
+        rate: '1,50',
+        reason: '  Error de carga  ',
+      },
+    });
+
+    expect(input).toEqual({
+      kind: 'correction',
+      changes: { name: 'Reclus corregido', rate: '0.015' },
+      asOfDate: '2026-10-01',
+      reason: 'Error de carga',
+    });
+  });
+
+  it('builds a maturity-only extension and rejects a non-extension', () => {
+    const baseForm = loanTermsFormValues(reclusLoan);
+    expect(buildLoanTermsChangeInput({
+      loan: reclusLoan,
+      mode: 'maturity_extension',
+      asOfDate: '2027-10-01',
+      form: { ...baseForm, newMaturityDate: '2028-03-01', reason: 'Renovación' },
+    })).toEqual({
+      kind: 'maturity_extension',
+      changes: { maturityDate: '2028-03-01' },
+      asOfDate: '2027-10-01',
+      reason: 'Renovación',
+    });
+    expect(() => buildLoanTermsChangeInput({
+      loan: reclusLoan,
+      mode: 'maturity_extension',
+      asOfDate: '2027-10-01',
+      form: { ...baseForm, reason: 'Sin cambio' },
+    })).toThrowError(expect.objectContaining({ field: 'newMaturityDate' }));
+  });
+
+  it('requires a reason and maps concurrency and ledger failures to human messages', () => {
+    expect(() => buildLoanTermsChangeInput({
+      loan: reclusLoan,
+      mode: 'correction',
+      asOfDate: '2026-10-01',
+      form: { ...loanTermsFormValues(reclusLoan), rate: '1,5' },
+    })).toThrowError(expect.objectContaining({ field: 'reason' }));
+    expect(loanTermsErrorMessage({ code: 'STALE_LOAN_TERMS_REVISION' }))
+      .toMatch(/otra sesión/i);
+    expect(loanTermsErrorMessage({ code: 'START_DATE_REQUIRES_CONTRIBUTION' }))
+      .toMatch(/primero corregí la fecha del ingreso inicial/i);
+    expect(loanTermsErrorMessage({ code: 'MOVEMENT_AFTER_MATURITY' }))
+      .toMatch(/fuera de la vigencia/i);
+    expect(loanTermsErrorMessage({ code: 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE' }))
+      .toMatch(/sin saldo suficiente/i);
   });
 });
 

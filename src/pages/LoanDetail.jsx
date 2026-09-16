@@ -4,6 +4,8 @@ import { db } from '../firebase/config';
 import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
 import LoanMovementForm from '../features/loans/LoanMovementForm';
+import LoanMovementDeleteDialog from '../features/loans/LoanMovementDeleteDialog';
+import LoanTermsForm from '../features/loans/LoanTermsForm';
 import { createLoanRepository } from '../features/loans/loanRepository';
 import {
   formatDateOnly,
@@ -30,7 +32,7 @@ function Metric({ label, value, primary = false, children }) {
   );
 }
 
-function MovementRow({ movement, currency, onEdit }) {
+function MovementRow({ movement, currency, onEdit, onDelete }) {
   const withdrawal = movement.type === 'withdrawal';
   return (
     <div className={`loan-movement${withdrawal ? ' loan-movement--withdrawal' : ''}`}>
@@ -55,6 +57,11 @@ function MovementRow({ movement, currency, onEdit }) {
             Editar
           </button>
         )}
+        {onDelete && (
+          <button type="button" className="loan-movement__delete" onClick={() => onDelete(movement)}>
+            Eliminar
+          </button>
+        )}
       </div>
     </div>
   );
@@ -70,6 +77,8 @@ export default function LoanDetail({ currentUser, repository = loanRepository })
   const [notFound, setNotFound] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [movementDialog, setMovementDialog] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState(null);
+  const [showTermsDialog, setShowTermsDialog] = useState(false);
   const bottomNavHidden = useHideBottomNavOnScroll();
 
   useEffect(() => {
@@ -102,8 +111,10 @@ export default function LoanDetail({ currentUser, repository = loanRepository })
     setReloadKey((value) => value + 1);
   };
 
-  const movementSaved = () => {
+  const changesSaved = () => {
     setMovementDialog(null);
+    setDeleteDialog(null);
+    setShowTermsDialog(false);
     retry();
   };
 
@@ -162,7 +173,18 @@ export default function LoanDetail({ currentUser, repository = loanRepository })
 
         <div className="loan-detail-layout">
           <section className="loan-detail-section" aria-labelledby="conditions-heading">
-            <h2 id="conditions-heading">Condiciones</h2>
+            <div className="loan-detail-section__heading">
+              <h2 id="conditions-heading">Condiciones</h2>
+              {canManageMovements && (
+                <button
+                  type="button"
+                  className="loan-button loan-button--secondary loan-button--compact"
+                  onClick={() => setShowTermsDialog(true)}
+                >
+                  Editar condiciones
+                </button>
+              )}
+            </div>
             <dl className="loan-conditions">
               <div className="loan-condition">
                 <dt>Tasa</dt>
@@ -214,6 +236,7 @@ export default function LoanDetail({ currentUser, repository = loanRepository })
                     movement={movement}
                     currency={loan.currency}
                     onEdit={canManageMovements ? (selected) => setMovementDialog({ movement: selected }) : null}
+                    onDelete={canManageMovements ? (selected) => setDeleteDialog({ movement: selected }) : null}
                   />
                 ))}
               </div>
@@ -248,7 +271,29 @@ export default function LoanDetail({ currentUser, repository = loanRepository })
           movement={movementDialog.movement}
           repository={repository}
           onCancel={() => setMovementDialog(null)}
-          onSaved={movementSaved}
+          onSaved={changesSaved}
+        />
+      )}
+      {deleteDialog && presentation && (
+        <LoanMovementDeleteDialog
+          uid={uid}
+          loanId={loanId}
+          loan={presentation.loan}
+          movement={deleteDialog.movement}
+          repository={repository}
+          onCancel={() => setDeleteDialog(null)}
+          onDeleted={changesSaved}
+        />
+      )}
+      {showTermsDialog && presentation && (
+        <LoanTermsForm
+          uid={uid}
+          loanId={loanId}
+          loan={presentation.loan}
+          asOfDate={asOfDate}
+          repository={repository}
+          onCancel={() => setShowTermsDialog(false)}
+          onSaved={changesSaved}
         />
       )}
       <AppBottomNav hidden={bottomNavHidden} />

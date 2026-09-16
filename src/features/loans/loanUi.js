@@ -229,6 +229,139 @@ export function movementSaveErrorMessage(error) {
   return 'No pudimos guardar el movimiento. Revisá los datos e intentá nuevamente.';
 }
 
+export async function submitLoanMovementDeletion({
+  uid,
+  loanId,
+  movementId,
+  reason,
+  repository,
+}) {
+  if (!uid) formError('auth', 'La sesión no está disponible. Volvé a ingresar.');
+  if (!loanId || !movementId) formError('movement', 'No pudimos identificar el movimiento.');
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    formError('reason', 'Ingresá el motivo de la eliminación.');
+  }
+  if (reason.trim().length > 500) {
+    formError('reason', 'El motivo puede tener hasta 500 caracteres.');
+  }
+  return repository.deleteMovement(uid, loanId, movementId, reason.trim());
+}
+
+export function movementDeleteErrorMessage(error) {
+  if (error instanceof LoanFormValidationError) return error.message;
+  if (error?.code === 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE') {
+    return 'No se puede eliminar: un retiro posterior quedaría sin saldo suficiente.';
+  }
+  if (error?.code === 'INITIAL_CONTRIBUTION_REQUIRED') {
+    return 'No se puede eliminar el ingreso inicial mientras sea el único aporte efectivo en la fecha de inicio.';
+  }
+  if (error?.code === 'MOVEMENT_ALREADY_REVERSED') {
+    return 'El movimiento ya fue eliminado o corregido. Actualizá la página.';
+  }
+  if (error?.code === 'TECHNICAL_REVERSAL_IMMUTABLE') {
+    return 'El movimiento técnico de auditoría no puede eliminarse.';
+  }
+  if (error?.code === 'MOVEMENT_NOT_FOUND') {
+    return 'El movimiento ya no existe. Actualizá la página.';
+  }
+  if (/status (closed|cancelled)/i.test(error?.message || '')) {
+    return 'El préstamo está cerrado o cancelado y no admite cambios.';
+  }
+  return 'No pudimos eliminar el movimiento. Actualizá la página e intentá nuevamente.';
+}
+
+export function loanTermsFormValues(loan) {
+  return {
+    name: loan.name,
+    startDate: loan.startDate,
+    maturityDate: loan.maturityDate,
+    rateType: loan.rateType,
+    rate: new Decimal(loan.rate).times(100).toString().replace('.', ','),
+    newMaturityDate: loan.maturityDate,
+    reason: '',
+  };
+}
+
+export function buildLoanTermsChangeInput({ loan, mode, form, asOfDate }) {
+  if (!['correction', 'maturity_extension'].includes(mode)) {
+    formError('mode', 'Elegí el tipo de cambio.');
+  }
+  const reason = typeof form?.reason === 'string' ? form.reason.trim() : '';
+  if (!reason) formError('reason', 'Ingresá el motivo del cambio.');
+  if (reason.length > 1000) formError('reason', 'El motivo puede tener hasta 1000 caracteres.');
+
+  let changes;
+  if (mode === 'maturity_extension') {
+    try {
+      parseDateOnly(form.newMaturityDate, 'newMaturityDate');
+    } catch {
+      formError('newMaturityDate', 'Ingresá una fecha de vencimiento válida.');
+    }
+    if (compareDateOnly(form.newMaturityDate, loan.maturityDate) <= 0) {
+      formError('newMaturityDate', 'El nuevo vencimiento debe ser posterior al actual.');
+    }
+    changes = { maturityDate: form.newMaturityDate };
+  } else {
+    const name = typeof form.name === 'string' ? form.name.trim() : '';
+    if (!name) formError('name', 'Ingresá un nombre.');
+    for (const field of ['startDate', 'maturityDate']) {
+      try {
+        parseDateOnly(form[field], field);
+      } catch {
+        formError(field, 'Ingresá una fecha válida.');
+      }
+    }
+    if (compareDateOnly(form.maturityDate, form.startDate) <= 0) {
+      formError('maturityDate', 'El vencimiento debe ser posterior a la fecha inicial.');
+    }
+    if (!Object.hasOwn(RATE_TYPE_LABELS, form.rateType)) {
+      formError('rateType', 'Elegí un tipo de tasa.');
+    }
+    const proposed = {
+      name,
+      startDate: form.startDate,
+      maturityDate: form.maturityDate,
+      rateType: form.rateType,
+      rate: humanPercentToRate(form.rate),
+    };
+    changes = Object.fromEntries(
+      Object.entries(proposed).filter(([field, value]) => value !== loan[field]),
+    );
+    if (Object.keys(changes).length === 0) formError('form', 'No hay cambios para previsualizar.');
+  }
+
+  return { kind: mode, changes, asOfDate, reason };
+}
+
+export function loanTermsErrorMessage(error) {
+  if (error instanceof LoanFormValidationError) return error.message;
+  if (error?.code === 'STALE_LOAN_TERMS_REVISION') {
+    return 'Las condiciones cambiaron en otra sesión. Actualizá el préstamo y volvé a intentarlo.';
+  }
+  if (error?.code === 'START_DATE_REQUIRES_CONTRIBUTION') {
+    return 'Para cambiar la fecha inicial, primero corregí la fecha del ingreso inicial.';
+  }
+  if (error?.code === 'MOVEMENT_AFTER_MATURITY') {
+    return 'El nuevo vencimiento dejaría movimientos fuera de la vigencia del préstamo.';
+  }
+  if (error?.code === 'MOVEMENT_BEFORE_START') {
+    return 'La nueva fecha inicial dejaría movimientos anteriores fuera del contrato.';
+  }
+  if (error?.code === 'WITHDRAWAL_EXCEEDS_AVAILABLE_VALUE') {
+    return 'El cambio dejaría el historial del préstamo sin saldo suficiente.';
+  }
+  if (error?.code === 'LOAN_STATUS_NOT_ACTIVE') {
+    return 'El préstamo está cerrado o cancelado y no admite cambios.';
+  }
+  if (error?.code === 'INVALID_RATE' || error?.code === 'INVALID_RATE_DECIMAL') {
+    return 'Ingresá una tasa válida.';
+  }
+  if (error?.code === 'INVALID_DATE' || error?.code === 'INVALID_DATE_ONLY') {
+    return 'Ingresá fechas válidas.';
+  }
+  return 'No pudimos procesar el cambio. Revisá los datos e intentá nuevamente.';
+}
+
 export function buildLoanCreationInput(form) {
   const name = typeof form?.name === 'string' ? form.name.trim() : '';
   if (!name) formError('name', 'Ingresá un nombre.');
