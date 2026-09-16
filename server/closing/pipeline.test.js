@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createRepository, createRestStore } from './repository.js';
 import { runClose, buildFromDurable } from './pipeline.js';
-import { normalize, freezeInputs, BYMA_DATE_CONTRACT } from './model.js';
-import { MemoryStore, fixtureContract, fixtureByma, row, position, DATE, NOW } from './testSupport.js';
+import { normalize, freezeInputs } from './model.js';
+import { MemoryStore, fixtureByma, row, position, DATE, NOW } from './testSupport.js';
 
 function setup({ positions = [position()], byma = fixtureByma(), archive, build, publish = true } = {}) {
   const store = new MemoryStore();
@@ -10,7 +10,7 @@ function setup({ positions = [position()], byma = fixtureByma(), archive, build,
   const now = () => clock.value;
   const repo = createRepository(store, now);
   const args = { date: DATE, repo, byma, loadPositions: async () => positions, publish,
-    contract: fixtureContract, now, log: () => {}, archive, ...(build ? { build } : {}) };
+    now, log: () => {}, archive, ...(build ? { build } : {}) };
   return { store, repo, args, clock, byma, run: () => runClose(args),
     snapshot: async () => (await store.get(`portfolioDailySnapshots/${DATE}`))?.data };
 }
@@ -45,9 +45,9 @@ describe('B1 required failure scenarios', () => {
     expect(await s.snapshot()).toBeUndefined();
   });
   it('5 previous_close is preserved but rejected, never dated from capture time', async () => {
-    const observations = normalize(row('GGAL', 0, 'ARS', { previous_close: 99 }), 'acciones', DATE, NOW, 'a', fixtureContract);
+    const observations = normalize(row('GGAL', 0, 'ARS', { previous_close: 99 }), 'acciones', DATE, NOW, 'a');
     const previous = observations.find((o) => o.priceType === 'PREVIOUS_CLOSE');
-    expect(previous).toMatchObject({ price: 99, valuationDate: DATE, priceDate: '2026-09-14', stale: true, status: 'REJECTED' });
+    expect(previous).toMatchObject({ price: 99, valuationDate: DATE, priceDate: null, stale: true, status: 'REJECTED' });
     const s = setup();
     s.byma.responses.acciones = [row('GGAL', 0, 'ARS', { previous_close: 99 })];
     expect((await s.run()).status).toBe('PARTIAL');
@@ -143,19 +143,19 @@ describe('B1 additional safety boundaries', () => {
     await s.store.commit([{ path: target, data: { ...prior.data, totals: { netUsd: 999 } }, version: prior.version }]);
     await expect(s.run()).rejects.toMatchObject({ code: 'PUBLISHED_SNAPSHOT_CHANGED' });
   });
-  it('production contract fails closed even when Date and capture date match', () => {
-    const actual = normalize(row('GGAL', 100), 'acciones', DATE, NOW, 'a', BYMA_DATE_CONTRACT);
-    expect(actual.every((o) => o.status === 'REJECTED')).toBe(true);
-    expect(actual[0]).toMatchObject({ priceDate: null, reason: 'UNVERIFIED_PRICE_DATE' });
+  it('production contract accepts only the daily trade, never reference closing prices', () => {
+    const actual = normalize(row('GGAL', 100), 'acciones', DATE, NOW, 'a');
+    expect(actual.filter((o) => o.status === 'VALID').map((o) => o.priceType)).toEqual(['TRADE']);
+    expect(actual[0]).toMatchObject({ priceDate: null, reason: 'REFERENCE_ONLY' });
   });
   it('real BYMA response enums stay distinct from request parameters', () => {
-    const o = normalize(row('GGAL', 100, 'ARS', { market: 'CT', operativeForm: 'C' }), 'acciones', DATE, NOW, 'a')[0];
-    expect(o).toMatchObject({ market: 'CT', operativeForm: 'C', requestedOperativeForm: 'CONTADO', reason: 'UNVERIFIED_PRICE_DATE' });
+    const o = normalize(row('GGAL', 100, 'ARS', { market: 'CT', operativeForm: 'C' }), 'acciones', DATE, NOW, 'a').find((o) => o.priceType === 'TRADE');
+    expect(o).toMatchObject({ market: 'CT', operativeForm: 'C', requestedOperativeForm: 'CONTADO', status: 'VALID' });
   });
-  it('user-provided trade-date semantics never date previous_close or accept trade as official close', () => {
+  it('positive trade without positive count is NO_TRADE and cannot date previous_close', () => {
     const observations = normalize(row('GGAL', 0, 'ARS', { trade: 6795 }), 'acciones', DATE, NOW, 'a');
-    expect(observations.find((o) => o.priceType === 'TRADE')).toMatchObject({ priceDate: DATE,
-      status: 'REJECTED', reason: 'NOT_CURRENT_CLOSING_PRICE' });
+    expect(observations.find((o) => o.priceType === 'TRADE')).toMatchObject({ priceDate: null,
+      status: 'REJECTED', reason: 'NO_TRADE' });
     expect(observations.find((o) => o.priceType === 'PREVIOUS_CLOSE').priceDate).toBeNull();
   });
   it('ARS and USD representations of a held ticker are not merged into one market price row', async () => {
@@ -175,14 +175,14 @@ describe('B1 additional safety boundaries', () => {
     const result = await s.run();
     expect(result).toMatchObject({ status: 'COMPLETE', archiveStatus: 'DEGRADED' });
   });
-  it('rejects wrong closing session, currency and settlement', () => {
-    for (const extra of [{ closing_price_date: '2026-09-14' }, { currency: 'USD' }, { settlPeriod: '0001' }]) {
-      expect(normalize(row('GGAL', 100, 'ARS', extra), 'acciones', DATE, NOW, 'a', fixtureContract)[0].status).toBe('REJECTED');
+  it('rejects wrong trade session, currency and settlement', () => {
+    for (const extra of [{ Date: '2026-09-14' }, { currency: 'USD' }, { settlPeriod: '0001' }]) {
+      expect(normalize(row('GGAL', 100, 'ARS', extra), 'acciones', DATE, NOW, 'a').find((o) => o.priceType === 'TRADE').status).toBe('REJECTED');
     }
   });
   it('does not collapse same ticker in different segments or security IDs', async () => {
     const s = setup();
-    s.byma.responses.cedears = [row('GGAL', 90, 'ARS', { security_id: 'different' })];
+    s.byma.responses.cedears = [row('GGAL', 90, 'ARS', { category: 23 })];
     const state = await s.run();
     expect(state.rejected).toContainEqual({ key: 'acciones+cedears:GGAL', reason: 'AMBIGUOUS_QUOTE' });
     expect(await s.snapshot()).toBeUndefined();

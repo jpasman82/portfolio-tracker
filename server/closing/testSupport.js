@@ -24,19 +24,14 @@ export class MemoryStore {
   }
 }
 
-// Synthetic contract for unit/emulator fixtures ONLY. This is deliberately not
-// imported by the HTTP handler or exposed as a production configuration switch.
-export const fixtureContract = {
-  version: 'TEST-ONLY-explicit-price-dates',
-  resolve: (row, field) => ({ priceDate: row[`${field}_date`] || null,
-    reference: 'test-fixture://explicit-dated-price', reason: null }),
-};
+// Synthetic prices, real response shape. Tests use the production trade policy.
 export const DATE = '2026-09-15';
 export const NOW = '2026-09-15T22:00:00.000Z';
 export const row = (symbol, price, currency = 'ARS', extra = {}) => ({
-  symbol, security_id: symbol, currency, market: 'PPT', settlPeriod: '0002', operativeForm: 'CONTADO',
-  closing_price: price, closing_price_date: DATE, previous_close: price - 1,
-  previous_close_date: '2026-09-14', Date: DATE, broadcast_time: '18:10:00', ...extra,
+  symbol, security_id: `${symbol}-0002-C-CT-${currency}`, currency, market: 'CT', settlPeriod: '0002', operativeForm: 'C',
+  category: /^AL30|^TU27D/.test(symbol) ? 3 : 1,
+  trade: price, trades: price > 0 ? 10 : 0, closing_price: 0, previous_close: price - 1,
+  Date: DATE, broadcast_time: 165959, ...extra,
 });
 export const position = (ticker = 'GGAL', quantity = 1, extra = {}) => ({
   id: 'one', data: { assets: [{ ticker, quantity, ...extra }], debt: 0 },

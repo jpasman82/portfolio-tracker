@@ -1,17 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { VERSION, BYMA_DATE_CONTRACT, freezeInputs, normalize, selectRequirement, hash } from './model.js';
+import { VERSION, PRICE_POLICY, CAPTURE_POLICY, captureWindowReason, eligibleObservation, freezeInputs, normalize, selectRequirement, hash } from './model.js';
 import { publicError } from './repository.js';
 import { updatePositionsAndBuildSnapshot } from './legacy.js';
 
 const fail = (code) => Object.assign(new Error(code), { code });
 
 export async function buildFromDurable(input, selected, observations, date, capturedAt) {
+  if (input.policyVersion !== VERSION) throw fail('POLICY_VERSION_MISMATCH');
   const byId = new Map(observations.map((o) => [o.id, o]));
   const prices = new Map();
   for (const requirement of input.requirements) {
     const o = byId.get(selected[requirement.key]);
-    if (!o || o.status !== 'VALID' || o.priceType !== 'CLOSING_PRICE' || o.source !== 'BYMA'
-      || o.normalizerVersion !== VERSION || !o.dateEvidence?.reference || o.priceDate !== date || !(o.price > 0)
+    if (!eligibleObservation(o, date)
       || !requirement.groups.includes(o.group) || !requirement.symbols.includes(o.providerSymbol)) throw fail('MISSING_REQUIRED_INPUT');
     prices.set(requirement.key, o.price);
   }
@@ -29,12 +29,18 @@ export async function buildFromDurable(input, selected, observations, date, capt
   if (Object.values(snapshot.totals).some((n) => !Number.isFinite(n))) throw fail('INVALID_VALUATION');
   const selectedIds = Object.entries(selected).sort(([a], [b]) => a.localeCompare(b));
   return { ...snapshot, isComplete: true, economicStatus: 'COMPLETE', policyVersion: VERSION,
+    pricePolicy: PRICE_POLICY, priceSource: 'BYMA_SNAPSHOT', dailyPriceDefinition: 'daily last traded price',
+    priceObservations: selectedIds.map(([key, id]) => {
+      const o = byId.get(id);
+      return { key, observationId: id, group: o.group, priceType: o.priceType, source: o.source,
+        providerDate: o.providerDate, tradeCount: o.tradeCount, capturedAt: o.capturedAt, captureCutoffART: o.captureCutoffART };
+    }),
     marketPriceRunRef: `marketPriceRuns/${date}`, inputHash: input.inputHash,
     b1BuildId: hash([date, input.inputHash, selectedIds, VERSION]) };
 }
 
 export async function runClose({ date, repo, byma, loadPositions, publish = false,
-  archive = null, contract = BYMA_DATE_CONTRACT, now = () => new Date().toISOString(),
+  archive = null, policy = CAPTURE_POLICY, now = () => new Date().toISOString(),
   log = (entry) => console.info(JSON.stringify(entry)), build = buildFromDurable,
   attemptId = randomUUID() }) {
   let lease;
@@ -51,7 +57,10 @@ export async function runClose({ date, repo, byma, loadPositions, publish = fals
     return pending;
   };
   try {
+    const windowReason = captureWindowReason(date, now(), policy);
+    if (windowReason) throw fail(windowReason); // No lease, provider calls or writes before the window.
     ({ lease, run: state } = await repo.acquire(date, attemptId));
+    if (state.captureCutoffART && state.captureCutoffART !== policy.cutoffART) throw fail('CAPTURE_POLICY_MISMATCH');
     event('close_attempt_started', { attemptCount: state.attemptCount });
     if (state.publicationStatus === 'PUBLISHED') {
       const published = await repo.store.get(`portfolioDailySnapshots/${date}`);
@@ -61,7 +70,7 @@ export async function runClose({ date, repo, byma, loadPositions, publish = fals
     }
     if (!publish && state.status === 'COMPLETE') return state;
     stage = 'INPUTS';
-    await repo.update(date, lease, { stage, lastError: null });
+    await repo.update(date, lease, { stage, lastError: null, pricePolicy: PRICE_POLICY, captureCutoffART: policy.cutoffART });
     let input = await repo.input(date);
     if (!input) {
       input = freezeInputs(await loadPositions(), now());
@@ -73,6 +82,14 @@ export async function runClose({ date, repo, byma, loadPositions, publish = fals
     state = await repo.update(date, lease, { stage });
     let observations = await repo.observations(date);
     const selected = { ...state.selected };
+    // Reconcile durable captures before refetching: a restart must not depend
+    // on the provider still serving a price already saved and checkpointed.
+    for (const requirement of input.requirements.filter((r) => !selected[r.key])) {
+      const choice = selectRequirement(requirement, observations, date);
+      if (choice.observation && requirement.groups.every((g) => state.endpointResults[g]?.status === 'OK')) {
+        selected[requirement.key] = choice.observation.id;
+      }
+    }
     const pending = input.requirements.filter((r) => !selected[r.key]);
     const groups = [...new Set(pending.flatMap((r) => r.groups))];
     const results = await Promise.allSettled(groups.map(async (group) => {
@@ -84,7 +101,7 @@ export async function runClose({ date, repo, byma, loadPositions, publish = fals
         const capturedAt = now();
         const relevant = body.result.filter((row) => input.requirements.some((r) => r.groups.includes(group)
           && r.symbols.includes(String(row?.symbol || '').trim().toUpperCase())));
-        const normalized = relevant.flatMap((row) => normalize(row, group, date, capturedAt, attemptId, contract));
+        const normalized = relevant.flatMap((row) => normalize(row, group, date, capturedAt, attemptId, policy));
         // Mandatory durable observations come BEFORE the optional archive.
         groupStage = 'PERSIST_OBSERVATIONS';
         await enqueue(() => repo.saveObservations(date, lease, normalized));
@@ -118,7 +135,7 @@ export async function runClose({ date, repo, byma, loadPositions, publish = fals
     observations = await repo.observations(date);
     const rejected = [];
     for (const requirement of pending) {
-      const choice = selectRequirement(requirement, observations);
+      const choice = selectRequirement(requirement, observations, date);
       // Both equity groups must have returned before declaring a symbol unique.
       const groupsKnown = requirement.groups.every((g) => state.endpointResults[g]?.status === 'OK');
       if (choice.observation && groupsKnown) selected[requirement.key] = choice.observation.id;

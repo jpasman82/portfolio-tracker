@@ -1,7 +1,33 @@
 import { createHash } from 'node:crypto';
 
-export const VERSION = 'b1-v1';
+export const VERSION = 'b1-snapshot-last-trade-v2';
 export const TIMEZONE = 'America/Argentina/Buenos_Aires';
+export const PRICE_POLICY = 'BYMA_SNAPSHOT_LAST_TRADE';
+export const TRADE_REFERENCE = 'https://jira-tecval.atlassian.net/wiki/external/NTQ0OTRmYzBlMTUzNGFlOTg1MTFkMzI2OWIzYTM1MTc';
+export const CAPTURE_POLICY = Object.freeze({ cutoffART: '18:00', version: 'post-wheel-art-v1' });
+// Only a later cutoff can be configured without revising the reviewed minimum.
+export function capturePolicy(env = process.env) {
+  const cutoffART = env.PORTFOLIO_CAPTURE_CUTOFF_ART ?? CAPTURE_POLICY.cutoffART;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoffART) || cutoffART < CAPTURE_POLICY.cutoffART) {
+    throw Object.assign(new Error('INVALID_CAPTURE_CUTOFF'), { code: 'INVALID_CAPTURE_CUTOFF' });
+  }
+  return { ...CAPTURE_POLICY, cutoffART };
+}
+const validDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+export function captureWindowReason(date, capturedAt, policy = CAPTURE_POLICY) {
+  if (!validDate(date)) return 'INVALID_VALUATION_DATE';
+  if (!policy || policy.version !== CAPTURE_POLICY.version
+    || !/^([01]\d|2[0-3]):[0-5]\d$/.test(policy.cutoffART) || policy.cutoffART < CAPTURE_POLICY.cutoffART) return 'INVALID_CAPTURE_CUTOFF';
+  if (typeof capturedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T.*Z$/.test(capturedAt)
+    || !Number.isFinite(Date.parse(capturedAt))) return 'INVALID_CAPTURE_TIME';
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(capturedAt)).map((part) => [part.type, part.value]));
+  if (`${parts.year}-${parts.month}-${parts.day}` !== date) return 'WRONG_CAPTURE_SESSION';
+  if ([0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay())) return 'NON_TRADING_WEEKDAY';
+  return `${parts.hour}:${parts.minute}` < policy.cutoffART ? 'BEFORE_CAPTURE_CUTOFF' : null;
+}
 const canonical = (value) => Array.isArray(value) ? value.map(canonical)
   : value && typeof value === 'object'
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
@@ -65,27 +91,18 @@ export function freezeInputs(positions, capturedAt) {
   return { ...input, inputHash: hash(input) };
 }
 
-// User clarification: Date/broadcast_time date the updated traded quote, with
-// broadcast_time in Argentina local HHmmss. This is user-provided semantics,
-// NOT an official BYMA certification of closing_price or previous_close dates.
-// Closing-price semantics remain fail-closed. No environment-variable bypass.
-export const BYMA_DATE_CONTRACT = Object.freeze({
-  version: 'byma-user-trade-date-v1',
-  resolve: (row, field) => field === 'trade'
-    ? { priceDate: row.Date || null, reference: 'user-clarification://portfolio-tracker/2026-09-15/traded-quote',
-      reason: 'USER_PROVIDED_TRADE_DATE_SEMANTICS' }
-    : { priceDate: null, reference: null, reason: 'UNVERIFIED_PRICE_DATE' },
-});
-
-export function normalize(row, group, valuationDate, capturedAt, attemptId, contract = BYMA_DATE_CONTRACT) {
+// Business contract: row Date + positive operation count is the evidence for
+// that day's last trade. broadcast_time is only the time of the last update,
+// NOT an execution timestamp and NOT evidence of an official BYMA close.
+export function normalize(row, group, valuationDate, capturedAt, attemptId, policy = CAPTURE_POLICY) {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return [];
   const spec = GROUPS[group];
   const identity = {
     providerSymbol: String(row.symbol || '').trim().toUpperCase(),
     securityId: row.security_id == null ? null : String(row.security_id),
-    segment: spec.group, currency: String(row.currency || spec.currency),
-    market: String(row.market || spec.market || 'UNKNOWN'),
-    settlement: String(row.settlPeriod || '0002'),
+    segment: spec.group, currency: String(row.currency ?? 'UNKNOWN'),
+    market: String(row.market ?? 'UNKNOWN'),
+    settlement: String(row.settlPeriod ?? 'UNKNOWN'),
     operativeForm: row.operativeForm == null ? 'UNKNOWN' : String(row.operativeForm),
     requestedMarket: spec.market || null, requestedOperativeForm: 'CONTADO',
     quoteUnit: spec.type === 'fixed_income' ? 'PER_100_NOMINAL' : 'PER_UNIT',
@@ -93,42 +110,72 @@ export function normalize(row, group, valuationDate, capturedAt, attemptId, cont
   // Response enums are not request enums: real BYMA rows use operativeForm=C
   // and market=CT even for requests with CONTADO / PPT. Keep both dimensions;
   // never relabel CT as PPT or use request values to erase provider identity.
-  const mismatch = identity.currency !== spec.currency || identity.settlement !== '0002';
+  const category = typeof row.category === 'number' ? row.category : null;
+  const expectedCategory = { acciones: 1, cedears: 23, bonosARS: 3, bonosUSD: 3, bonosEXT: 3 }[group];
+  const mismatch = identity.currency !== spec.currency || identity.settlement !== '0002'
+    || identity.market !== 'CT' || identity.operativeForm !== 'C' || category !== expectedCategory
+    || identity.securityId !== `${identity.providerSymbol}-0002-C-CT-${identity.currency}`;
+  const tradeCount = Number.isSafeInteger(row.trades) && row.trades >= 0 ? row.trades : null;
+  const providerDate = row.Date == null ? null : String(row.Date);
+  const windowReason = captureWindowReason(valuationDate, capturedAt, policy);
   const quoteKey = hash(identity);
   return [['closing_price', 'CLOSING_PRICE'], ['previous_close', 'PREVIOUS_CLOSE'], ['trade', 'TRADE']]
-    .filter(([field]) => row[field] !== undefined)
+    .filter(([field]) => field === 'trade' || row[field] !== undefined)
     .map(([field, priceType]) => {
-      let evidence;
-      try { evidence = contract.resolve(row, field, group) || {}; }
-      catch { evidence = { priceDate: null, reference: null, reason: 'DATE_CONTRACT_ERROR' }; }
       const price = typeof row[field] === 'number' && Number.isFinite(row[field]) ? row[field] : null;
-      const knownDate = typeof evidence.priceDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(evidence.priceDate)
-        && evidence.reference ? evidence.priceDate : null;
+      const knownDate = priceType === 'TRADE' && validDate(providerDate) && tradeCount > 0 && price > 0 ? providerDate : null;
       const reason = !identity.providerSymbol || !identity.securityId || mismatch ? 'INVALID_IDENTITY'
-        : !(price > 0) ? 'INVALID_PRICE'
-          : priceType !== 'CLOSING_PRICE' ? 'NOT_CURRENT_CLOSING_PRICE'
-            : !knownDate ? 'UNVERIFIED_PRICE_DATE'
-              : knownDate !== valuationDate ? 'WRONG_SESSION' : null;
+        : priceType !== 'TRADE' ? 'REFERENCE_ONLY'
+          : !validDate(providerDate) ? 'UNKNOWN_TRADE_DATE'
+            : providerDate !== valuationDate ? 'WRONG_SESSION'
+              : row.trade == null || price === 0 || tradeCount === 0 ? 'NO_TRADE'
+                : !(price > 0) ? 'INVALID_PRICE'
+                  : tradeCount === null ? 'UNKNOWN_TRADE_COUNT'
+                    : windowReason;
       const stable = { ...identity, quoteKey, group, valuationDate, priceDate: knownDate,
-        price, priceType, source: 'BYMA', status: reason ? 'REJECTED' : 'VALID', reason,
+        providerDate, tradeCount, category, price, priceType, source: 'BYMA_SNAPSHOT', pricePolicy: PRICE_POLICY,
+        captureCutoffART: policy?.cutoffART ?? null, status: reason ? 'REJECTED' : 'VALID', reason,
         stale: priceType === 'PREVIOUS_CLOSE' || (knownDate ? knownDate !== valuationDate : null),
-        dateEvidence: { contractVersion: contract.version, reference: evidence.reference || null,
-          reason: evidence.reason || null, providerDate: row.Date == null ? null : String(row.Date),
+        dateEvidence: { contractVersion: VERSION, reference: TRADE_REFERENCE,
+          basis: 'ROW_DATE_AND_POSITIVE_TRADE_COUNT', captureWindowVersion: policy?.version ?? null,
+          providerDate, tradeCount,
           broadcastTime: row.broadcast_time == null ? null : String(row.broadcast_time) },
         normalizerVersion: VERSION };
       return { ...stable, id: hash(stable), capturedAt, attemptId };
     });
 }
 
-export function selectRequirement(requirement, observations) {
-  const candidates = observations.filter((o) => requirement.groups.includes(o.group)
-    && requirement.symbols.includes(o.providerSymbol) && o.status === 'VALID');
+export function eligibleObservation(o, date) {
+  const spec = GROUPS[o?.group];
+  return Boolean(spec && o.status === 'VALID' && o.priceType === 'TRADE' && o.source === 'BYMA_SNAPSHOT'
+    && o.pricePolicy === PRICE_POLICY && o.normalizerVersion === VERSION && o.dateEvidence?.contractVersion === VERSION
+    && o.dateEvidence.reference === TRADE_REFERENCE && o.dateEvidence.basis === 'ROW_DATE_AND_POSITIVE_TRADE_COUNT'
+    && o.providerDate === date && o.priceDate === date && o.valuationDate === date
+    && Number.isSafeInteger(o.tradeCount) && o.tradeCount > 0 && o.dateEvidence.tradeCount === o.tradeCount
+    && o.dateEvidence.providerDate === o.providerDate && Number.isFinite(o.price) && o.price > 0
+    && o.currency === spec.currency && o.market === 'CT' && o.operativeForm === 'C' && o.settlement === '0002'
+    && o.segment === spec.group && o.category === ({ acciones: 1, cedears: 23, bonosARS: 3, bonosUSD: 3, bonosEXT: 3 }[o.group])
+    && o.securityId === `${o.providerSymbol}-0002-C-CT-${o.currency}`
+    && !captureWindowReason(date, o.capturedAt, { cutoffART: o.captureCutoffART, version: o.dateEvidence.captureWindowVersion }));
+}
+
+export function selectRequirement(requirement, observations, date) {
+  const relevant = observations.filter((o) => requirement.groups.includes(o.group) && requirement.symbols.includes(o.providerSymbol));
+  const candidates = relevant.filter((o) => eligibleObservation(o, date));
+  // Preserve the first eligible post-cutoff capture even if the worker died
+  // before checkpointing its selection. Never choose between conflicting identities.
+  if (new Set(candidates.map((o) => o.quoteKey)).size > 1) return { observation: null, reason: 'AMBIGUOUS_QUOTE' };
+  candidates.sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
+  const firstTime = candidates.length ? Date.parse(candidates[0].capturedAt) : null;
   const quotes = new Map();
-  for (const o of candidates) {
+  for (const o of candidates.filter((o) => Date.parse(o.capturedAt) === firstTime)) {
     // Repeated identical rows are harmless; different values or identities are
     // ambiguous, even if their symbols happen to match.
     quotes.set(`${o.quoteKey}:${o.price}`, o);
   }
-  if (quotes.size !== 1) return { observation: null, reason: quotes.size ? 'AMBIGUOUS_QUOTE' : 'MISSING_VALID_CLOSE' };
+  if (quotes.size !== 1) {
+    const latest = relevant.filter((o) => o.priceType === 'TRADE').sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
+    return { observation: null, reason: quotes.size ? 'AMBIGUOUS_QUOTE' : latest?.reason || 'MISSING_VALID_TRADE' };
+  }
   return { observation: [...quotes.values()][0], reason: null };
 }

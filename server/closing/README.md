@@ -1,4 +1,4 @@
-# B1 — captura durable y contención del cierre
+# B1 — captura durable de daily last traded price
 
 Baseline exclusivo: `20b3980288dc7d65b52c36098b528194c0532c3f`.
 Rama: `codex/b1-durable-close-capture`. Sin merge, push, deploy ni backfill.
@@ -11,34 +11,30 @@ B1 persiste observaciones normalizadas relevantes en Firestore, retoma pendiente
 protege escrituras con lease y permite publicar sólo con insumos completos.
 Conserva el cálculo del baseline; no introduce un motor nuevo ni migra el frontend.
 
-**El contrato de fecha BYMA sigue sin verificar.** El adaptador de producción
-`BYMA_DATE_CONTRACT` devuelve `priceDate: null` para closing_price/previous_close,
-con evidencia del campo recibido y motivo explícito. No interpreta `Date` o
-`broadcast_time` como fecha probada del precio de cierre. Por ello, hoy **ningún precio real puede habilitar publicación
-oficial B1**, aunque `closing_price` sea positivo. Esto es fail-closed deliberado,
-no una promesa de cierre productivo ya homologado.
+**Decisión funcional vigente:** se conserva el último operado observado después
+de la rueda, NO el fixing/cierre oficial BYMA. Contrato completo, evidencia y
+límites: [LAST_TRADE_POLICY.md](./LAST_TRADE_POLICY.md).
 
-Antes de habilitar publicación se necesita documentación BYMA verificable y un
-cambio revisado en ese adaptador, con fixtures del contrato. No existe una variable
-de entorno para saltar la validación. `fixtureContract` sólo pertenece a pruebas y
-no se importa desde el handler. Los tests de COMPLETE prueban la mecánica con
-precios sintéticos explícitamente fechados, no homologan los datos reales de BYMA.
+Política `b1-snapshot-last-trade-v2`: sólo TRADE positivo, contador de operaciones
+positivo, Date = valuationDate e identidad completa, capturado desde las 18:00 ART
+del mismo día hábil. El cutoff puede retrasarse, nunca adelantarse, mediante
+PORTFOLIO_CAPTURE_CUTOFF_ART. Sin precio/operaciones: NO_TRADE y PARTIAL si requerido.
+CLOSING_PRICE y PREVIOUS_CLOSE son referencias rechazadas, sin sustitución.
 
-Referencia consultada: [BYMA Market Data API y enlace al manual](https://www.byma.com.ar/en/byma-apis).
-El manual público de Confluence no devolvió una definición utilizable durante B1.
+La publicación se identifica como BYMA_SNAPSHOT_LAST_TRADE / daily last traded
+price. EOD: NOT REQUIRED FOR CURRENT BUSINESS POLICY. No hay deploy ni activación
+de publish; estos cambios quedan para revisión. Los tests usan la política real,
+sin resolver fechas con un contrato sintético. Las fixtures reales son intradiarias;
+las pruebas post-cutoff están marcadas explícitamente como simuladas.
 
-Aclaración del usuario en esta revisión (2026-09-15): Date representa la fecha de
-la cotización actualizada y broadcast_time es hora argentina del precio operado
-(144717 = 14:47:17). Se registra como semántica aportada por el usuario para TRADE,
-con referencia `user-clarification://portfolio-tracker/2026-09-15/traded-quote`.
-No se presenta como certificación oficial de BYMA ni se extiende a PREVIOUS_CLOSE.
-TRADE sigue REJECTED para publicación oficial. Falta confirmar el comportamiento
-de closing_price al cierre y en el cambio de sesión.
+Se conserva la investigación previa B1A/B1B en LAST_TRADE_POLICY.md: el contrato
+de closing_price no fue homologado y el acceso EOD no fue concedido. La nueva
+política no convierte esas conclusiones en falsas ni presenta TRADE como cierre BYMA.
 
 ## Flujo y modos
 
 La ruta y las dos ventanas cron de `vercel.json` no cambian; `maxDuration` sigue en
-60 segundos. Cada invocación fija la fecha argentina al inicio, adquiere lease,
+60 segundos. Cada invocación fija la fecha argentina al inicio, verifica el cutoff, adquiere lease,
 lee/congela insumos, descarga grupos pendientes concurrentemente y persiste cada
 respuesta relevante antes del archivo raw opcional. Después reconcilia lo durable,
 valida, calcula y, sólo si está habilitado, publica atómicamente.
@@ -48,7 +44,7 @@ valida, calcula y, sólo si está habilitado, publica atómicamente.
 | Modo | Comportamiento |
 | --- | --- |
 | `capture` (default) | Captura durable; nunca escribe `portfolioDailySnapshots`. |
-| `publish` | Captura y publica únicamente con validación completa. Bloqueado por el contrato de fecha actual. |
+| `publish` | Captura y publica únicamente con todos los TRADE diarios requeridos válidos. No habilitado por este cambio. |
 | `off` | No ejecuta captura ni publicación. |
 | `legacy` | Rollback explícito al handler baseline; recupera también sus limitaciones conocidas. |
 
@@ -89,15 +85,18 @@ económicas son `YYYY-MM-DD`. No se mezclan timestamps nativos nuevos y strings.
 - `providerSymbol`, `securityId`, `segment`, `currency`, `market`, `settlement`,
   `operativeForm`, `requestedMarket`, `requestedOperativeForm`, `quoteUnit`, `quoteKey`, `group`.
 - `valuationDate`, `priceDate` nullable, `capturedAt`, `price`, `priceType`
-  (CLOSING_PRICE / PREVIOUS_CLOSE / TRADE), `source: BYMA`, `status`, `reason`, `stale`.
-- `dateEvidence`: versión del contrato, referencia/motivo, `providerDate`, `broadcastTime`.
+  (CLOSING_PRICE / PREVIOUS_CLOSE / TRADE), `source: BYMA_SNAPSHOT`, `status`, `reason`, `stale`.
+- `pricePolicy`, `providerDate`, `tradeCount`, `category`, `captureCutoffART`.
+- `dateEvidence`: versión, referencia, base de evidencia, fecha/contador y broadcastTime (última novedad, no operación).
 - `attemptId`, `normalizerVersion`, `id`. El hash excluye el instante local y el
   intento: recapturar la misma observación no crea duplicados lógicos.
 
 Se conserva la identidad de respuesta sin sustituir sus códigos por los del
 request: se observó `operativeForm=C`, `market=CT` con queries CONTADO/PPT.
-Moneda/plazo incompatibles se rechazan; dos instrumentos o precios incompatibles
-para un requerimiento son AMBIGUOUS_QUOTE, no gana el último ticker del objeto.
+Identidad completa, categoría, mercado, forma, moneda y plazo incompatibles se
+rechazan. Identidades distintas o precios contradictorios en la primera captura
+elegible son AMBIGUOUS_QUOTE. En retries se conserva la primera captura válida;
+incluso un reinicio previo al checkpoint de selección puede recuperarla del durable.
 
 `marketPriceRuns/{date}/inputs/frozen` (una copia inmutable, no historial completo):
 
@@ -120,7 +119,8 @@ endpoints para observar el contrato completo.
 
 `portfolioDailySnapshots/{date}` conserva el payload consumido por UI, más
 `isComplete`, `economicStatus`, `policyVersion`, `marketPriceRunRef`, `inputHash`,
-`b1BuildId`. Las filas marketPrices distinguen representación ARS/USD del mismo
+`b1BuildId`, `pricePolicy`, `priceSource`, `dailyPriceDefinition` y `priceObservations`
+con referencias a las observaciones seleccionadas. Las filas marketPrices distinguen representación ARS/USD del mismo
 ticker. No hay snapshot provisional; un snapshot existente ajeno/diferente da
 EXISTING_SNAPSHOT_CONFLICT y se conserva intacto. Un overwrite posterior por un
 writer legacy/cliente se detecta al reintentar (PUBLISHED_SNAPSHOT_CHANGED), incluso
@@ -171,7 +171,7 @@ del token Google compartido. Volver a legacy reactiva riesgos conocidos de ese f
 
 ## Revisión y eventual rollout (NO ejecutado)
 
-1. Revisar este diff y homologar el contrato BYMA antes de publicación.
+1. Revisar este diff, aceptar la política last-trade y confirmar ventana/mapeos antes de publicación.
 2. Verificar IAM/CRON_SECRET y aplicar rules aditivas mediante una autorización futura.
 3. Desplegar en capture y validar datos/volumen con autorización futura; no hay escrituras de prueba productivas en B1.
 4. Habilitar publish sólo con fechas probadas, mapeos revisados y estrategia para conflictos con writers existentes.

@@ -2,6 +2,7 @@ import legacyHandler, { getGoogleAccessToken, getServiceAccount, snapshotDate, i
 import { createRestStore, createRepository, publicError } from '../server/closing/repository.js';
 import { createBymaClient } from '../server/closing/byma.js';
 import { runClose } from '../server/closing/pipeline.js';
+import { capturePolicy, captureWindowReason } from '../server/closing/model.js';
 
 export default async function handler(req, res) {
   if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -16,9 +17,12 @@ export default async function handler(req, res) {
   // No arbitrary date/force/backfill capability in B1.
   const date = snapshotDate();
   try {
+    const policy = capturePolicy();
+    const windowReason = captureWindowReason(date, new Date().toISOString(), policy);
+    if (windowReason) return res.status(503).json({ ok: false, date, error: windowReason });
     const store = createRestStore({ projectId: getServiceAccount().projectId, getToken: getGoogleAccessToken });
     const state = await runClose({ date, repo: createRepository(store), byma: createBymaClient(),
-      loadPositions: () => store.list('brokerPositions'), publish: mode === 'publish' });
+      loadPositions: () => store.list('brokerPositions'), publish: mode === 'publish', policy });
     return res.status(state.status === 'COMPLETE' ? 200 : 503).json({
       ok: state.status === 'COMPLETE', date, status: state.status, stage: state.stage,
       valid: state.valid.length, missing: state.missing, archiveStatus: state.archiveStatus,

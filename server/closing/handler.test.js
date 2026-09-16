@@ -9,9 +9,27 @@ import { runClose } from './pipeline.js';
 import legacyHandler from './legacy.js';
 const response = () => ({ code: null, body: null,
   status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } });
-beforeEach(() => { vi.clearAllMocks(); vi.stubEnv('CRON_SECRET', 'test-secret'); vi.stubEnv('PORTFOLIO_CLOSE_MODE', 'capture'); });
-afterEach(() => vi.unstubAllEnvs());
+beforeEach(() => { vi.clearAllMocks(); vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-15T21:10:00Z'));
+  vi.stubEnv('CRON_SECRET', 'test-secret'); vi.stubEnv('PORTFOLIO_CLOSE_MODE', 'capture'); vi.stubEnv('PORTFOLIO_CAPTURE_CUTOFF_ART', '18:00'); });
+afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 describe('B1 HTTP containment', () => {
+  it('pre-cutoff request is rejected before creating a writer or invoking BYMA', async () => {
+    vi.setSystemTime(new Date('2026-09-15T20:59:59Z'));
+    const res = response();
+    await handler({ method: 'GET', headers: { authorization: 'Bearer test-secret' } }, res);
+    expect(res.code).toBe(503); expect(res.body.error).toBe('BEFORE_CAPTURE_CUTOFF');
+    expect(runClose).not.toHaveBeenCalled(); expect(legacyHandler).not.toHaveBeenCalled();
+  });
+  it('configuration may delay the cutoff but cannot bypass its reviewed minimum', async () => {
+    const req = { method: 'GET', headers: { authorization: 'Bearer test-secret' } };
+    vi.stubEnv('PORTFOLIO_CAPTURE_CUTOFF_ART', '19:00');
+    const later = response(); await handler(req, later);
+    expect(later.body.error).toBe('BEFORE_CAPTURE_CUTOFF');
+    vi.stubEnv('PORTFOLIO_CAPTURE_CUTOFF_ART', '17:00');
+    const earlier = response(); await handler(req, earlier);
+    expect(earlier.body.error.code).toBe('INVALID_CAPTURE_CUTOFF');
+    expect(runClose).not.toHaveBeenCalled();
+  });
   it('missing server secret fails closed without invoking any writer', async () => {
     vi.stubEnv('CRON_SECRET', '');
     const res = response();
