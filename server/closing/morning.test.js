@@ -149,6 +149,43 @@ describe('morning previous-close valuation', () => {
       .toEqual([['AL30', 1200], ['AL30D', 1.2]]);
   });
 
+  it('values PESOS and CABLE as explicit broker cash balances without cached prices', async () => {
+    const held = [{ id: 'balanz', data: { debt: 0, assets: [
+      { ticker: 'PESOS', quantity: 1000, price: 999999 },
+      { ticker: 'CABLE', quantity: 2, price: 999999 },
+    ] } }];
+    const { snapshot } = await execute({ held });
+    expect(snapshot.rates).toMatchObject({ mep: 1000, cable: 1200 / 1.1 });
+    expect(snapshot.brokers[0].assets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ticker: 'PESOS', unitPrice: 1, unitPriceUsd: 0.001 }),
+      expect.objectContaining({ ticker: 'CABLE', unitPrice: 1200 / 1.1, unitPriceUsd: (1200 / 1.1) / 1000 }),
+    ]));
+    expect(snapshot.priceObservations).toContainEqual(expect.objectContaining({
+      key: 'fx:CABLE:EXT', providerSymbol: 'AL30C', previousClose: 1.1,
+    }));
+  });
+
+  it('maps JPM USD bonds explicitly and converts ARS-only bond symbols with same-session MEP', async () => {
+    const source = responses();
+    for (const symbol of ['AE38D', 'AL35D', 'AL41D', 'CO26D', 'GD35D', 'TU27D']) {
+      source.bonosUSD.result.push(quote('bonosUSD', symbol, 2));
+    }
+    for (const symbol of ['BA37D', 'BB37D', 'BC37D']) {
+      source.bonosARS.result.push(quote('bonosARS', symbol, 2000));
+    }
+    const held = [{ id: 'jpm', data: { debt: 0, assets:
+      ['AE38', 'AL30', 'AL35', 'AL41', 'CO26', 'GD35', 'TFU27', 'BA37D', 'BB37D', 'BC37D']
+        .map((ticker) => ({ ticker, quantity: 100, isBond: true })) } }];
+    const { snapshot } = await execute({ source, held });
+    const observations = new Map(snapshot.priceObservations.map((item) => [item.key, item]));
+    expect(observations.get('bonosUSD:AE38D')).toMatchObject({ providerSymbol: 'AE38D', group: 'bonosUSD' });
+    expect(observations.get('bonosUSD:AL30D')).toMatchObject({ providerSymbol: 'AL30D', group: 'bonosUSD' });
+    expect(observations.get('bonosUSD:TU27D')).toMatchObject({ providerSymbol: 'TU27D', group: 'bonosUSD' });
+    expect(observations.get('bonosARS:BA37D')).toMatchObject({ providerSymbol: 'BA37D', group: 'bonosARS' });
+    expect(snapshot.brokers[0].assets.find((asset) => asset.ticker === 'AE38').unitPriceUsd).toBe(0.02);
+    expect(snapshot.brokers[0].assets.find((asset) => asset.ticker === 'BA37D').unitPriceUsd).toBe(0.02);
+  });
+
   it('does not publish when either MEP leg is missing', async () => {
     const source = responses();
     source.bonosUSD.result[0].previous_close = null;

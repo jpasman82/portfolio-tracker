@@ -9,6 +9,10 @@ export const VALUATION_SCOPE = Object.freeze({ name: 'BROKERS_ONLY', collection:
 
 const EXPECTED_CATEGORY = Object.freeze({ acciones: 1, cedears: 23, bonosARS: 3, bonosUSD: 3, bonosEXT: 3 });
 const EXCLUDED_BY_EXISTING_VALUATION = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ']);
+const JPM_USD_BOND_ALIASES = Object.freeze({
+  AE38: 'AE38D', AL30: 'AL30D', AL35: 'AL35D', AL41: 'AL41D',
+  CO26: 'CO26D', GD35: 'GD35D', TFU27: 'TU27D',
+});
 const fail = (code, details = null) => Object.assign(new Error(code), { code, details });
 const bond = (ticker) => /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(ticker);
 
@@ -35,12 +39,21 @@ export function freezeMorningInputs(positions) {
           if (quantity !== 0 && !ticker) throw fail('INVALID_INPUT');
           const isBond = Boolean(asset?.isBond || bond(ticker));
           if (quantity !== 0 && !EXCLUDED_BY_EXISTING_VALUATION.has(ticker)) {
-            const nativeUsdBond = id === 'jpm' && isBond;
-            const providerSymbol = nativeUsdBond && ticker === 'TFU27' ? 'TU27D' : ticker;
-            const groups = nativeUsdBond ? ['bonosUSD'] : isBond ? ['bonosARS'] : ['acciones', 'cedears'];
-            const key = add(`${groups.join('+')}:${providerSymbol}`, groups, [providerSymbol]);
-            bindings.push({ brokerId: String(id), ticker, quantity, key,
-              providerSymbol, convertToUSD: id === 'jpm' && !nativeUsdBond });
+            if (ticker === 'PESOS') {
+              bindings.push({ brokerId: String(id), ticker, quantity, key: null,
+                providerSymbol: null, valuationKind: 'ARS_CASH', convertToUSD: id === 'jpm' });
+            } else if (ticker === 'CABLE') {
+              const key = add('fx:CABLE:EXT', ['bonosEXT'], ['AL30C']);
+              bindings.push({ brokerId: String(id), ticker, quantity, key,
+                providerSymbol: 'AL30C', valuationKind: 'CABLE_CASH', convertToUSD: id === 'jpm' });
+            } else {
+              const usdBondAlias = id === 'jpm' && isBond ? JPM_USD_BOND_ALIASES[ticker] : null;
+              const providerSymbol = usdBondAlias || ticker;
+              const groups = usdBondAlias ? ['bonosUSD'] : isBond ? ['bonosARS'] : ['acciones', 'cedears'];
+              const key = add(`${groups.join('+')}:${providerSymbol}`, groups, [providerSymbol]);
+              bindings.push({ brokerId: String(id), ticker, quantity, key,
+                providerSymbol, valuationKind: 'MARKET', convertToUSD: id === 'jpm' && !usdBondAlias });
+            }
           }
           // Cached client price/rate is deliberately excluded from historical inputs.
           return { ticker, quantity, isBond };
@@ -206,15 +219,20 @@ export async function buildMorningSnapshot({ informationDate, capturedAt, positi
   const mepUsd = selected.get('fx:MEP:USD');
   const mep = mepArs.price / mepUsd.price;
   if (!(mep > 0) || !Number.isFinite(mep)) throw fail('INVALID_MEP');
+  const cableLeg = selected.get('fx:CABLE:EXT');
+  const cable = cableLeg ? mepArs.price / cableLeg.price : null;
+  if (cableLeg && (!(cable > 0) || !Number.isFinite(cable))) throw fail('INVALID_CABLE');
   const assetPrices = new Map(input.bindings.map((binding) => {
-    const price = selected.get(binding.key).price;
+    const price = binding.valuationKind === 'ARS_CASH' ? 1
+      : binding.valuationKind === 'CABLE_CASH' ? cable
+        : selected.get(binding.key).price;
     return [`${binding.brokerId}:${binding.ticker}`, binding.convertToUSD ? price / mep : price];
   }));
   const { positionUpdates: _ignoredPositionUpdates, ...calculated } = await updatePositionsAndBuildSnapshot({
     positions: input.positions,
     valuationDate,
     capturedAt,
-    marketData: { prices: {}, usdBondSymbols: new Set(), mep, cable: null },
+    marketData: { prices: {}, usdBondSymbols: new Set(), mep, cable },
     priceForAsset: (brokerId, ticker) => assetPrices.get(`${brokerId}:${ticker}`),
   });
   if (Object.values(calculated.totals).some((value) => !Number.isFinite(value))) throw fail('INVALID_VALUATION');
@@ -323,5 +341,16 @@ export async function runMorning({ informationDate, store, byma, loadPositions,
     brokers: snapshot.brokers.length,
     mep: snapshot.rates.mep,
     buildId: snapshot.morningBuildId,
+    snapshot: {
+      date: published.snapshot.date,
+      totalUsd: published.snapshot.totals.netUsd,
+      brokers: published.snapshot.brokers.map((broker) => broker.brokerId),
+      mep: published.snapshot.rates.mep,
+      pricesUsed: published.snapshot.priceObservations.length,
+      source: published.snapshot.source,
+      policyVersion: published.snapshot.policyVersion,
+      capturedAt: published.snapshot.capturedAt,
+      valuationScope: published.snapshot.valuationScope,
+    },
   };
 }
