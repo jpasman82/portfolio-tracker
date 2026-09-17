@@ -39,7 +39,8 @@ export function freezeMorningInputs(positions) {
             const providerSymbol = nativeUsdBond && ticker === 'TFU27' ? 'TU27D' : ticker;
             const groups = nativeUsdBond ? ['bonosUSD'] : isBond ? ['bonosARS'] : ['acciones', 'cedears'];
             const key = add(`${groups.join('+')}:${providerSymbol}`, groups, [providerSymbol]);
-            bindings.push({ brokerId: String(id), ticker, key, convertToUSD: id === 'jpm' && !nativeUsdBond });
+            bindings.push({ brokerId: String(id), ticker, quantity, key,
+              providerSymbol, convertToUSD: id === 'jpm' && !nativeUsdBond });
           }
           // Cached client price/rate is deliberately excluded from historical inputs.
           return { ticker, quantity, isBond };
@@ -142,6 +143,43 @@ export function selectPreviousClose(requirement, observations) {
   return valid[0];
 }
 
+function missingRequirementDetail(requirement, observations, bindings, error) {
+  const relevant = observations.filter((observation) => requirement.groups.includes(observation.group)
+    && requirement.symbols.includes(observation.providerSymbol));
+  const rejectionReasons = relevant.map((observation) => observation.reason).filter(Boolean);
+  const reasons = [...new Set([
+    ...(relevant.length ? rejectionReasons : ['BYMA_ROW_NOT_FOUND']),
+    ...(error.code === 'AMBIGUOUS_PREVIOUS_CLOSE' ? ['AMBIGUOUS_PREVIOUS_CLOSE'] : []),
+  ])].sort();
+  return {
+    requirementKey: requirement.key,
+    ticker: requirement.symbols[0] || null,
+    providerSymbols: requirement.symbols,
+    groups: requirement.groups,
+    positions: bindings.filter((binding) => binding.key === requirement.key).map((binding) => ({
+      broker: binding.brokerId,
+      quantity: binding.quantity,
+      localTicker: binding.ticker,
+      providerSymbol: binding.providerSymbol,
+    })),
+    reasons,
+    candidates: relevant.map((observation) => ({
+      providerSymbol: observation.providerSymbol,
+      group: observation.group,
+      previousClose: observation.price,
+      providerDate: observation.providerDate,
+      status: observation.status,
+      reason: observation.reason,
+      currency: observation.currency,
+      settlement: observation.settlement,
+      market: observation.market,
+      operativeForm: observation.operativeForm,
+      category: observation.category,
+      securityId: observation.securityId,
+    })),
+  };
+}
+
 export async function buildMorningSnapshot({ informationDate, capturedAt, positions, responses }) {
   const informationDay = classifyBymaDate(informationDate);
   if (informationDay.state === 'UNKNOWN') throw fail('CALENDAR_UNKNOWN');
@@ -153,8 +191,17 @@ export async function buildMorningSnapshot({ informationDate, capturedAt, positi
   const input = freezeMorningInputs(positions);
   const observations = Object.keys(GROUPS).flatMap((group) => responses[group].result
     .map((row) => normalizePreviousClose(row, group, informationDate)));
-  const selected = new Map(input.requirements.map((requirement) => [requirement.key,
-    selectPreviousClose(requirement, observations)]));
+  const selected = new Map();
+  const missing = [];
+  for (const requirement of input.requirements) {
+    try {
+      selected.set(requirement.key, selectPreviousClose(requirement, observations));
+    } catch (error) {
+      if (!['MISSING_REQUIRED_PREVIOUS_CLOSE', 'AMBIGUOUS_PREVIOUS_CLOSE'].includes(error.code)) throw error;
+      missing.push(missingRequirementDetail(requirement, observations, input.bindings, error));
+    }
+  }
+  if (missing.length) throw fail('MISSING_REQUIRED_PREVIOUS_CLOSE', { missing });
   const mepArs = selected.get('fx:MEP:ARS');
   const mepUsd = selected.get('fx:MEP:USD');
   const mep = mepArs.price / mepUsd.price;

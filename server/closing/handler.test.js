@@ -118,4 +118,19 @@ describe('morning previous-close production route', () => {
     }
     expect(runMorning).not.toHaveBeenCalled();
   });
+
+  it('exposes only safe missing-requirement diagnostics for the private route', async () => {
+    const missing = [{ requirementKey: 'acciones+cedears:MISS', ticker: 'MISS',
+      providerSymbols: ['MISS'], groups: ['acciones', 'cedears'],
+      positions: [{ broker: 'one', quantity: 2, localTicker: 'MISS', providerSymbol: 'MISS' }],
+      reasons: ['BYMA_ROW_NOT_FOUND'], candidates: [] }];
+    runMorning.mockRejectedValue(Object.assign(new Error('MISSING_REQUIRED_PREVIOUS_CLOSE'), {
+      code: 'MISSING_REQUIRED_PREVIOUS_CLOSE', details: { missing },
+    }));
+    const res = response();
+    await morningHandler(request(), res);
+    expect(res.code).toBe(503);
+    expect(res.body).toEqual(expect.objectContaining({ informationDate: '2026-09-17', missing }));
+    expect(JSON.stringify(res.body)).not.toMatch(/token|credential|secret|private.key/i);
+  });
 });

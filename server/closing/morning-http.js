@@ -66,7 +66,11 @@ export async function handleMorning(req, res) {
     return res.status(200).json({ ok: true, ...state });
   } catch (error) {
     const status = error.code === 'EXISTING_SNAPSHOT_CONFLICT' ? 409 : 503;
+    const safeMissing = error.code === 'MISSING_REQUIRED_PREVIOUS_CLOSE'
+      && Array.isArray(error.details?.missing) ? error.details.missing : undefined;
     return res.status(status).json({ ok: false, informationDate,
-      error: publicError(error, 'MORNING_PREVIOUS_CLOSE', null) });
+      error: publicError(error, 'MORNING_PREVIOUS_CLOSE', null),
+      ...(safeMissing ? { missing: safeMissing } : {}),
+    });
   }
 }

@@ -91,6 +91,35 @@ describe('morning previous-close valuation', () => {
     await expect(execute({ source })).rejects.toMatchObject({ code: 'MISSING_REQUIRED_PREVIOUS_CLOSE' });
   });
 
+  it('reports every missing requirement with safe broker, mapping and identity diagnostics', async () => {
+    const source = responses();
+    source.acciones.result[0].previous_close = 0;
+    source.bonosUSD.result[0].previous_close = null;
+    let failure;
+    try { await execute({ source, held: positions('GGAL', -2) }); } catch (error) { failure = error; }
+    expect(failure).toMatchObject({ code: 'MISSING_REQUIRED_PREVIOUS_CLOSE' });
+    expect(failure.details.missing).toHaveLength(2);
+    expect(failure.details.missing).toEqual(expect.arrayContaining([
+      expect.objectContaining({ requirementKey: 'acciones+cedears:GGAL', ticker: 'GGAL',
+        groups: ['acciones', 'cedears'], positions: [{ broker: 'one', quantity: -2,
+          localTicker: 'GGAL', providerSymbol: 'GGAL' }], reasons: ['MISSING_PREVIOUS_CLOSE'],
+        candidates: [expect.objectContaining({ providerSymbol: 'GGAL', previousClose: 0,
+          currency: 'ARS', settlement: '0002', market: 'CT', operativeForm: 'C', category: 1 })] }),
+      expect.objectContaining({ requirementKey: 'fx:MEP:USD', ticker: 'AL30D', groups: ['bonosUSD'],
+        positions: [], reasons: ['MISSING_PREVIOUS_CLOSE'] }),
+    ]));
+  });
+
+  it('reports BYMA_ROW_NOT_FOUND when the expected provider symbol is absent', async () => {
+    const source = responses();
+    source.acciones.result = source.acciones.result.filter((item) => item.symbol !== 'GGAL');
+    let failure;
+    try { await execute({ source }); } catch (error) { failure = error; }
+    expect(failure.details.missing).toContainEqual(expect.objectContaining({
+      ticker: 'GGAL', reasons: ['BYMA_ROW_NOT_FOUND'], candidates: [],
+    }));
+  });
+
   it('does not require a price for an exactly zero quantity', async () => {
     const source = responses();
     source.acciones.result[0].previous_close = 0;
@@ -159,7 +188,12 @@ describe('morning previous-close valuation', () => {
   it('keeps Acciones and CEDEAR identity distinct', async () => {
     const source = responses();
     source.cedears.result.push(quote('cedears', 'GGAL', 90));
-    await expect(execute({ source })).rejects.toMatchObject({ code: 'AMBIGUOUS_PREVIOUS_CLOSE' });
+    await expect(execute({ source })).rejects.toMatchObject({
+      code: 'MISSING_REQUIRED_PREVIOUS_CLOSE',
+      details: {
+        missing: [expect.objectContaining({ reasons: ['AMBIGUOUS_PREVIOUS_CLOSE'] })],
+      },
+    });
   });
 
   it('does not write brokerPositions as a valuation side effect', async () => {
