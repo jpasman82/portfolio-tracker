@@ -205,21 +205,34 @@ export function calculateLoanAtDate(input) {
   return calculateNormalizedLoanAtDate(normalizeLoanInputs(input));
 }
 
+function projectNormalizedLoanAtDate(normalized, projectionDate) {
+  parseDateOnly(projectionDate, 'projectionDate');
+  const knownThroughDate = minDateOnly(normalized.asOfDate, normalized.loan.maturityDate);
+  const knownMovements = normalized.movements.filter(
+    (movement) => movement.effectiveDate <= knownThroughDate
+  );
+  return calculateNormalizedLoanAtDate({
+    loan: normalized.loan,
+    movements: knownMovements,
+    asOfDate: projectionDate,
+  });
+}
+
+/**
+ * Values a future date using only movements known on or before `asOfDate`.
+ */
+export function projectLoanAtDate({ loan, movements, asOfDate, projectionDate }) {
+  const normalized = normalizeLoanInputs({ loan, movements, asOfDate });
+  return projectNormalizedLoanAtDate(normalized, projectionDate);
+}
+
 /**
  * Projects to maturity using only movements effective on or before `asOfDate`.
  */
 export function projectLoanToMaturity(input) {
   const normalized = normalizeLoanInputs(input);
   const current = calculateNormalizedLoanAtDate(normalized);
-  const knownThroughDate = minDateOnly(normalized.asOfDate, normalized.loan.maturityDate);
-  const knownMovements = normalized.movements.filter(
-    (movement) => movement.effectiveDate <= knownThroughDate
-  );
-  const projected = calculateNormalizedLoanAtDate({
-    loan: normalized.loan,
-    movements: knownMovements,
-    asOfDate: normalized.loan.maturityDate,
-  });
+  const projected = projectNormalizedLoanAtDate(normalized, normalized.loan.maturityDate);
 
   return {
     projectedMaturityValue: projected.value,

@@ -26,11 +26,12 @@ let loan = {
   revision: 0,
 };
 
-let nextMovementId = 4;
+let nextMovementId = 5;
 let movements = [
   { id: 'movement-1', type: 'contribution', effectiveDate: '2026-09-01', amount: '710000', note: 'Ingreso inicial' },
-  { id: 'movement-2', type: 'contribution', effectiveDate: '2026-10-01', amount: '20000', note: 'Aporte adicional' },
-  { id: 'movement-3', type: 'withdrawal', effectiveDate: '2026-10-05', amount: '5000', note: 'Retiro de prueba' },
+  { id: 'movement-2', type: 'contribution', effectiveDate: '2026-09-13', amount: '450000', note: 'Ingreso de mitad de mes' },
+  { id: 'movement-3', type: 'contribution', effectiveDate: '2026-10-01', amount: '20000', note: 'Ingreso en capitalización' },
+  { id: 'movement-4', type: 'withdrawal', effectiveDate: '2026-10-15', amount: '50000', note: 'Retiro de mitad de mes' },
 ];
 
 const clone = (value) => structuredClone(value);
@@ -105,7 +106,7 @@ createRoot(document.getElementById('root')).render(
             <LoanDetail
               currentUser={{ uid: 'fixture-user' }}
               repository={repository}
-              initialAsOfDate="2026-08-20"
+              initialAsOfDate="2026-10-20"
             />
           )}
         />

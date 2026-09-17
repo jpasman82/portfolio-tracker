@@ -1,12 +1,11 @@
 import Decimal from 'decimal.js';
-import { calculateLoanAtDate, projectLoanToMaturity } from './loanEngine';
 import { compareDateOnly, parseDateOnly, toDateOnly } from './loanDates';
 import {
   normalizeLoanForPersistence,
   toLoanEngineDefinition,
-  toLoanEngineMovement,
 } from './loanSerialization';
 import { effectiveMovements } from './loanMovements';
+import { buildLoanTimeline } from './loanTimeline';
 
 const RATE_TYPE_LABELS = Object.freeze({
   monthly_effective: 'Mensual',
@@ -135,9 +134,7 @@ export function statusLabel(status) {
 export function deriveLoanPresentation({ loan, movements, asOfDate }) {
   const engineLoan = toLoanEngineDefinition(loan);
   const visibleMovements = effectiveMovements(movements);
-  const engineMovements = visibleMovements.map(toLoanEngineMovement);
-  const valuation = calculateLoanAtDate({ loan: engineLoan, movements: engineMovements, asOfDate });
-  const projection = projectLoanToMaturity({ loan: engineLoan, movements: engineMovements, asOfDate });
+  const timeline = buildLoanTimeline({ loan: engineLoan, movements, asOfDate });
   const effectiveStatus = effectiveLoanStatus(loan, asOfDate);
 
   return {
@@ -145,8 +142,9 @@ export function deriveLoanPresentation({ loan, movements, asOfDate }) {
     movements,
     visibleMovements,
     asOfDate,
-    valuation,
-    projection,
+    valuation: timeline.currentValuation,
+    projection: timeline.projection,
+    timeline,
     effectiveStatus,
   };
 }

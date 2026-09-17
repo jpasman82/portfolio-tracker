@@ -5,6 +5,7 @@ import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
 import LoanMovementForm from '../features/loans/LoanMovementForm';
 import LoanMovementDeleteDialog from '../features/loans/LoanMovementDeleteDialog';
+import LoanFlow from '../features/loans/LoanFlow';
 import LoanTermsForm from '../features/loans/LoanTermsForm';
 import { createLoanRepository } from '../features/loans/loanRepository';
 import {
@@ -154,7 +155,14 @@ export default function LoanDetail({
       </div>
     );
   } else {
-    const { loan, valuation, projection, visibleMovements, effectiveStatus } = presentation;
+    const {
+      loan,
+      valuation,
+      projection,
+      timeline,
+      visibleMovements,
+      effectiveStatus,
+    } = presentation;
     const canManageMovements = loan.status === 'active';
     content = (
       <>
@@ -247,6 +255,8 @@ export default function LoanDetail({
             )}
           </section>
         </div>
+
+        <LoanFlow loan={loan} timeline={timeline} />
       </>
     );
   }

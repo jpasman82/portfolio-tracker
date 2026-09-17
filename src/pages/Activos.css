@@ -782,6 +782,169 @@
   overflow-wrap: anywhere;
 }
 
+.loan-flow {
+  margin-top: 20px;
+  content-visibility: auto;
+  contain-intrinsic-size: 760px;
+}
+
+.loan-flow__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.loan-flow__heading h2 { margin: 4px 0 0; }
+
+.loan-flow__legend,
+.loan-flow-event__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.loan-flow-phase {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid rgba(45, 212, 191, 0.18);
+  border-radius: 999px;
+  color: #8EB1B1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.loan-flow-phase--actual {
+  border-color: rgba(45, 212, 191, 0.26);
+  background: rgba(45, 212, 191, 0.08);
+  color: #5EEAD4;
+}
+
+.loan-flow-phase--projected {
+  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(96, 165, 250, 0.08);
+  color: #93C5FD;
+}
+
+.loan-flow-phase--today {
+  border-color: rgba(251, 191, 36, 0.34);
+  background: rgba(251, 191, 36, 0.1);
+  color: #FDE68A;
+}
+
+.loan-flow-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(45, 212, 191, 0.1);
+  border-radius: 14px;
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.loan-flow-summary > div {
+  min-width: 0;
+  padding: 13px 14px;
+  background: #102126;
+}
+
+.loan-flow-summary span,
+.loan-flow-card__values dt {
+  color: #658B8B;
+  font-size: 10px;
+}
+
+.loan-flow-summary strong {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  color: #D8EEEE;
+  font-size: 14px;
+}
+
+.loan-flow__projection-note {
+  margin: 13px 0 16px;
+  color: #7CA4A4;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.loan-flow-table-wrap {
+  overflow: hidden;
+  border: 1px solid rgba(45, 212, 191, 0.1);
+  border-radius: 14px;
+}
+
+.loan-flow-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.loan-flow-table th,
+.loan-flow-table td {
+  padding: 12px 11px;
+  border-bottom: 1px solid rgba(45, 212, 191, 0.07);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.loan-flow-table th:first-child,
+.loan-flow-table td:first-child,
+.loan-flow-table th:nth-child(2),
+.loan-flow-table td:nth-child(2) { text-align: left; }
+
+.loan-flow-table th {
+  background: rgba(7, 20, 24, 0.72);
+  color: #5B8A8A;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.loan-flow-table td {
+  color: #AFCACA;
+  font-size: 11px;
+}
+
+.loan-flow-table td:nth-child(2) {
+  min-width: 170px;
+  white-space: normal;
+}
+
+.loan-flow-table td strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #D8EEEE;
+}
+
+.loan-flow-event--projected { background: rgba(96, 165, 250, 0.025); }
+.loan-flow-event--today { background: rgba(251, 191, 36, 0.055); }
+.loan-flow-event--maturity { background: rgba(45, 212, 191, 0.065); }
+.loan-flow-negative { color: #FCA5A5 !important; }
+
+.loan-flow-gap td,
+.loan-flow-gap {
+  padding: 7px;
+  color: #456E6E;
+  text-align: center !important;
+  letter-spacing: 0.2em;
+}
+
+.loan-flow-cards { display: none; }
+
+.loan-flow__toggle {
+  display: block;
+  margin: 16px auto 0;
+}
+
 @media (max-width: 760px) {
   .loan-page { padding-inline: 14px; }
   .loan-page__header { min-height: 78px; }
@@ -789,6 +952,66 @@
   .loan-grid,
   .loan-detail-layout { grid-template-columns: 1fr; }
   .loan-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .loan-flow-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .loan-flow-table-wrap { display: none; }
+  .loan-flow-cards { display: grid; gap: 10px; }
+
+  .loan-flow-cards .loan-flow-event {
+    padding: 15px;
+    border: 1px solid rgba(45, 212, 191, 0.1);
+    border-left: 3px solid rgba(45, 212, 191, 0.3);
+    border-radius: 13px;
+  }
+
+  .loan-flow-cards .loan-flow-event--projected {
+    border-left-color: rgba(96, 165, 250, 0.55);
+  }
+
+  .loan-flow-cards .loan-flow-event--today {
+    border-color: rgba(251, 191, 36, 0.32);
+  }
+
+  .loan-flow-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .loan-flow-card__header time {
+    color: #658B8B;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+
+  .loan-flow-card__header h3 {
+    margin: 5px 0 0;
+    color: #D8EEEE;
+    font-size: 14px;
+  }
+
+  .loan-flow-card__values {
+    display: grid;
+    gap: 8px;
+    margin: 14px 0 0;
+  }
+
+  .loan-flow-card__values > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .loan-flow-card__values dd {
+    margin: 0;
+    color: #C9E1E1;
+    font-size: 12px;
+    font-weight: 650;
+    text-align: right;
+  }
 }
 
 @media (max-width: 520px) {
@@ -814,4 +1037,7 @@
   .loan-movement__actions { justify-content: space-between; padding-left: 47px; }
   .loan-movement__amount { text-align: left; }
   .loan-detail-section__heading { align-items: flex-start; }
+  .loan-flow { padding-inline: 14px; }
+  .loan-flow__heading { align-items: flex-start; }
+  .loan-flow-summary { grid-template-columns: 1fr; }
 }
