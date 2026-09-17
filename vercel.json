@@ -10,6 +10,14 @@
   "crons": [
     {
       "path": "/api/portfolio-snapshot-morning",
+      "schedule": "0 11 * * 1-5"
+    },
+    {
+      "path": "/api/portfolio-snapshot-morning",
+      "schedule": "0 12 * * 1-5"
+    },
+    {
+      "path": "/api/portfolio-snapshot-morning",
       "schedule": "0 13 * * 1-5"
     }
   ],

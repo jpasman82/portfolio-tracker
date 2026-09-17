@@ -5,7 +5,10 @@ import { runMorning, VALUATION_SCOPE } from './morning.js';
 import { createRestStore, publicError } from './repository.js';
 
 export const MORNING_ROUTE = '/api/portfolio-snapshot-morning';
-export const MORNING_CRON = Object.freeze({ schedule: '0 13 * * 1-5', startART: '10:00' });
+export const MORNING_CRON = Object.freeze({
+  schedules: Object.freeze(['0 11 * * 1-5', '0 12 * * 1-5', '0 13 * * 1-5']),
+  startART: '08:00',
+});
 
 const header = (req, name) => req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
 const requestUrl = (req) => {

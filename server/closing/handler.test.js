@@ -45,6 +45,10 @@ afterEach(() => {
 
 describe('morning previous-close production route', () => {
   it.each([
+    ['08:00', '2026-09-17T11:00:00Z'],
+    ['08:59', '2026-09-17T11:59:59Z'],
+    ['09:00', '2026-09-17T12:00:00Z'],
+    ['09:59', '2026-09-17T12:59:59Z'],
     ['10:00', '2026-09-17T13:00:00Z'],
     ['10:59', '2026-09-17T13:59:59Z'],
   ])('accepts the full Hobby invocation hour at %s ART', async (_label, timestamp) => {
@@ -57,8 +61,8 @@ describe('morning previous-close production route', () => {
     expect(runMorning).toHaveBeenCalledWith(expect.objectContaining({ informationDate: '2026-09-17' }));
   });
 
-  it('rejects execution before the 10:00 ART cutoff without reads or writes', async () => {
-    vi.setSystemTime(new Date('2026-09-17T12:59:59Z'));
+  it('rejects execution before the 08:00 ART cutoff without reads or writes', async () => {
+    vi.setSystemTime(new Date('2026-09-17T10:59:59Z'));
     const res = response();
     await morningHandler(request(), res);
     expect(res.code).toBe(503);
@@ -74,9 +78,12 @@ describe('morning previous-close production route', () => {
     expect(res.code).toBe(200);
   });
 
-  it('configures exactly one weekday cron at the start of the 10 ART hour', () => {
-    expect(vercelConfig.crons).toEqual([{ path: MORNING_ROUTE, schedule: '0 13 * * 1-5' }]);
-    expect(MORNING_CRON).toEqual({ schedule: '0 13 * * 1-5', startART: '10:00' });
+  it('configures exactly three weekday retries at 08, 09 and 10 ART on the same route', () => {
+    const schedules = ['0 11 * * 1-5', '0 12 * * 1-5', '0 13 * * 1-5'];
+    expect(vercelConfig.crons).toEqual(schedules.map((schedule) => ({ path: MORNING_ROUTE, schedule })));
+    expect(MORNING_CRON).toEqual({ schedules, startART: '08:00' });
+    expect(vercelConfig.crons.every(({ path }) => path === MORNING_ROUTE)).toBe(true);
+    expect(vercelConfig.crons.some(({ schedule }) => /\s(?:21|22|23)\s/.test(schedule))).toBe(false);
     expect(Object.keys(vercelConfig.functions)).toEqual(['api/portfolio-snapshot-morning.js']);
   });
 
