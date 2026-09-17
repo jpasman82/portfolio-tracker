@@ -1,231 +1,92 @@
-# B1 — captura durable de daily last traded price
+# Morning previous-close valuation
 
-Integrado en `main` desde el baseline `20b3980288dc7d65b52c36098b528194c0532c3f`.
-No hay backfill automático, nuevas dependencias npm ni infraestructura cloud.
+Production policy: `BYMA_SNAPSHOT_PREVIOUS_CLOSE`, version
+`morning-previous-close-v1`.
 
-## Alcance y límite de activación
+## Business boundary
 
-B1 persiste observaciones normalizadas relevantes en Firestore, retoma pendientes,
-protege escrituras con lease y permite publicar sólo con insumos completos.
-Conserva el cálculo del baseline; no introduce un motor nuevo ni migra el frontend.
+The historical portfolio is the sum of the portfolios stored in the top-level
+`brokerPositions` collection. Loans, Activos, Reclus, loan movements, interest
+and `nonBrokerAssets` are not inputs and contribute zero to this series. The
+morning job never writes `brokerPositions`.
 
-**Decisión funcional vigente:** se conserva el último operado observado después
-de la rueda, NO el fixing/cierre oficial BYMA. Contrato completo, evidencia y
-límites: [LAST_TRADE_POLICY.md](./LAST_TRADE_POLICY.md).
+## Production flow
 
-Política `b1-snapshot-last-trade-v3`: sólo TRADE positivo, contador de operaciones
-positivo, Date = valuationDate e identidad completa, capturado desde las 18:00 ART
-del mismo día hábil. El cutoff puede retrasarse, nunca adelantarse, mediante
-PORTFOLIO_CAPTURE_CUTOFF_ART. Sin precio/operaciones: NO_TRADE y PARTIAL si requerido.
-CLOSING_PRICE y PREVIOUS_CLOSE son referencias rechazadas, sin sustitución.
+Vercel invokes `GET /api/portfolio-snapshot-morning` once on weekdays with
+`0 13 * * 1-5` (10:00–10:59 ART on the current fixed UTC-3 offset). The internal
+earliest cutoff is 10:00 ART, so the first possible Hobby invocation is valid.
+There is no request-controlled date, mode, force or policy.
 
-La publicación se identifica como BYMA_SNAPSHOT_LAST_TRADE / daily last traded
-price. EOD: NOT REQUIRED FOR CURRENT BUSINESS POLICY. Los tests usan la política real,
-sin resolver fechas con un contrato sintético. Las fixtures reales son intradiarias;
-las pruebas post-cutoff están marcadas explícitamente como simuladas.
+The route:
 
-Se conserva la investigación previa B1A/B1B en LAST_TRADE_POLICY.md: el contrato
-de closing_price no fue homologado y el acceso EOD no fue concedido. La nueva
-política no convierte esas conclusiones en falsas ni presenta TRADE como cierre BYMA.
+1. derives `informationDate` in `America/Argentina/Buenos_Aires`;
+2. checks the versioned BYMA calendar;
+3. resolves `valuationDate = previousTradingSession(informationDate)`;
+4. reads only `brokerPositions`;
+5. fetches all five BYMA Snapshot groups;
+6. requires every group to expose the same `Date = informationDate`;
+7. requires strict instrument identity and positive finite `previous_close` for
+   every non-zero holding;
+8. calculates MEP as `AL30 previous_close / AL30D previous_close`;
+9. builds a complete brokers-only valuation in memory; and
+10. creates `portfolioDailySnapshots/{valuationDate}` atomically if absent.
 
-## Flujo productivo
+There are no intermediate Firestore writes. A retry with the same policy,
+broker input hash and selected BYMA prices is a no-op. An existing manual,
+different-policy or otherwise incompatible document is a closed conflict and is
+never overwritten.
 
-`vercel.json` define dos rutas server-side distintas, ambas con `maxDuration` de
-60 segundos:
+Authentication retains the prior production contract: exact bearer match when
+`CRON_SECRET` exists; otherwise the exact Vercel Cron user agent is accepted
+only in Production and only on the exact morning route.
 
-| Hora ART | Ruta | Fase |
-| --- | --- | --- |
-| 18:00–18:59 | `/api/portfolio-snapshot-capture` | Captura durable y congela insumos; nunca publica. |
-| 20:00–20:59 | `/api/portfolio-snapshot-publish` | Recaptura, reconcilia y publica sólo un resultado COMPLETE. |
+## Calendar
 
-Cada invocación fija la fecha argentina al inicio, verifica su propio cutoff, adquiere lease,
-lee/congela insumos, vuelve a descargar todos los grupos requeridos concurrentemente y persiste cada
-respuesta relevante antes del archivo raw opcional. Después reconcilia lo durable,
-valida, calcula y la segunda fase publica atómicamente. No existe selector público
-de modo, política ni fecha, ni fallback automático al writer legacy.
+`calendar.js` covers every date in 2026 using the reviewed BYMA calendar at
+<https://www.byma.com.ar/mercado/calendario-bursatil>. It distinguishes:
 
-Si `CRON_SECRET` existe se exige exactamente `Authorization: Bearer <CRON_SECRET>`.
-Configurar ese secreto es la opción recomendada. Si falta, el único fallback
-aceptado exige simultáneamente `VERCEL_ENV=production`, una de las dos rutas exactas
-y `User-Agent: vercel-cron/1.0`; además registra `CRON_SECRET_MISSING` como warning
-estructurado. Sólo se acepta GET. B1 no permite `force`, fecha arbitraria ni
-backfill; fines de semana se omiten. No hay calendario de
-feriados nuevo. Un resultado parcial devuelve 503 con estado explícito; lease
-ocupado devuelve 409. HTTP 200 en captura no significa snapshot UI publicado:
-`publicationStatus` lo distingue.
+- `TRADING`;
+- `LIMITED_WITH_TRADING` for BYMA days without settlement but with trading; and
+- `CLOSED` for weekends and no-trading holidays.
 
-Vercel Hobby puede invocar tarde: una corrida posterior al cutoff sigue siendo
-válida, pero nunca se acepta una corrida temprana. Ambos cron comienzan en el
-minuto cero de su hora y cumplen `earliest possible cron invocation >= internal cutoff`.
-Las rutas productivas fijan el cutoff de captura en 18:00 y no heredan un valor
-histórico posterior de `PORTFOLIO_CAPTURE_CUTOFF_ART`.
+The metadata includes a version, covered year, source and review date. A needed
+date outside the covered year is `CALENDAR_UNKNOWN` and fails closed. BYMA notes
+that its calendar may be updated following official resolutions, so extending
+or revising coverage requires a new reviewed version.
 
-Las peticiones BYMA tienen timeout (token 6 s, grupo 10 s), Firestore 8 s y Google
-OAuth 6 s. Se chequea presupuesto antes de construir. No se extiende el runtime
-con trabajo de publicación en segundo plano. Un corte duro puede dejar stage
-intermedio y lease; la siguiente ventana puede retomarlo al expirar el lease.
-No se garantiza completar dentro de 60 s ante degradación sostenida de Firestore.
+## Price and identity contract
 
-## Modelo realmente implementado
+Only numeric, finite `previous_close > 0` is eligible. `trade`, `trades`,
+`closing_price` and cached local prices are ignored, including as fallback.
+Exactly-zero holdings do not create a quote requirement; negative holdings do.
 
-Todos los **instantes nuevos son strings ISO-8601 UTC** (`toISOString`); las fechas
-económicas son `YYYY-MM-DD`. No se mezclan timestamps nativos nuevos y strings.
+Identity remains strict for symbol/security ID, BYMA category, requested group,
+currency, settlement `0002`, response market `CT` and operative form `C`.
+Acciones and CEDEARs are not collapsed when the same symbol appears in both.
+Fixed-income quotes retain their `PER_100_NOMINAL` unit.
 
-`marketPriceRuns/{valuationDate}`:
+Each official snapshot traces `informationDate`, `valuationDate`, calendar
+metadata, policy, source, capture time, input hash, build ID, MEP legs and every
+selected price/identity tuple.
 
-- `valuationDate`, `timezone`, `version`, `policyVersion`.
-- `status`: PENDING / PARTIAL / COMPLETE / FAILED; `stage`.
-- `startedAt`, `lastAttemptAt`, `completedAt`, `lastDurableProgressAt`, `attemptCount`.
-- `expectedQuoteKeys`: claves del requerimiento (no confundir con identidad del instrumento).
-- `valid`, `missing`: listas de requerimientos; `rejected`: clave y motivo.
-- `selected`: requerimiento → ID de observación durable elegida.
-- `reconciliation`: selección, contador, último resultado, último cambio de selección
-  y anomalías durables por requerimiento; `reconciliationAnomalies` las resume.
-- `inputHash`, `b1BuildId`, `b1SnapshotHash`, `publicationStatus` (NOT_REQUESTED / PUBLISHED).
-- `endpointResults`: estado, filas, instante e intento más reciente por grupo.
-- `lastError`: código, etapa, intento y HTTP status, sin cuerpo de proveedor/secretos.
-- `archiveStatus`: COMPLETE / DEGRADED / FAILED / NOT_CONFIGURED; `archiveResults` por grupo.
-- `lease`: owner (attemptId), token creciente, expiresAt.
+## Retired night surface
 
-`marketPriceRuns/{date}/observations/{contentHash}` (inmutables):
+The public capture and publish API files and both night crons were removed.
+`pipeline.js`, the last-trade tests and `LAST_TRADE_POLICY.md` remain as an
+unexposed rollback/audit record. `model.js` and `repository.js` also retain the
+reviewed shared group/hash/number and Firestore REST primitives. The morning
+route never invokes the old `runClose` or `createRepository` reconciliation
+path. The generic Firestore REST store and existing broker valuation adapter
+are reused.
 
-- `providerSymbol`, `securityId`, `segment`, `currency`, `market`, `settlement`,
-  `operativeForm`, `requestedMarket`, `requestedOperativeForm`, `quoteUnit`, `quoteKey`, `group`.
-- `valuationDate`, `priceDate` nullable, `capturedAt`, `price`, `priceType`
-  (CLOSING_PRICE / PREVIOUS_CLOSE / TRADE), `source: BYMA_SNAPSHOT`, `status`, `reason`, `stale`.
-- `pricePolicy`, `providerDate`, `tradeCount`, `category`, `captureCutoffART`.
-- `dateEvidence`: versión, referencia, base de evidencia, fecha/contador y broadcastTime (última novedad, no operación).
-- `attemptId`, `normalizerVersion`, `id`. El hash excluye el instante local y el
-  intento: recapturar la misma observación no crea duplicados lógicos.
+## Verification
 
-Se conserva la identidad de respuesta sin sustituir sus códigos por los del
-request: se observó `operativeForm=C`, `market=CT` con queries CONTADO/PPT.
-Identidad completa, categoría, mercado, forma, moneda y plazo incompatibles se
-rechazan. Identidades distintas son AMBIGUOUS_QUOTE. Para la misma identidad,
-gana la observación elegible con mayor `tradeCount`: una posterior sólo reemplaza
-si el contador acumulado creció. Un contador menor se registra como
-TRADE_COUNT_REGRESSION sin retroceder; igual contador con distinto precio es
-TRADE_COUNT_PRICE_CONFLICT y bloquea COMPLETE/publicación hasta que evidencia
-posterior con contador mayor lo resuelva. Un reinicio puede reconstruir esta
-selección desde observaciones durables.
-
-`marketPriceRuns/{date}/inputs/frozen` (una copia inmutable, no historial completo):
-
-- `positions`: broker, updateTime observado, cantidades, flags y deuda normalizados.
-- `bindings`, `requirements`, `capturedAt`, `inputHash`, `policyVersion`.
-- `source: first-successful-read-not-market-close`.
-
-No incluye precios ni usdRate cacheados. Es la primera lectura exitosa, **no una
-reconstrucción as-of del cierre**. Reintentar no usa cantidades actuales nuevas.
-Posiciones distintas de cero, incluso negativas, requieren precio; cero exacto no.
-Entradas numéricas inválidas fallan explícitamente. Se preservan exclusiones
-Brasil del baseline y alias TFU27→TU27D para bonos USD. Otros mapeos ambiguos fallan
-cerrado; no se convierte una especie EXT en USD silenciosamente.
-
-MEP requiere AL30 ARS y AL30D (o AL30) USD válidos de la misma sesión, con idéntica
-unidad nominal. No hay fallback a usdRate, dólar externo ni 1. Cable no es obligatorio
-para el cálculo actual y queda `null` (no una cotización inventada); B1 no incorpora
-valuación nueva de especies cable. El diagnóstico read-only sí consulta los cinco
-endpoints para observar el contrato completo.
-
-`portfolioDailySnapshots/{date}` conserva el payload consumido por UI, más
-`isComplete`, `economicStatus`, `policyVersion`, `marketPriceRunRef`, `inputHash`,
-`b1BuildId`, `pricePolicy`, `priceSource`, `dailyPriceDefinition` y `priceObservations`
-con referencias a las observaciones seleccionadas. Las filas marketPrices distinguen representación ARS/USD del mismo
-ticker. No hay snapshot provisional; un snapshot existente ajeno/diferente da
-EXISTING_SNAPSHOT_CONFLICT y se conserva intacto. Un overwrite posterior por un
-writer legacy/cliente se detecta al reintentar (PUBLISHED_SNAPSHOT_CHANGED), incluso
-si un merge conserva el b1BuildId: se compara el hash canónico del payload completo.
-
-## Durabilidad, concurrencia y archivo opcional
-
-Firestore REST `Commit` escribe atómicamente; la precondición `updateTime` del run
-actúa como compare-and-swap. Cada escritura de observaciones, insumos o snapshot
-incluye ese fencing record. Un worker con token viejo no puede consolidar tras
-otro acquire. Lease: 70 s (mayor que maxDuration actual), liberado al terminar.
-No se usan callbacks transaccionales con llamadas BYMA dentro.
-
-Fuentes: [Commit atómico](https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/commit),
-[precondiciones updateTime/exists](https://firebase.google.com/docs/firestore/reference/rest/v1/Precondition).
-
-Las observaciones se crean por hash en lotes acotados; jamás se borran al fallar
-otro grupo o el builder. La selección ya válida no se degrada en retries. Los
-grupos se refrescan completos sólo para requerimientos pendientes (no se presume
-API por ticker). Se relee tras conflictos o ACK incierto antes de reintentar.
-Publicación y consolidación de COMPLETE/PUBLISHED usan el mismo Commit.
-
-El adaptador opcional es `archive.put({ group, valuationDate, capturedAt, attemptId,
-body, signal })`. Debe respetar AbortSignal y ser idempotente; presupuesto 1 s.
-No existe implementación Cloud Storage ni bucket nuevo. Su fallo afecta sólo
-archiveStatus, nunca invalida datos económicos ya validados y persistidos.
-
-Límites honestos: una caída antes de la primera persistencia aún puede perder la
-respuesta en memoria; no hay archivo alternativo si Firestore está totalmente
-inaccesible. Un día sin ninguna invocación no se recupera solo. Ambos problemas
-requieren fases posteriores. Los guards rechazan documentos >900 KB/commits >9 MB;
-no se implementó un sistema distribuido de gran escala.
-
-## Seguridad y compatibilidad
-
-Las nuevas rutas bajo `marketPriceRuns/**` deniegan read/write a clientes, incluso
-autenticados. El servidor opera con OAuth de service account e IAM; el emulador
-verifica reglas, pero **no acredita permisos IAM actuales de producción**.
-El código B1 no ejecuta los callbacks positionUpdates del baseline. El frontend ya
-no expone ni invoca `saveDailyPortfolioSnapshot`: `portfolioDailySnapshots/**` es
-server-owned y las reglas conservan lectura autenticada pero deniegan create,
-update y delete de clientes. Las referencias manuales se guardan separadamente en
-`portfolioManualBaselines/**`, sin posibilidad de pisar un cierre oficial.
-
-El servidor reutiliza las credenciales existentes. No subir `.env`. Agregar
-`CRON_SECRET` en Production sigue siendo recomendado aun cuando existe el fallback
-acotado para Vercel Cron.
-
-## Rollout
-
-El flujo se activa al desplegar `main`; no requiere `PORTFOLIO_CLOSE_MODE`.
-No invocar manualmente las rutas para probar producción porque escriben estado
-durable. Un rollback debe hacerse mediante una revisión de código explícita, sin
-borrar observaciones ni reescribir historia.
-
-## Verificación local
-
-Desde el clon B1:
-
-```powershell
-npm ci --ignore-scripts --no-audit --no-fund
+```text
 npm run test:b1
 npm test
-npx eslint api/portfolio-snapshot-capture.js api/portfolio-snapshot-publish.js server/closing src/utils/portfolioSnapshots.js src/utils/portfolioSnapshots.test.js src/pages/Home.jsx src/pages/PortfolioHistory.jsx scripts/b1-byma-readonly.mjs test/b1/firestore.test.js
+npm run test:b1:firestore
+npm run test:firestore
 npm run build
+npx eslint api/portfolio-snapshot-morning.js server/closing scripts/morning-byma-readonly.mjs test/b1/morning.firestore.test.js
 git diff --check
 ```
-
-Emulador B1 (proyecto demo, nunca producción):
-
-```powershell
-$env:PATH = 'C:\Users\dell\Documents\apps\portfolio-tracker-b1\.b1-tools\java21\jdk-21.0.12.1+1-jre\bin;' + $env:PATH
-npm run test:b1:firestore
-```
-
-El JRE portable oficial Temurin 21 está sólo en `.b1-tools/` ignorado; no es dependencia
-productiva. ZIP SHA256: `d35f31e712f0fcf6ac5a093edc90204fbff22f720ba3950bd09d331d5e621636`.
-Los tests Firestore exigen localhost y proyecto `demo-b1-close`; una ruta distinta
-falla antes de acceder a datos. Prueban REST/CAS real, atomicidad y reglas denegatorias.
-
-Captura BYMA de diagnóstico (no importa Firestore ni escribe archivos/datos):
-
-```powershell
-node scripts/b1-byma-readonly.mjs --allow-network
-```
-
-Resultado 2026-09-15 17:40:12Z / 14:40 ART: acciones 103, CEDEARs 532,
-bonos ARS 199, USD 149, EXT 143. Cero closing_price positivos en los cinco grupos
-(captura intradiaria). Previous_close positivo se conservó como PREVIOUS_CLOSE,
-priceDate=null, stale=true, REJECTED. No se afirmó que perteneciera al día anterior:
-su fecha exacta tampoco está probada. Cero escrituras de producción.
-
-## Fuera de B1
-
-Calendario completo, monitor/alertas externos, Cloud Scheduler/Tasks, proveedor
-histórico, backfill, reconstrucción histórica, versionado completo de posiciones,
-archivo raw implementado y nuevo motor de valuación permanecen fuera de alcance.
