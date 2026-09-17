@@ -35,8 +35,8 @@ política no convierte esas conclusiones en falsas ni presenta TRADE como cierre
 
 | Hora ART | Ruta | Fase |
 | --- | --- | --- |
-| 18:10 | `/api/portfolio-snapshot-capture` | Captura durable y congela insumos; nunca publica. |
-| 19:35 | `/api/portfolio-snapshot-publish` | Recaptura, reconcilia y publica sólo un resultado COMPLETE. |
+| 18:00–18:59 | `/api/portfolio-snapshot-capture` | Captura durable y congela insumos; nunca publica. |
+| 20:00–20:59 | `/api/portfolio-snapshot-publish` | Recaptura, reconcilia y publica sólo un resultado COMPLETE. |
 
 Cada invocación fija la fecha argentina al inicio, verifica su propio cutoff, adquiere lease,
 lee/congela insumos, vuelve a descargar todos los grupos requeridos concurrentemente y persiste cada
@@ -55,7 +55,10 @@ ocupado devuelve 409. HTTP 200 en captura no significa snapshot UI publicado:
 `publicationStatus` lo distingue.
 
 Vercel Hobby puede invocar tarde: una corrida posterior al cutoff sigue siendo
-válida, pero nunca se acepta una corrida temprana.
+válida, pero nunca se acepta una corrida temprana. Ambos cron comienzan en el
+minuto cero de su hora y cumplen `earliest possible cron invocation >= internal cutoff`.
+Las rutas productivas fijan el cutoff de captura en 18:00 y no heredan un valor
+histórico posterior de `PORTFOLIO_CAPTURE_CUTOFF_ART`.
 
 Las peticiones BYMA tienen timeout (token 6 s, grupo 10 s), Firestore 8 s y Google
 OAuth 6 s. Se chequea presupuesto antes de construir. No se extiende el runtime

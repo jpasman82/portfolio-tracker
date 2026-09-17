@@ -5,9 +5,13 @@ import { runClose } from './pipeline.js';
 import { TIMEZONE, capturePolicy, captureWindowReason } from './model.js';
 
 export const CRON_PHASES = Object.freeze({
-  capture: Object.freeze({ route: '/api/portfolio-snapshot-capture', cutoffART: '18:10', publish: false }),
-  publish: Object.freeze({ route: '/api/portfolio-snapshot-publish', cutoffART: '19:35', publish: true }),
+  capture: Object.freeze({ route: '/api/portfolio-snapshot-capture', cutoffART: '18:00', publish: false }),
+  publish: Object.freeze({ route: '/api/portfolio-snapshot-publish', cutoffART: '20:00', publish: true }),
 });
+export const VALUATION_SCOPE = Object.freeze({ name: 'BROKERS_ONLY', collection: 'brokerPositions' });
+export const PRODUCTION_CAPTURE_POLICY = Object.freeze(capturePolicy({
+  PORTFOLIO_CAPTURE_CUTOFF_ART: CRON_PHASES.capture.cutoffART,
+}));
 
 const header = (req, name) => req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
 const requestPath = (req) => {
@@ -45,12 +49,12 @@ export async function handleClose(req, res, phase) {
 
   const date = snapshotDate();
   try {
-    const policy = capturePolicy();
+    const policy = PRODUCTION_CAPTURE_POLICY;
     const windowReason = phaseWindowReason(phase, date, new Date().toISOString(), policy);
     if (windowReason) return res.status(503).json({ ok: false, date, phase, error: windowReason });
     const store = createRestStore({ projectId: getServiceAccount().projectId, getToken: getGoogleAccessToken });
     const state = await runClose({ date, repo: createRepository(store), byma: createBymaClient(),
-      loadPositions: () => store.list('brokerPositions'), publish: config.publish, policy });
+      loadPositions: () => store.list(VALUATION_SCOPE.collection), publish: config.publish, policy });
     return res.status(state.status === 'COMPLETE' ? 200 : 503).json({
       ok: state.status === 'COMPLETE', date, phase, status: state.status, stage: state.stage,
       valid: state.valid.length, missing: state.missing, archiveStatus: state.archiveStatus,

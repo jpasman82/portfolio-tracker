@@ -65,8 +65,10 @@ supersedes the selection when its valid cumulative operation counter is greater.
 
 ## Capture window
 
-Existing vercel.json remains unchanged: 10 21 * * 1-5 and 35 22 * * 1-5, i.e.
-18:10 and 19:35 ART. First attempt is post-wheel, second is retry/reconciliation.
+Production uses `0 21 * * 1-5` and `0 23 * * 1-5`: on Vercel Hobby these are
+effective windows of approximately 18:00–18:59 and 20:00–20:59 ART. Internal
+cutoffs are the start of each window (18:00 and 20:00), so every possible hourly
+invocation is eligible. First attempt is post-wheel; second is retry/reconciliation.
 
 Basis reviewed on 2026-09-16:
 
@@ -81,16 +83,15 @@ Basis reviewed on 2026-09-16:
   extension as today's timetable. Both were read as independent official documents.
 
 Minimum cutoff 18:00 leaves 60 minutes after the user-confirmed ordinary end and
-30 minutes after the specific modality described above; the first cron adds another
-10 minutes. These are operational margins, not claims of a BYMA data-ready SLA.
+30 minutes after the specific modality described above. These are operational
+margins, not claims of a BYMA data-ready SLA.
 The code accepts later invocations on the same ART day, not only an exact cron minute.
 
-PORTFOLIO_CAPTURE_CUTOFF_ART is server-only, optional, HH:mm, default 18:00; it
-may only delay that minimum. Invalid/earlier values fail closed. Nothing was set
-in remote environments or local secret files. A changed cutoff during an existing
-run is rejected as CAPTURE_POLICY_MISMATCH. For exceptional extended sessions,
-delay the cutoff before capture or use mode off; no automatic exchange calendar
-or emergency-extension detector is claimed by this change.
+PORTFOLIO_CAPTURE_CUTOFF_ART remains available to lower-level diagnostic callers,
+but the production HTTP routes pin it to 18:00 so an inherited environment value
+cannot move the cutoff inside the Hobby invocation window. A changed policy in an
+existing durable run is still rejected as CAPTURE_POLICY_MISMATCH. No automatic
+exchange calendar or emergency-extension detector is claimed by this change.
 
 Pre-window invocation is rejected before lease, input freeze, BYMA or Firestore
 writes. A capture crossing midnight ART is rejected for that valuationDate.
@@ -133,7 +134,7 @@ history is neither rewritten nor relabeled. The UI may still display 'cierre', b
 the metadata and documentation unambiguously describe daily last traded price.
 
 There is no automatic or request-selectable legacy fallback. Production uses two
-explicit routes: the 18:10 ART route always passes `publish: false`; the 19:35 ART
+explicit routes: the 18:00 ART window always passes `publish: false`; the 20:00 ART
 route reconciles again and passes `publish: true`. The client no longer exports or
 invokes `saveDailyPortfolioSnapshot`. Authenticated users retain read access to
 `portfolioDailySnapshots/**`, but Firestore rules deny client create/update/delete.
