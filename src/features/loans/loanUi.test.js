@@ -18,6 +18,8 @@ import {
   movementFormValues,
   movementDeleteErrorMessage,
   movementSaveErrorMessage,
+  previewLoanValueAfterMovement,
+  previewLoanValueAfterMovementDeletion,
   submitLoanCreation,
   submitLoanMovement,
   submitLoanMovementDeletion,
@@ -444,5 +446,71 @@ describe('authenticated repository access', () => {
     await expect(submitLoanCreation({ uid: '', form: validForm, repository }))
       .rejects.toMatchObject({ field: 'auth' });
     expect(repository.createLoan).not.toHaveBeenCalled();
+  });
+});
+
+describe('movement outcome previews', () => {
+  const asOfDate = '2027-03-01';
+
+  it('values an added movement through the same ledger the repository will write', () => {
+    const before = deriveLoanPresentation({
+      loan: reclusLoan,
+      movements: [...reclusMovements],
+      asOfDate,
+    });
+    const after = previewLoanValueAfterMovement({
+      loan: reclusLoan,
+      movements: [...reclusMovements],
+      asOfDate,
+      form: { type: 'contribution', effectiveDate: asOfDate, amount: '25.000', note: '' },
+    });
+
+    expect(new Decimal(after.value).minus(before.valuation.value).toString()).toBe('25000');
+  });
+
+  it('values a correction as the reversal plus replacement pair', () => {
+    const after = previewLoanValueAfterMovement({
+      loan: reclusLoan,
+      movements: [...reclusMovements],
+      asOfDate,
+      movementId: 'initial-contribution',
+      form: { type: 'contribution', effectiveDate: '2026-09-01', amount: '700.000', note: '' },
+    });
+    const corrected = deriveLoanPresentation({
+      loan: reclusLoan,
+      movements: [{ ...reclusMovements[0], amount: '700000' }],
+      asOfDate,
+    });
+
+    expect(after.value).toBe(corrected.valuation.value);
+  });
+
+  it('values a deletion as the loan without that movement', () => {
+    const movements = [
+      ...reclusMovements,
+      { id: 'later', effectiveDate: '2026-12-01', type: 'contribution', amount: '40000' },
+    ];
+    const after = previewLoanValueAfterMovementDeletion({
+      loan: reclusLoan,
+      movements,
+      asOfDate,
+      movementId: 'later',
+    });
+    const withoutIt = deriveLoanPresentation({
+      loan: reclusLoan,
+      movements: [...reclusMovements],
+      asOfDate,
+    });
+
+    expect(after.value).toBe(withoutIt.valuation.value);
+  });
+
+  it('rejects an incomplete form so the caller can show nothing yet', () => {
+    expect(() => previewLoanValueAfterMovement({
+      loan: reclusLoan,
+      movements: [...reclusMovements],
+      asOfDate,
+      form: { type: 'contribution', effectiveDate: asOfDate, amount: '', note: '' },
+    })).toThrow(LoanFormValidationError);
   });
 });

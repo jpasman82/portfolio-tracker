@@ -3,8 +3,14 @@ import { compareDateOnly, parseDateOnly, toDateOnly } from './loanDates';
 import {
   normalizeLoanForPersistence,
   toLoanEngineDefinition,
+  toLoanEngineMovement,
 } from './loanSerialization';
-import { effectiveMovements } from './loanMovements';
+import { calculateLoanAtDate } from './loanEngine';
+import {
+  effectiveMovements,
+  prepareMovementCorrection,
+  prepareMovementDeletion,
+} from './loanMovements';
 import { buildLoanTimeline } from './loanTimeline';
 
 const RATE_TYPE_LABELS = Object.freeze({
@@ -188,6 +194,61 @@ export function buildMovementInput(form, loan) {
     amount,
     ...(note ? { note } : {}),
   };
+}
+
+/**
+ * Valuation the loan would show at `asOfDate` once `form` is saved, so the
+ * movement sheet can confirm the outcome before writing.
+ *
+ * No new arithmetic: it assembles exactly the ledger the repository will
+ * persist — an appended movement when adding, and the reversal + replacement
+ * pair from `prepareMovementCorrection` when editing — and hands it to L1.
+ * Throws `LoanFormValidationError` while the form is still incomplete, which
+ * callers treat as "nothing to preview yet".
+ */
+export function previewLoanValueAfterMovement({
+  loan,
+  movements,
+  asOfDate,
+  movementId,
+  form,
+}) {
+  const candidate = buildMovementInput(form, loan);
+  const resultingMovements = movementId
+    ? prepareMovementCorrection({ movements, movementId, correctedData: candidate })
+      .resultingMovements
+    : [...movements, candidate];
+
+  return valueOfLedger({ loan, movements: resultingMovements, asOfDate });
+}
+
+/**
+ * Valuation the loan would show at `asOfDate` once the movement is deleted,
+ * so the confirmation can state the effect instead of only describing it.
+ * Uses the same reversal the repository writes.
+ */
+export function previewLoanValueAfterMovementDeletion({
+  loan,
+  movements,
+  asOfDate,
+  movementId,
+}) {
+  const { resultingMovements } = prepareMovementDeletion({
+    movements,
+    movementId,
+    // The reason is stored as the reversal's note and never reaches the engine.
+    // The preview supplies a placeholder so it can run before one is typed.
+    reason: 'preview',
+  });
+  return valueOfLedger({ loan, movements: resultingMovements, asOfDate });
+}
+
+function valueOfLedger({ loan, movements, asOfDate }) {
+  return calculateLoanAtDate({
+    loan: toLoanEngineDefinition(loan),
+    movements: effectiveMovements(movements).map(toLoanEngineMovement),
+    asOfDate,
+  });
 }
 
 export async function submitLoanMovement({
