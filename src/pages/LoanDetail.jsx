@@ -9,6 +9,12 @@ import LoanFlow from '../features/loans/LoanFlow';
 import LoanTermsForm from '../features/loans/LoanTermsForm';
 import { createLoanRepository } from '../features/loans/loanRepository';
 import {
+  formatPercentValue,
+  interestSharePercent,
+  loanTermProgress,
+  nextCapitalizationPreview,
+} from '../features/loans/loanPresentation';
+import {
   formatDateOnly,
   formatMoney,
   formatRatePercent,
@@ -23,47 +29,85 @@ import './Activos.css';
 
 const loanRepository = createLoanRepository(db);
 
-function Metric({ label, value, primary = false, children }) {
+function EditIcon() {
   return (
-    <article className={`loan-metric${primary ? ' loan-metric--primary' : ''}`}>
-      <span className="loan-metric__label">{label}</span>
-      <p className="loan-metric__value">{value}</p>
-      {children}
-    </article>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
   );
 }
 
-function MovementRow({ movement, currency, onEdit, onDelete }) {
+function PlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+/** Start → today → maturity, with the elapsed share of the term. */
+function TermBar({ term, loan }) {
+  const marker = Math.min(99, Math.max(1, term.percent));
+  return (
+    <section className="loan-term" aria-label="Vigencia del préstamo">
+      <div className="loan-term__track">
+        <div className="loan-term__fill" style={{ width: `${term.percent}%` }} />
+        {term.phase === 'active' && (
+          <div className="loan-term__marker" style={{ left: `${marker}%` }} />
+        )}
+      </div>
+      <div className="loan-term__labels">
+        <span>{formatDateOnly(loan.startDate)} inicio</span>
+        <span className={`loan-term__now loan-term__now--${term.phase}`}>
+          {term.phase === 'pending'
+            ? 'Aún no comenzó'
+            : term.phase === 'matured'
+              ? 'Plazo cumplido'
+              : `Hoy · ${term.elapsedDays} de ${term.totalDays} días`}
+        </span>
+        <span>{formatDateOnly(loan.maturityDate)} vence</span>
+      </div>
+    </section>
+  );
+}
+
+function MovementRow({ movement, currency, onEdit }) {
   const withdrawal = movement.type === 'withdrawal';
   return (
     <div className={`loan-movement${withdrawal ? ' loan-movement--withdrawal' : ''}`}>
-      <div className="loan-movement__main">
-        <span className="loan-movement__icon" aria-hidden="true">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <path d={withdrawal ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
-          </svg>
-        </span>
-        <div>
-          <p className="loan-movement__type">{movementTypeLabel(movement.type)}</p>
-          <p className="loan-movement__date">{formatDateOnly(movement.effectiveDate)}</p>
-          {movement.note && <p className="loan-movement__note">{movement.note}</p>}
-        </div>
-      </div>
-      <div className="loan-movement__actions">
-        <p className="loan-movement__amount">
-          {withdrawal ? '−' : '+'} {formatMoney(currency, movement.amount)}
+      <span className="loan-movement__icon" aria-hidden="true">{withdrawal ? '▼' : '▲'}</span>
+      <div className="loan-movement__body">
+        <p className="loan-movement__type">
+          {movementTypeLabel(movement.type)}
+          <span className="loan-movement__date"> · {formatDateOnly(movement.effectiveDate)}</span>
         </p>
-        {onEdit && (
-          <button type="button" className="loan-movement__edit" onClick={() => onEdit(movement)}>
-            Editar
-          </button>
-        )}
-        {onDelete && (
-          <button type="button" className="loan-movement__delete" onClick={() => onDelete(movement)}>
-            Eliminar
-          </button>
-        )}
+        {movement.note && <p className="loan-movement__note">{movement.note}</p>}
       </div>
+      <p className="loan-movement__amount">
+        {withdrawal ? '−' : '+'} {formatMoney(currency, movement.amount)}
+      </p>
+      {onEdit && (
+        <button
+          type="button"
+          className="loan-movement__edit"
+          onClick={() => onEdit(movement)}
+        >
+          Editar
+          <span className="loan-visually-hidden">
+            {` ${movementTypeLabel(movement.type)} del ${formatDateOnly(movement.effectiveDate)}`}
+          </span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Term({ label, children }) {
+  return (
+    <div className="loan-term-item">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
     </div>
   );
 }
@@ -123,6 +167,8 @@ export default function LoanDetail({
     retry();
   };
 
+  const canManage = presentation?.loan.status === 'active';
+
   let content;
   if (!uid) {
     content = (
@@ -163,83 +209,103 @@ export default function LoanDetail({
       visibleMovements,
       effectiveStatus,
     } = presentation;
-    const canManageMovements = loan.status === 'active';
+    const term = loanTermProgress({ loan, asOfDate });
+    const share = interestSharePercent(valuation);
+    const nextCapitalization = nextCapitalizationPreview({ timeline, valuation, asOfDate });
+
     content = (
       <>
-        <div className="loan-detail__title-row">
-          <div className="loan-detail__identity">
-            <p className="loan-kicker">Préstamo · {loan.currency}</p>
+        <div className="loan-identity">
+          <div className="loan-identity__name-line">
             <h1>{loan.name}</h1>
+            <span className={`loan-badge loan-badge--${effectiveStatus}`}>
+              {statusLabel(effectiveStatus)}
+            </span>
           </div>
-          <span className={`loan-badge loan-badge--${effectiveStatus}`}>{statusLabel(effectiveStatus)}</span>
+          <p className="loan-identity__meta">
+            Préstamo · {loan.currency} · {formatRatePercent(loan.rate)} {rateTypeLabel(loan.rateType).toLowerCase()}
+          </p>
         </div>
 
-        <section className="loan-metrics" aria-label="Resumen financiero">
-          <Metric label="Valor actual" value={formatMoney(loan.currency, valuation.value)} primary />
-          <Metric label="Aportes netos" value={formatMoney(loan.currency, valuation.netCashFlow)} />
-          <Metric label="Intereses generados" value={formatMoney(loan.currency, valuation.totalInterestGenerated)} />
-          <Metric label="Proyección al vencimiento" value={formatMoney(loan.currency, projection.projectedMaturityValue)}>
-            <p className="loan-projection-note">Sin considerar futuros ingresos o retiros.</p>
-          </Metric>
-        </section>
-
-        <div className="loan-detail-layout">
-          <section className="loan-detail-section" aria-labelledby="conditions-heading">
-            <div className="loan-detail-section__heading">
-              <h2 id="conditions-heading">Condiciones</h2>
-              {canManageMovements && (
-                <button
-                  type="button"
-                  className="loan-button loan-button--secondary loan-button--compact"
-                  onClick={() => setShowTermsDialog(true)}
-                >
-                  Editar condiciones
-                </button>
-              )}
-            </div>
-            <dl className="loan-conditions">
-              <div className="loan-condition">
-                <dt>Tasa</dt>
-                <dd>{formatRatePercent(loan.rate)} · {rateTypeLabel(loan.rateType)}</dd>
-              </div>
-              <div className="loan-condition">
-                <dt>Inicio</dt>
-                <dd>{formatDateOnly(loan.startDate)}</dd>
-              </div>
-              <div className="loan-condition">
-                <dt>Vencimiento</dt>
-                <dd>{formatDateOnly(loan.maturityDate)}</dd>
-              </div>
-              <div className="loan-condition">
-                <dt>Próxima capitalización</dt>
-                <dd>{formatDateOnly(valuation.nextCapitalizationDate)}</dd>
-              </div>
-              <div className="loan-condition">
-                <dt>Estado</dt>
-                <dd>{statusLabel(effectiveStatus)}</dd>
-              </div>
-              <div className="loan-condition">
-                <dt>Valuado al</dt>
-                <dd>{formatDateOnly(asOfDate)}</dd>
-              </div>
-            </dl>
+        <div className="loan-headline">
+          <section className="loan-lead" aria-label="Valor actual">
+            <p className="loan-lead__label">Valor actual · {formatDateOnly(asOfDate)}</p>
+            <p className="loan-lead__value">{formatMoney(loan.currency, valuation.value)}</p>
+            <p className="loan-lead__delta">
+              + {formatMoney(loan.currency, valuation.totalInterestGenerated)}
+              <span className="loan-lead__delta-context">
+                {` de intereses sobre ${formatMoney(loan.currency, valuation.netCashFlow)} aportados`}
+                {share !== null ? ` · ${formatPercentValue(share)}` : ''}
+              </span>
+            </p>
+            <TermBar term={term} loan={loan} />
           </section>
 
-          <section className="loan-detail-section" aria-labelledby="movements-heading">
-            <div className="loan-detail-section__heading">
-              <h2 id="movements-heading">Movimientos</h2>
-              {canManageMovements && (
+          <section className="loan-secondary" aria-label="Proyección al vencimiento">
+            <div className="loan-secondary__head">
+              <p className="loan-lead__label">Proyección al vencimiento</p>
+              <span className="loan-secondary__date">{formatDateOnly(loan.maturityDate)}</span>
+            </div>
+            <p className="loan-secondary__value">
+              {formatMoney(loan.currency, projection.projectedMaturityValue)}
+            </p>
+            <p className="loan-secondary__note">
+              {formatMoney(loan.currency, projection.projectedFutureInterest)} de interés futuro estimado, sin nuevos ingresos ni retiros.
+            </p>
+          </section>
+        </div>
+
+        <div className="loan-detail-layout">
+          <section className="loan-block" aria-labelledby="conditions-heading">
+            <div className="loan-block__heading">
+              <h2 id="conditions-heading">Condiciones</h2>
+              {canManage && (
                 <button
                   type="button"
-                  className="loan-button loan-button--primary loan-button--compact"
-                  onClick={() => setMovementDialog({ movement: null })}
+                  className="loan-link-button"
+                  onClick={() => setShowTermsDialog(true)}
                 >
-                  + Movimiento
+                  <EditIcon />
+                  Editar
+                  <span className="loan-visually-hidden"> condiciones del préstamo</span>
                 </button>
               )}
             </div>
+            <dl className="loan-terms-grid">
+              <Term label="Tasa">{formatRatePercent(loan.rate)} · {rateTypeLabel(loan.rateType)}</Term>
+              <Term label="Capitalización">Mensual</Term>
+              <Term label="Inicio">{formatDateOnly(loan.startDate)}</Term>
+              <Term label="Vencimiento">{formatDateOnly(loan.maturityDate)}</Term>
+              <Term label="Moneda">{loan.currency} · no editable</Term>
+              {nextCapitalization && (
+                <>
+                  <Term label="Próxima capitalización">
+                    {formatDateOnly(nextCapitalization.date)}
+                  </Term>
+                  <Term
+                    label={nextCapitalization.daysAway > 0
+                      ? `En ${nextCapitalization.daysAway} días suma`
+                      : 'Suma estimada'}
+                  >
+                    {formatMoney(loan.currency, nextCapitalization.amount)}
+                  </Term>
+                </>
+              )}
+            </dl>
+            <p className="loan-note">
+              Cada corrección queda registrada con su motivo y muestra el antes y el después antes de confirmarse.
+            </p>
+          </section>
+
+          <section className="loan-block" aria-labelledby="movements-heading">
+            <div className="loan-block__heading">
+              <h2 id="movements-heading">Movimientos</h2>
+              <span className="loan-block__meta">
+                {visibleMovements.length} · neto {formatMoney(loan.currency, valuation.netCashFlow)}
+              </span>
+            </div>
             {visibleMovements.length === 0 ? (
-              <p className="loan-projection-note">No hay movimientos registrados.</p>
+              <p className="loan-note">No hay movimientos registrados.</p>
             ) : (
               <div className="loan-movements">
                 {visibleMovements.map((movement, index) => (
@@ -247,44 +313,96 @@ export default function LoanDetail({
                     key={movement.id || `${movement.effectiveDate}-${index}`}
                     movement={movement}
                     currency={loan.currency}
-                    onEdit={canManageMovements ? (selected) => setMovementDialog({ movement: selected }) : null}
-                    onDelete={canManageMovements ? (selected) => setDeleteDialog({ movement: selected }) : null}
+                    onEdit={canManage ? (selected) => setMovementDialog({ movement: selected }) : null}
                   />
                 ))}
               </div>
             )}
+            <p className="loan-note">
+              Eliminar un movimiento se hace desde su ficha de edición. El tipo se distingue por la palabra, el signo y la flecha, no sólo por el color.
+            </p>
           </section>
         </div>
 
-        <LoanFlow loan={loan} timeline={timeline} />
+        <LoanFlow loan={loan} timeline={timeline} asOfDate={asOfDate} />
       </>
     );
   }
 
   return (
-    <div className="loan-page">
+    <div className={`loan-page${canManage ? ' loan-page--with-action-bar' : ''}`}>
       <main className="loan-page__inner">
         <header className="loan-page__header">
-          <Link className="loan-back-link" to="/activos" aria-label="Volver a Activos">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <Link className="loan-back-link" to="/activos">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="m15 18-6-6 6-6" />
             </svg>
+            <span className="loan-back-link__text">Activos · Préstamos</span>
+            <span className="loan-visually-hidden">Volver a Activos</span>
           </Link>
           <div className="loan-page__header-actions">
+            {canManage && (
+              <>
+                <button
+                  type="button"
+                  className="loan-button loan-button--secondary loan-button--compact loan-action--desktop"
+                  onClick={() => setShowTermsDialog(true)}
+                >
+                  <EditIcon />
+                  Editar condiciones
+                </button>
+                <button
+                  type="button"
+                  className="loan-button loan-button--primary loan-button--compact loan-action--desktop"
+                  onClick={() => setMovementDialog({ movement: null })}
+                >
+                  <PlusIcon />
+                  Movimiento
+                </button>
+              </>
+            )}
             <LogoutButton />
           </div>
         </header>
         {content}
       </main>
+
+      {canManage && !movementDialog && !deleteDialog && !showTermsDialog && (
+        <div className="loan-action-bar loan-action--mobile">
+          <button
+            type="button"
+            className="loan-button loan-button--primary loan-button--block"
+            onClick={() => setMovementDialog({ movement: null })}
+          >
+            <PlusIcon />
+            Movimiento
+          </button>
+          <button
+            type="button"
+            className="loan-button loan-button--secondary loan-button--icon"
+            onClick={() => setShowTermsDialog(true)}
+            aria-label="Editar condiciones del préstamo"
+          >
+            <EditIcon />
+          </button>
+        </div>
+      )}
+
       {movementDialog && presentation && (
         <LoanMovementForm
           key={movementDialog.movement?.id || 'new-movement'}
           uid={uid}
           loanId={loanId}
           loan={presentation.loan}
+          movements={presentation.movements}
+          asOfDate={asOfDate}
           movement={movementDialog.movement}
           repository={repository}
           onCancel={() => setMovementDialog(null)}
+          onDelete={(movement) => {
+            setMovementDialog(null);
+            setDeleteDialog({ movement });
+          }}
           onSaved={changesSaved}
         />
       )}
@@ -293,7 +411,10 @@ export default function LoanDetail({
           uid={uid}
           loanId={loanId}
           loan={presentation.loan}
+          movements={presentation.movements}
+          asOfDate={asOfDate}
           movement={deleteDialog.movement}
+          currentValue={presentation.valuation.value}
           repository={repository}
           onCancel={() => setDeleteDialog(null)}
           onDeleted={changesSaved}

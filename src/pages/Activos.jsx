@@ -1,10 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
 import NewLoanForm from '../features/loans/NewLoanForm';
 import { createLoanRepository } from '../features/loans/loanRepository';
+import {
+  formatPercentValue,
+  interestSharePercent,
+  loanCurrencyTotals,
+  loanTermProgress,
+} from '../features/loans/loanPresentation';
 import {
   formatDateOnly,
   formatMoney,
@@ -18,28 +24,64 @@ import './Activos.css';
 
 const loanRepository = createLoanRepository(db);
 
-function LoanCard({ presentation }) {
+function PlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function LoanRow({ presentation, asOfDate }) {
   const { loan, valuation, projection, effectiveStatus } = presentation;
+  const share = interestSharePercent(valuation);
+  const term = loanTermProgress({ loan, asOfDate });
+  const matured = term.phase === 'matured';
 
   return (
-    <Link className="loan-card" to={`/activos/prestamos/${loan.id}`}>
-      <div className="loan-card__top">
-        <h3 className="loan-card__name">{loan.name}</h3>
-        <span className={`loan-badge loan-badge--${effectiveStatus}`}>{statusLabel(effectiveStatus)}</span>
-      </div>
-      <p className="loan-card__value">{formatMoney(loan.currency, valuation.value)}</p>
-      <span className="loan-card__label">Valor actual · {loan.currency}</span>
-      <p className="loan-card__rate">
-        {formatRatePercent(loan.rate)} · {rateTypeLabel(loan.rateType)}
-      </p>
-      <div className="loan-card__projection">
-        <span className="loan-card__label">Proyección al vencimiento</span>
-        <strong>{formatMoney(loan.currency, projection.projectedMaturityValue)}</strong>
-      </div>
-      <div className="loan-card__footer">
-        <span>Vence {formatDateOnly(loan.maturityDate)}</span>
-        <span aria-hidden="true">→</span>
-      </div>
+    <Link className="loan-row" to={`/activos/prestamos/${loan.id}`}>
+      <span className="loan-row__identity">
+        <span className="loan-row__name-line">
+          <span className="loan-row__name">{loan.name}</span>
+          <span className={`loan-badge loan-badge--${effectiveStatus}`}>
+            {statusLabel(effectiveStatus)}
+          </span>
+        </span>
+        <span className="loan-row__meta">
+          {loan.currency} · {formatRatePercent(loan.rate)} {rateTypeLabel(loan.rateType).toLowerCase()}
+          {' · inicio '}
+          {formatDateOnly(loan.startDate)}
+        </span>
+      </span>
+
+      <span className="loan-row__cell loan-row__cell--value">
+        <span className="loan-row__cell-label">Valor actual</span>
+        <span className="loan-row__value">{formatMoney(loan.currency, valuation.value)}</span>
+      </span>
+
+      <span className="loan-row__cell loan-row__cell--interest">
+        <span className="loan-row__cell-label">Intereses</span>
+        <span className="loan-row__interest">
+          + {formatMoney(loan.currency, valuation.totalInterestGenerated)}
+        </span>
+        {share !== null && (
+          <span className="loan-row__sub">{formatPercentValue(share)} sobre aportes</span>
+        )}
+      </span>
+
+      <span className="loan-row__cell loan-row__cell--projection">
+        <span className="loan-row__cell-label">Proyección · vence</span>
+        <span className="loan-row__projection">
+          {formatMoney(loan.currency, projection.projectedMaturityValue)}
+        </span>
+        <span className="loan-row__sub">
+          {matured
+            ? `venció ${formatDateOnly(loan.maturityDate)}`
+            : `${formatDateOnly(loan.maturityDate)} · ${term.remainingDays} días`}
+        </span>
+      </span>
+
+      <span className="loan-row__chevron" aria-hidden="true">→</span>
     </Link>
   );
 }
@@ -81,6 +123,13 @@ export default function Activos({ currentUser }) {
     setReloadKey((value) => value + 1);
   };
 
+  const totals = useMemo(() => loanCurrencyTotals(presentations), [presentations]);
+  const activeCount = useMemo(
+    () => presentations.filter((item) => item.effectiveStatus === 'active').length,
+    [presentations],
+  );
+  const hasLoans = presentations.length > 0;
+
   return (
     <div className="loan-page">
       <main className="loan-page__inner">
@@ -90,26 +139,45 @@ export default function Activos({ currentUser }) {
             <h1 className="loan-page__title">Activos</h1>
           </div>
           <div className="loan-page__header-actions">
+            <button
+              type="button"
+              className="loan-button loan-button--primary loan-action--desktop"
+              onClick={() => setShowNewLoan(true)}
+            >
+              <PlusIcon />
+              Nuevo préstamo
+            </button>
             <LogoutButton />
           </div>
         </header>
 
-        <p className="loan-page__intro">
-          Seguimiento complementario de inversiones por fuera de tus brokers. Estos valores no modifican el patrimonio principal ni la Cartera Unificada.
-        </p>
+        {hasLoans && (
+          <section className="loan-totals" aria-label="Total en préstamos">
+            <p className="loan-totals__label">Total en préstamos</p>
+            <div className="loan-totals__figures">
+              {totals.map((total, index) => (
+                <p
+                  key={total.currency}
+                  className={`loan-totals__figure${index === 0 ? ' loan-totals__figure--lead' : ''}`}
+                >
+                  {formatMoney(total.currency, total.value)}
+                </p>
+              ))}
+            </div>
+            <p className="loan-totals__note">
+              Seguimiento complementario por fuera de tus brokers. Cada moneda se informa por separado, sin conversión: estos valores no modifican el patrimonio principal ni la Cartera Unificada.
+            </p>
+          </section>
+        )}
 
         <section aria-labelledby="loans-heading">
           <div className="loan-section__heading">
-            <div>
-              <p className="loan-kicker">Activos financieros</p>
-              <h2 id="loans-heading">Préstamos</h2>
-            </div>
-            <button type="button" className="loan-button loan-button--primary" onClick={() => setShowNewLoan(true)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              Nuevo préstamo
-            </button>
+            <h2 id="loans-heading" className="loan-section__title">Préstamos</h2>
+            {hasLoans && (
+              <span className="loan-section__count">
+                {presentations.length} · {activeCount} activo{activeCount === 1 ? '' : 's'}
+              </span>
+            )}
           </div>
 
           {!uid ? (
@@ -128,7 +196,7 @@ export default function Activos({ currentUser }) {
               <p>Revisá tu conexión e intentá nuevamente.</p>
               <button type="button" className="loan-button loan-button--secondary" onClick={retry}>Reintentar</button>
             </div>
-          ) : presentations.length === 0 ? (
+          ) : !hasLoans ? (
             <div className="loan-empty">
               <div className="loan-empty__icon" aria-hidden="true">
                 <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -143,12 +211,34 @@ export default function Activos({ currentUser }) {
               </button>
             </div>
           ) : (
-            <div className="loan-grid">
-              {presentations.map((item) => <LoanCard key={item.loan.id} presentation={item} />)}
+            <div className="loan-list">
+              <div className="loan-list__head" aria-hidden="true">
+                <span>Préstamo</span>
+                <span>Valor actual</span>
+                <span>Intereses</span>
+                <span>Proyección · vence</span>
+                <span />
+              </div>
+              {presentations.map((item) => (
+                <LoanRow key={item.loan.id} presentation={item} asOfDate={asOfDate} />
+              ))}
             </div>
           )}
         </section>
       </main>
+
+      {hasLoans && !showNewLoan && (
+        <div className="loan-action-bar loan-action--mobile">
+          <button
+            type="button"
+            className="loan-button loan-button--primary loan-button--block"
+            onClick={() => setShowNewLoan(true)}
+          >
+            <PlusIcon />
+            Nuevo préstamo
+          </button>
+        </div>
+      )}
 
       {showNewLoan && (
         <NewLoanForm

@@ -1,18 +1,30 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { movementDateShortcuts } from './loanPresentation';
 import {
   LoanFormValidationError,
+  formatDateOnly,
+  formatMoney,
   movementFormValues,
   movementSaveErrorMessage,
+  previewLoanValueAfterMovement,
   submitLoanMovement,
 } from './loanUi';
+
+const TYPES = Object.freeze([
+  { value: 'contribution', label: 'Ingreso', glyph: '▲' },
+  { value: 'withdrawal', label: 'Retiro', glyph: '▼' },
+]);
 
 export default function LoanMovementForm({
   uid,
   loanId,
   loan,
+  movements = [],
+  asOfDate,
   movement,
   repository,
   onCancel,
+  onDelete,
   onSaved,
 }) {
   const [form, setForm] = useState(() => movementFormValues({ loan, movement }));
@@ -22,10 +34,44 @@ export default function LoanMovementForm({
   const saveInFlight = useRef(false);
   const editing = Boolean(movement);
 
+  const shortcuts = useMemo(
+    () => (asOfDate ? movementDateShortcuts({ loan, today: asOfDate, movements }) : []),
+    [loan, asOfDate, movements],
+  );
+
+  // The resulting value is only shown once the form is complete enough for the
+  // engine to value it; an incomplete form simply has nothing to preview.
+  const resultingValue = useMemo(() => {
+    if (!asOfDate) return null;
+    try {
+      return previewLoanValueAfterMovement({
+        loan,
+        movements,
+        asOfDate,
+        movementId: movement?.id,
+        form,
+      }).value;
+    } catch {
+      return null;
+    }
+  }, [loan, movements, asOfDate, movement, form]);
+
   const updateField = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
     if (fieldError === name) setFieldError('');
+    setErrorMessage('');
+  };
+
+  const chooseType = (type) => {
+    setForm((current) => ({ ...current, type }));
+    if (fieldError === 'type') setFieldError('');
+    setErrorMessage('');
+  };
+
+  const chooseDate = (date) => {
+    setForm((current) => ({ ...current, effectiveDate: date }));
+    if (fieldError === 'effectiveDate') setFieldError('');
     setErrorMessage('');
   };
 
@@ -71,8 +117,12 @@ export default function LoanMovementForm({
         <div className="loan-dialog__handle" aria-hidden="true" />
         <div className="loan-dialog__header">
           <div>
-            <p className="loan-kicker">Movimientos</p>
             <h2 id="loan-movement-title">{editing ? 'Editar movimiento' : 'Nuevo movimiento'}</h2>
+            <p className="loan-dialog__context">
+              {editing
+                ? `${loan.name} · ${formatMoney(loan.currency, movement.amount)} del ${formatDateOnly(movement.effectiveDate)}`
+                : `${loan.name} · ${loan.currency} · entre ${formatDateOnly(loan.startDate)} y ${formatDateOnly(loan.maturityDate)}`}
+            </p>
           </div>
           <button
             type="button"
@@ -88,30 +138,28 @@ export default function LoanMovementForm({
         </div>
 
         <form className="loan-form" onSubmit={handleSubmit} noValidate>
-          <label className="loan-field">
-            <span>Tipo</span>
-            <select name="type" value={form.type} onChange={updateField} aria-invalid={fieldError === 'type'}>
-              <option value="contribution">Ingreso</option>
-              <option value="withdrawal">Retiro</option>
-            </select>
-          </label>
+          <div className="loan-field loan-field--wide">
+            <span id="loan-movement-type-label">Tipo</span>
+            <div className="loan-toggle" role="group" aria-labelledby="loan-movement-type-label">
+              {TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  className={`loan-toggle__option loan-toggle__option--${type.value}`}
+                  aria-pressed={form.type === type.value}
+                  onClick={() => chooseType(type.value)}
+                  disabled={saving}
+                >
+                  <span aria-hidden="true">{type.glyph}</span>
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <label className="loan-field">
-            <span>Fecha</span>
-            <input
-              type="date"
-              name="effectiveDate"
-              value={form.effectiveDate}
-              min={loan.startDate}
-              max={loan.maturityDate}
-              onChange={updateField}
-              aria-invalid={fieldError === 'effectiveDate'}
-            />
-          </label>
-
-          <label className="loan-field loan-field--wide">
+          <label className="loan-field loan-field--wide loan-field--amount">
             <span>Importe</span>
-            <div className="loan-field__prefix">
+            <div className="loan-field__prefix loan-field__prefix--lead">
               <span>{loan.currency}</span>
               <input
                 name="amount"
@@ -125,8 +173,38 @@ export default function LoanMovementForm({
             </div>
           </label>
 
+          <div className="loan-field loan-field--wide">
+            <label className="loan-field__label" htmlFor="loan-movement-date">Fecha</label>
+            <input
+              id="loan-movement-date"
+              type="date"
+              name="effectiveDate"
+              value={form.effectiveDate}
+              min={loan.startDate}
+              max={loan.maturityDate}
+              onChange={updateField}
+              aria-invalid={fieldError === 'effectiveDate'}
+            />
+            {shortcuts.length > 0 && (
+              <div className="loan-chips">
+                {shortcuts.map((shortcut) => (
+                  <button
+                    key={shortcut.id}
+                    type="button"
+                    className="loan-chip"
+                    aria-pressed={form.effectiveDate === shortcut.date}
+                    onClick={() => chooseDate(shortcut.date)}
+                    disabled={saving}
+                  >
+                    {shortcut.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <label className="loan-field loan-field--wide">
-            <span>Nota opcional</span>
+            <span>Nota <span className="loan-field__optional">opcional</span></span>
             <input
               name="note"
               value={form.note}
@@ -137,6 +215,13 @@ export default function LoanMovementForm({
               aria-invalid={fieldError === 'note'}
             />
           </label>
+
+          {resultingValue !== null && (
+            <div className="loan-outcome loan-field--wide">
+              <span>Valor tras el movimiento</span>
+              <strong>{formatMoney(loan.currency, resultingValue)}</strong>
+            </div>
+          )}
 
           {errorMessage && (
             <div id="loan-movement-error" className="loan-error" role="alert">
@@ -158,6 +243,19 @@ export default function LoanMovementForm({
               {saving ? 'Guardando…' : editing ? 'Guardar corrección' : 'Guardar movimiento'}
             </button>
           </div>
+
+          {editing && onDelete && (
+            <div className="loan-destructive-row loan-field--wide">
+              <button
+                type="button"
+                className="loan-button loan-button--ghost-danger"
+                onClick={() => onDelete(movement)}
+                disabled={saving}
+              >
+                Eliminar movimiento
+              </button>
+            </div>
+          )}
         </form>
       </section>
     </div>

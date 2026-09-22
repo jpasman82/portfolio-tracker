@@ -2,15 +2,25 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const sources = [
-  new URL('./loanUi.js', import.meta.url),
-  new URL('./NewLoanForm.jsx', import.meta.url),
-  new URL('./LoanMovementForm.jsx', import.meta.url),
-  new URL('./LoanMovementDeleteDialog.jsx', import.meta.url),
-  new URL('./LoanTermsForm.jsx', import.meta.url),
-  new URL('../../pages/Activos.jsx', import.meta.url),
-  new URL('../../pages/LoanDetail.jsx', import.meta.url),
-].map((url) => readFileSync(fileURLToPath(url), 'utf8'));
+const read = (relative) => readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
+
+// Helper modules may reach for Decimal and the engine; React components may not.
+const helperSources = [
+  './loanUi.js',
+  './loanPresentation.js',
+].map(read);
+
+const componentSources = [
+  './NewLoanForm.jsx',
+  './LoanMovementForm.jsx',
+  './LoanMovementDeleteDialog.jsx',
+  './LoanTermsForm.jsx',
+  './LoanFlow.jsx',
+  '../../pages/Activos.jsx',
+  '../../pages/LoanDetail.jsx',
+].map(read);
+
+const sources = [...helperSources, ...componentSources];
 
 describe('Activos UI isolation', () => {
   it.each([
@@ -22,7 +32,6 @@ describe('Activos UI isolation', () => {
   });
 
   it('keeps financial formulas out of React components', () => {
-    const componentSources = sources.slice(1);
     componentSources.forEach((source) => {
       expect(source).not.toContain('calculateLoanAtDate');
       expect(source).not.toContain('projectLoanToMaturity');
@@ -30,8 +39,14 @@ describe('Activos UI isolation', () => {
     });
   });
 
+  it('keeps the presentation helper free of loan arithmetic it does not own', () => {
+    const presentation = read('./loanPresentation.js');
+    expect(presentation).not.toContain('calculateLoanAtDate');
+    expect(presentation).not.toContain('projectLoanToMaturity');
+    expect(presentation).not.toContain('loanEngine');
+  });
+
   it('uses the L2B repository instead of ad-hoc Firestore calls', () => {
-    const componentSources = sources.slice(1);
     componentSources.forEach((source) => {
       expect(source).not.toContain("from 'firebase/firestore'");
     });

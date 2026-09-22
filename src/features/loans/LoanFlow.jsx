@@ -1,6 +1,12 @@
-import { useState } from 'react';
-import Decimal from 'decimal.js';
-import { collapsedLoanTimelineEvents } from './loanTimeline';
+import { useMemo, useState } from 'react';
+import {
+  absoluteAmount,
+  amountSign,
+  buildLoanFlowChart,
+  formatDayMonth,
+  formatMonthYear,
+  groupLoanFlowEvents,
+} from './loanPresentation';
 import { formatDateOnly, formatMoney } from './loanUi';
 
 const EVENT_LABELS = Object.freeze({
@@ -13,12 +19,11 @@ const EVENT_LABELS = Object.freeze({
 });
 
 const SUMMARY_ITEMS = Object.freeze([
-  ['initialValue', 'Valor inicial / primer ingreso'],
-  ['netContributions', 'Ingresos netos'],
-  ['interestToDate', 'Intereses generados hasta hoy'],
-  ['currentValue', 'Valor actual'],
-  ['projectedFutureInterest', 'Interés futuro estimado'],
-  ['projectedMaturityValue', 'Proyección al vencimiento'],
+  ['initialValue', 'Primer ingreso'],
+  ['netContributions', 'Aportes netos'],
+  ['interestToDate', 'Interés hasta hoy'],
+  ['projectedFutureInterest', 'Interés futuro'],
+  ['projectedMaturityValue', 'Total al vencimiento'],
 ]);
 
 function eventLabel(event) {
@@ -29,155 +34,264 @@ function eventLabel(event) {
 }
 
 function signedMoney(currency, value) {
-  const amount = new Decimal(value);
-  if (amount.isZero()) return '—';
-  return `${amount.isPositive() ? '+' : '−'} ${formatMoney(currency, amount.abs().toString())}`;
+  const sign = amountSign(value);
+  if (sign === 0) return '—';
+  return `${sign > 0 ? '+' : '−'} ${formatMoney(currency, absoluteAmount(value))}`;
 }
 
-function flowClass(event) {
+function rowClass(base, row) {
+  const event = row.event;
   return [
-    'loan-flow-event',
-    `loan-flow-event--${event.phase}`,
-    event.isToday ? 'loan-flow-event--today' : '',
-    event.isMaturity ? 'loan-flow-event--maturity' : '',
+    base,
+    `${base}--${event ? event.phase : row.phase}`,
+    event?.isToday ? `${base}--today` : '',
+    event?.isMaturity ? `${base}--maturity` : '',
+    row.kind === 'group' ? `${base}--group` : '',
   ].filter(Boolean).join(' ');
 }
 
-function EventBadges({ event }) {
+function FlowChart({ chart, currency, labels }) {
   return (
-    <span className="loan-flow-event__badges">
-      <span className={`loan-flow-phase loan-flow-phase--${event.phase}`}>
-        {event.phase === 'actual' ? 'Real' : 'Proyectado'}
-      </span>
-      {event.isToday ? <span className="loan-flow-phase loan-flow-phase--today">Hoy</span> : null}
-    </span>
+    <div className="loan-chart">
+      <div className="loan-chart__bounds">
+        <span>{formatMoney(currency, chart.maximumValue)} <em>máx</em></span>
+        <span><em>mín</em> {formatMoney(currency, chart.minimumValue)}</span>
+      </div>
+      <svg
+        className="loan-chart__svg"
+        viewBox={`0 0 ${chart.width} ${chart.height}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Saldo del préstamo entre ${formatDateOnly(chart.firstDate)} y ${formatDateOnly(chart.lastDate)}: realizado hasta hoy y proyectado al vencimiento.`}
+      >
+        <line x1="0" y1={chart.startPoint.y} x2={chart.width} y2={chart.startPoint.y} className="loan-chart__grid" />
+        <line x1="0" y1={chart.maturityPoint.y} x2={chart.width} y2={chart.maturityPoint.y} className="loan-chart__grid" />
+        {chart.todayX !== null && (
+          <line x1={chart.todayX} y1="0" x2={chart.todayX} y2={chart.height} className="loan-chart__today-line" />
+        )}
+        {chart.actualLine && (
+          <polyline points={chart.actualLine} className="loan-chart__line loan-chart__line--actual" />
+        )}
+        {chart.projectedLine && (
+          <polyline points={chart.projectedLine} className="loan-chart__line loan-chart__line--projected" />
+        )}
+        {chart.movementPoints.map((point) => (
+          <circle key={`m-${point.date}`} cx={point.x} cy={point.y} r="4" className="loan-chart__dot loan-chart__dot--movement" />
+        ))}
+        {chart.todayPoint && (
+          <circle cx={chart.todayPoint.x} cy={chart.todayPoint.y} r="5" className="loan-chart__dot loan-chart__dot--today" />
+        )}
+        <circle
+          cx={chart.maturityPoint.x}
+          cy={chart.maturityPoint.y}
+          r="4.5"
+          className={`loan-chart__dot loan-chart__dot--maturity-${chart.maturityPoint.phase}`}
+        />
+      </svg>
+      <div className="loan-chart__axis">
+        <span>{formatMonthYear(chart.firstDate)}</span>
+        {labels.today && <span className="loan-chart__axis-today">Hoy · {formatMonthYear(labels.today)}</span>}
+        <span>{formatMonthYear(chart.lastDate)}</span>
+      </div>
+      <div className="loan-chart__legend">
+        <span className="loan-legend__item"><span className="loan-legend__swatch loan-legend__swatch--actual" aria-hidden="true" />Realizado</span>
+        <span className="loan-legend__item"><span className="loan-legend__swatch loan-legend__swatch--projected" aria-hidden="true" />Proyectado</span>
+        <span className="loan-legend__item"><span className="loan-legend__swatch loan-legend__swatch--today" aria-hidden="true" />Hoy</span>
+      </div>
+    </div>
   );
 }
 
-function DesktopRow({ event, currency }) {
+function DesktopRow({ row, currency }) {
+  if (row.kind === 'group') {
+    return (
+      <tr className={rowClass('loan-flow-event', row)}>
+        <td className="loan-flow-table__date">
+          {formatDateOnly(row.fromDate)} – {formatDateOnly(row.toDate)}
+        </td>
+        <td>
+          {row.count} capitalizaciones
+          {row.phase === 'projected' && <span className="loan-flow-tag"> · proyectado</span>}
+        </td>
+        <td>{formatMoney(currency, row.openingValue)}</td>
+        <td>{formatMoney(currency, row.interestForInterval)}</td>
+        <td>—</td>
+        <td className="loan-flow-table__closing">{formatMoney(currency, row.closingValue)}</td>
+      </tr>
+    );
+  }
+
+  const { event } = row;
+  // The opening event has no prior balance and no interval behind it; an
+  // em dash says that more honestly than a zero amount.
+  const zeroAsDash = (value) => (amountSign(value) === 0 ? '—' : formatMoney(currency, value));
   return (
-    <tr className={flowClass(event)}>
-      <td>{formatDateOnly(event.date)}</td>
+    <tr className={rowClass('loan-flow-event', row)}>
+      <td className="loan-flow-table__date">{formatDateOnly(event.date)}</td>
       <td>
-        <strong>{eventLabel(event)}</strong>
-        <EventBadges event={event} />
+        {eventLabel(event)}
+        {event.phase === 'projected' && <span className="loan-flow-tag"> · proyectado</span>}
       </td>
-      <td>{formatMoney(currency, event.openingValue)}</td>
-      <td>{formatMoney(currency, event.interestForInterval)}</td>
-      <td className={new Decimal(event.movementAmount).isNegative() ? 'loan-flow-negative' : ''}>
+      <td>{zeroAsDash(event.openingValue)}</td>
+      <td>{zeroAsDash(event.interestForInterval)}</td>
+      <td className={amountSign(event.movementAmount) < 0 ? 'loan-flow-negative' : ''}>
         {signedMoney(currency, event.movementAmount)}
       </td>
-      <td>{formatMoney(currency, event.closingValue)}</td>
+      <td className="loan-flow-table__closing">{formatMoney(currency, event.closingValue)}</td>
     </tr>
   );
 }
 
-function MobileCard({ event, currency }) {
-  return (
-    <article className={flowClass(event)}>
-      <header className="loan-flow-card__header">
-        <div>
-          <time dateTime={event.date}>{formatDateOnly(event.date)}</time>
-          <h3>{eventLabel(event)}</h3>
+function TimelineRow({ row, currency }) {
+  if (row.kind === 'group') {
+    const from = formatDayMonth(row.fromDate);
+    const to = formatDayMonth(row.toDate);
+    return (
+      <div className={rowClass('loan-timeline-row', row)}>
+        <div className="loan-timeline-row__date">{from.month}<br />–{to.month}</div>
+        <div className="loan-timeline-row__body loan-timeline-row__body--inline">
+          <span>{row.count} capitalizaciones</span>
+          <span className="loan-timeline-row__amount">
+            + {formatMoney(currency, row.interestForInterval)}
+          </span>
         </div>
-        <EventBadges event={event} />
-      </header>
-      <dl className="loan-flow-card__values">
-        <div><dt>Saldo anterior</dt><dd>{formatMoney(currency, event.openingValue)}</dd></div>
-        <div><dt>Interés tramo</dt><dd>{formatMoney(currency, event.interestForInterval)}</dd></div>
-        <div><dt>Movimiento</dt><dd>{signedMoney(currency, event.movementAmount)}</dd></div>
-        <div><dt>Saldo final</dt><dd>{formatMoney(currency, event.closingValue)}</dd></div>
-      </dl>
-    </article>
+      </div>
+    );
+  }
+
+  const { event } = row;
+  const { day, month } = formatDayMonth(event.date);
+  const hasMovement = amountSign(event.movementAmount) !== 0;
+  // The opening event has no balance behind it and no interval to accrue over;
+  // printing two zeroes there is noise, not information.
+  const hasOpening = amountSign(event.openingValue) !== 0;
+  const hasInterest = amountSign(event.interestForInterval) !== 0;
+  return (
+    <div className={rowClass('loan-timeline-row', row)}>
+      <div className="loan-timeline-row__date">{day}<br />{month}</div>
+      <div className="loan-timeline-row__body">
+        <p className="loan-timeline-row__title">{eventLabel(event)}</p>
+        <dl className="loan-timeline-row__values">
+          {hasOpening && (
+            <div><dt>Saldo anterior</dt><dd>{formatMoney(currency, event.openingValue)}</dd></div>
+          )}
+          {hasInterest && (
+            <div><dt>Interés del tramo</dt><dd>{formatMoney(currency, event.interestForInterval)}</dd></div>
+          )}
+          {hasMovement && (
+            <div>
+              <dt>Movimiento</dt>
+              <dd className={amountSign(event.movementAmount) < 0 ? 'loan-flow-negative' : ''}>
+                {signedMoney(currency, event.movementAmount)}
+              </dd>
+            </div>
+          )}
+          <div className="loan-timeline-row__closing">
+            <dt>Saldo final</dt>
+            <dd>{formatMoney(currency, event.closingValue)}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
   );
 }
 
-function withGaps(allEvents, visibleEvents) {
-  const indexes = visibleEvents.map((event) => allEvents.indexOf(event));
-  return visibleEvents.flatMap((event, index) => {
-    const hasGap = index > 0 && indexes[index] - indexes[index - 1] > 1;
-    return hasGap
-      ? [{ gap: true, key: `gap-${event.date}` }, { event, key: event.date }]
-      : [{ event, key: event.date }];
-  });
+function PhaseHeading({ phase }) {
+  return (
+    <div className={`loan-phase-heading loan-phase-heading--${phase}`}>
+      <span>{phase === 'actual' ? 'Realizado' : 'Proyectado'}</span>
+      <span className="loan-phase-heading__rule" aria-hidden="true" />
+    </div>
+  );
 }
 
-export default function LoanFlow({ loan, timeline }) {
+export default function LoanFlow({ loan, timeline, asOfDate }) {
   const [expanded, setExpanded] = useState(false);
-  const collapsible = timeline.events.length > 10;
-  const visibleEvents = expanded || !collapsible
-    ? timeline.events
-    : collapsedLoanTimelineEvents(timeline.events);
-  const entries = withGaps(timeline.events, visibleEvents);
+
+  const rows = useMemo(
+    () => (expanded
+      ? timeline.events.map((event) => ({ kind: 'event', key: event.date, event }))
+      : groupLoanFlowEvents(timeline.events)),
+    [timeline.events, expanded],
+  );
+  const chart = useMemo(
+    () => buildLoanFlowChart({ events: timeline.events, asOfDate }),
+    [timeline.events, asOfDate],
+  );
+
+  const collapsible = rows.length !== timeline.events.length || expanded;
+  const actualRows = rows.filter((row) => (row.event ? row.event.phase : row.phase) === 'actual');
+  const projectedRows = rows.filter((row) => (row.event ? row.event.phase : row.phase) === 'projected');
 
   return (
-    <section className="loan-detail-section loan-flow" aria-labelledby="loan-flow-heading">
+    <section className="loan-flow" aria-labelledby="loan-flow-heading">
       <div className="loan-flow__heading">
         <div>
-          <p className="loan-kicker">Recorrido financiero completo</p>
           <h2 id="loan-flow-heading">Flujo del préstamo</h2>
-        </div>
-        <div className="loan-flow__legend" aria-label="Fases del flujo">
-          <span className="loan-flow-phase loan-flow-phase--actual">Real</span>
-          <span className="loan-flow-phase loan-flow-phase--projected">Proyectado</span>
+          <p className="loan-flow__intro">
+            Cómo el saldo llega desde el primer ingreso hasta la proyección. La línea sólida es lo realizado; la punteada, lo proyectado con la tasa vigente y sin nuevos movimientos.
+          </p>
         </div>
       </div>
 
-      <div className="loan-flow-summary" aria-label="Resumen del flujo">
-        {SUMMARY_ITEMS.map(([field, label]) => (
-          <div key={field}>
-            <span>{label}</span>
-            <strong>{formatMoney(loan.currency, timeline.summary[field])}</strong>
-          </div>
-        ))}
+      <div className="loan-flow__panel">
+        {chart
+          ? <FlowChart chart={chart} currency={loan.currency} labels={{ today: timeline.asOfEvent?.date }} />
+          : (
+            <p className="loan-note">
+              El gráfico aparece cuando el préstamo tiene al menos dos eventos en su recorrido.
+            </p>
+          )}
+        <dl className="loan-flow-totals">
+          {SUMMARY_ITEMS.map(([field, label]) => (
+            <div key={field} className={`loan-flow-totals__item loan-flow-totals__item--${field}`}>
+              <dt>{label}</dt>
+              <dd>{formatMoney(loan.currency, timeline.summary[field])}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
-
-      <p className="loan-flow__projection-note">
-        La proyección futura supone que no se registran nuevos ingresos ni retiros.
-      </p>
 
       <div className="loan-flow-table-wrap">
         <table className="loan-flow-table">
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>Evento</th>
-              <th>Saldo inicial</th>
-              <th>Interés</th>
-              <th>Movimiento</th>
-              <th>Saldo final</th>
+              <th scope="col">Fecha</th>
+              <th scope="col">Evento</th>
+              <th scope="col">Saldo inicial</th>
+              <th scope="col">Interés</th>
+              <th scope="col">Movimiento</th>
+              <th scope="col">Saldo final</th>
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => entry.gap ? (
-              <tr key={entry.key} className="loan-flow-gap" aria-hidden="true">
-                <td colSpan="6">•••</td>
-              </tr>
-            ) : (
-              <DesktopRow key={entry.key} event={entry.event} currency={loan.currency} />
-            ))}
+            {rows.map((row) => <DesktopRow key={row.key} row={row} currency={loan.currency} />)}
           </tbody>
         </table>
       </div>
 
-      <div className="loan-flow-cards">
-        {entries.map((entry) => entry.gap ? (
-          <div key={entry.key} className="loan-flow-gap" aria-hidden="true">•••</div>
-        ) : (
-          <MobileCard key={entry.key} event={entry.event} currency={loan.currency} />
-        ))}
+      <div className="loan-timeline">
+        {actualRows.length > 0 && <PhaseHeading phase="actual" />}
+        {actualRows.map((row) => <TimelineRow key={row.key} row={row} currency={loan.currency} />)}
+        {projectedRows.length > 0 && <PhaseHeading phase="projected" />}
+        {projectedRows.map((row) => <TimelineRow key={row.key} row={row} currency={loan.currency} />)}
       </div>
 
-      {collapsible ? (
-        <button
-          type="button"
-          className="loan-button loan-button--secondary loan-flow__toggle"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? 'Ver flujo resumido' : 'Ver flujo completo'}
-        </button>
-      ) : null}
+      <div className="loan-flow__footer">
+        <p className="loan-note">
+          Los tramos de capitalizaciones consecutivas se agrupan para acortar la lectura; el detalle completo sigue disponible. La proyección supone que no se registran nuevos ingresos ni retiros.
+        </p>
+        {collapsible && (
+          <button
+            type="button"
+            className="loan-button loan-button--secondary loan-button--compact"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? 'Ver resumido' : `Ver los ${timeline.events.length} eventos`}
+          </button>
+        )}
+      </div>
     </section>
   );
 }
