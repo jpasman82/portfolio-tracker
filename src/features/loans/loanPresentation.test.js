@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LOAN_FLOW_DEFAULT_EXPANDED,
   buildLoanFlowChart,
   groupLoanFlowEvents,
+  loanDetailActions,
+  loanFlowRows,
   interestSharePercent,
   loanCurrencyTotals,
   loanTermProgress,
@@ -10,6 +13,7 @@ import {
   shiftDateByMonths,
 } from './loanPresentation';
 import { buildLoanTimeline } from './loanTimeline';
+import { effectiveLoanStatus } from './loanUi';
 
 const LOAN = Object.freeze({
   name: 'Contraparte',
@@ -195,5 +199,92 @@ describe('date shortcuts are pure UI helpers', () => {
       movements: [{ effectiveDate: '2026-03-05' }],
     });
     expect(shortcuts.map((item) => item.id)).toEqual(['today']);
+  });
+});
+
+describe('flow view state', () => {
+  const events = timelineAt('2026-09-21').events;
+
+  it('opens showing every event, not the grouped summary', () => {
+    expect(LOAN_FLOW_DEFAULT_EXPANDED).toBe(true);
+
+    const view = loanFlowRows({ events, expanded: LOAN_FLOW_DEFAULT_EXPANDED });
+    expect(view.rows).toHaveLength(events.length);
+    expect(view.rows.every((row) => row.kind === 'event')).toBe(true);
+    expect(view.rows.map((row) => row.event)).toEqual(events);
+  });
+
+  it('summarises on request and restores every original event', () => {
+    const summarised = loanFlowRows({ events, expanded: false });
+    expect(summarised.canSummarise).toBe(true);
+    expect(summarised.rows.length).toBeLessThan(events.length);
+    expect(summarised.rows.some((row) => row.kind === 'group')).toBe(true);
+
+    const restored = loanFlowRows({ events, expanded: true });
+    expect(restored.rows.map((row) => row.event)).toEqual(events);
+  });
+
+  it('never changes the underlying events when the view switches', () => {
+    const summarised = loanFlowRows({ events, expanded: false });
+    const flattened = summarised.rows.flatMap(
+      (row) => (row.kind === 'group' ? row.events : [row.event]),
+    );
+    expect(flattened).toEqual(events);
+  });
+
+  it('hides the toggle when grouping would not shorten anything', () => {
+    const shortRun = events.filter((event) => !event.isCapitalization);
+    const view = loanFlowRows({ events: shortRun, expanded: false });
+    expect(view.canSummarise).toBe(false);
+    expect(view.rows).toHaveLength(shortRun.length);
+  });
+});
+
+describe('loan detail actions', () => {
+  const activeLoan = { status: 'active' };
+
+  it('leads with a new movement while the loan is running', () => {
+    expect(loanDetailActions({ loan: activeLoan, effectiveStatus: 'active' })).toEqual({
+      canManage: true,
+      pastMaturity: false,
+      canEditTerms: true,
+      canAddMovement: true,
+      primaryAction: 'movement',
+    });
+  });
+
+  it('stops offering a new movement once the loan is effectively matured', () => {
+    const actions = loanDetailActions({ loan: activeLoan, effectiveStatus: 'matured' });
+    expect(actions.canAddMovement).toBe(false);
+    expect(actions.primaryAction).not.toBe('movement');
+  });
+
+  it('keeps editing the terms and leads with the extension when matured', () => {
+    const actions = loanDetailActions({ loan: activeLoan, effectiveStatus: 'matured' });
+    expect(actions.canManage).toBe(true);
+    expect(actions.canEditTerms).toBe(true);
+    expect(actions.primaryAction).toBe('maturity_extension');
+  });
+
+  it('offers nothing once the stored status stops accepting changes', () => {
+    ['closed', 'cancelled'].forEach((status) => {
+      const actions = loanDetailActions({ loan: { status }, effectiveStatus: status });
+      expect(actions).toMatchObject({
+        canManage: false,
+        canEditTerms: false,
+        canAddMovement: false,
+        primaryAction: null,
+      });
+    });
+  });
+
+  it('matches the effective status the UI already derives from the dates', () => {
+    const running = effectiveLoanStatus({ ...LOAN, status: 'active' }, '2026-09-21');
+    const expired = effectiveLoanStatus({ ...LOAN, status: 'active' }, '2027-03-05');
+
+    expect(loanDetailActions({ loan: activeLoan, effectiveStatus: running }).primaryAction)
+      .toBe('movement');
+    expect(loanDetailActions({ loan: activeLoan, effectiveStatus: expired }).primaryAction)
+      .toBe('maturity_extension');
   });
 });

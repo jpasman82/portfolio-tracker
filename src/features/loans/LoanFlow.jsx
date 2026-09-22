@@ -5,7 +5,8 @@ import {
   buildLoanFlowChart,
   formatDayMonth,
   formatMonthYear,
-  groupLoanFlowEvents,
+  LOAN_FLOW_DEFAULT_EXPANDED,
+  loanFlowRows,
 } from './loanPresentation';
 import { formatDateOnly, formatMoney } from './loanUi';
 
@@ -206,12 +207,10 @@ function PhaseHeading({ phase }) {
 }
 
 export default function LoanFlow({ loan, timeline, asOfDate }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(LOAN_FLOW_DEFAULT_EXPANDED);
 
-  const rows = useMemo(
-    () => (expanded
-      ? timeline.events.map((event) => ({ kind: 'event', key: event.date, event }))
-      : groupLoanFlowEvents(timeline.events)),
+  const { rows, canSummarise } = useMemo(
+    () => loanFlowRows({ events: timeline.events, expanded }),
     [timeline.events, expanded],
   );
   const chart = useMemo(
@@ -219,7 +218,6 @@ export default function LoanFlow({ loan, timeline, asOfDate }) {
     [timeline.events, asOfDate],
   );
 
-  const collapsible = rows.length !== timeline.events.length || expanded;
   const actualRows = rows.filter((row) => (row.event ? row.event.phase : row.phase) === 'actual');
   const projectedRows = rows.filter((row) => (row.event ? row.event.phase : row.phase) === 'projected');
 
@@ -279,16 +277,19 @@ export default function LoanFlow({ loan, timeline, asOfDate }) {
 
       <div className="loan-flow__footer">
         <p className="loan-note">
-          Los tramos de capitalizaciones consecutivas se agrupan para acortar la lectura; el detalle completo sigue disponible. La proyección supone que no se registran nuevos ingresos ni retiros.
+          {expanded || !canSummarise
+            ? `Se muestran los ${timeline.events.length} eventos del recorrido.`
+            : 'Los tramos de capitalizaciones consecutivas se agrupan para acortar la lectura.'}
+          {' La proyección supone que no se registran nuevos ingresos ni retiros.'}
         </p>
-        {collapsible && (
+        {canSummarise && (
           <button
             type="button"
             className="loan-button loan-button--secondary loan-button--compact"
             aria-expanded={expanded}
             onClick={() => setExpanded((value) => !value)}
           >
-            {expanded ? 'Ver resumido' : `Ver los ${timeline.events.length} eventos`}
+            {expanded ? 'Resumir flujo' : 'Ver flujo completo'}
           </button>
         )}
       </div>

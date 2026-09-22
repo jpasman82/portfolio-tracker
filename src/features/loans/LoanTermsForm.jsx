@@ -51,10 +51,12 @@ export default function LoanTermsForm({
   loan,
   asOfDate,
   repository,
+  initialMode = 'correction',
   onCancel,
   onSaved,
 }) {
-  const [mode, setMode] = useState('correction');
+  // `initialMode` only chooses which tab opens; both remain reachable.
+  const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState(() => loanTermsFormValues(loan));
   const [preview, setPreview] = useState(null);
   const [fieldError, setFieldError] = useState('');

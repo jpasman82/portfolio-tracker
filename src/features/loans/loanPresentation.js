@@ -208,6 +208,51 @@ export function groupLoanFlowEvents(events, { minimumRun = 2 } = {}) {
 }
 
 /**
+ * The flow opens showing every event: reading the route from the first
+ * contribution to maturity is the point of the section, so summarising is the
+ * opt-in, not the default.
+ */
+export const LOAN_FLOW_DEFAULT_EXPANDED = true;
+
+/**
+ * Which rows the flow renders for a given toggle state, and whether the toggle
+ * is worth offering at all. Both row sets come from the same events, so
+ * switching is a view change and never a different set of figures.
+ */
+export function loanFlowRows({ events, expanded }) {
+  const allRows = events.map((event) => ({ kind: 'event', key: event.date, event }));
+  const groupedRows = groupLoanFlowEvents(events);
+  const canSummarise = groupedRows.length < allRows.length;
+  return {
+    allRows,
+    groupedRows,
+    canSummarise,
+    rows: expanded || !canSummarise ? allRows : groupedRows,
+  };
+}
+
+/**
+ * Which actions the loan detail offers.
+ *
+ * The stored status decides whether the loan accepts changes at all — that is
+ * the repository's rule and is not restated here. The effective status, already
+ * derived once from `asOfDate` against the maturity date, only decides which
+ * action leads: a loan past its maturity has stopped accruing, so extending it
+ * is the useful move and a new movement is not.
+ */
+export function loanDetailActions({ loan, effectiveStatus }) {
+  const canManage = loan?.status === 'active';
+  const pastMaturity = effectiveStatus === 'matured';
+  return {
+    canManage,
+    pastMaturity,
+    canEditTerms: canManage,
+    canAddMovement: canManage && !pastMaturity,
+    primaryAction: !canManage ? null : pastMaturity ? 'maturity_extension' : 'movement',
+  };
+}
+
+/**
  * Chart geometry for the balance curve. Every plotted value is an engine figure
  * already present on a timeline event: `closingValue`, plus — on an event that
  * carries a movement — the pre-movement value `closingValue - movementAmount`

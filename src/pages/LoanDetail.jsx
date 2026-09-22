@@ -11,6 +11,7 @@ import { createLoanRepository } from '../features/loans/loanRepository';
 import {
   formatPercentValue,
   interestSharePercent,
+  loanDetailActions,
   loanTermProgress,
   nextCapitalizationPreview,
 } from '../features/loans/loanPresentation';
@@ -127,7 +128,7 @@ export default function LoanDetail({
   const [reloadKey, setReloadKey] = useState(0);
   const [movementDialog, setMovementDialog] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState(null);
-  const [showTermsDialog, setShowTermsDialog] = useState(false);
+  const [termsDialog, setTermsDialog] = useState(null);
   const bottomNavHidden = useHideBottomNavOnScroll();
 
   useEffect(() => {
@@ -163,11 +164,15 @@ export default function LoanDetail({
   const changesSaved = () => {
     setMovementDialog(null);
     setDeleteDialog(null);
-    setShowTermsDialog(false);
+    setTermsDialog(null);
     retry();
   };
 
-  const canManage = presentation?.loan.status === 'active';
+  const { canManage, pastMaturity, primaryAction } = loanDetailActions({
+    loan: presentation?.loan,
+    effectiveStatus: presentation?.effectiveStatus,
+  });
+  const openTerms = (mode) => setTermsDialog({ mode });
 
   let content;
   if (!uid) {
@@ -239,6 +244,11 @@ export default function LoanDetail({
               </span>
             </p>
             <TermBar term={term} loan={loan} />
+            {pastMaturity && canManage && (
+              <p className="loan-note loan-note--matured" role="status">
+                El préstamo venció y dejó de devengar interés. Ampliá el vencimiento para continuarlo.
+              </p>
+            )}
           </section>
 
           <section className="loan-secondary" aria-label="Proyección al vencimiento">
@@ -250,7 +260,9 @@ export default function LoanDetail({
               {formatMoney(loan.currency, projection.projectedMaturityValue)}
             </p>
             <p className="loan-secondary__note">
-              {formatMoney(loan.currency, projection.projectedFutureInterest)} de interés futuro estimado, sin nuevos ingresos ni retiros.
+              {pastMaturity
+                ? 'El plazo se cumplió: el valor ya no cambia mientras el vencimiento siga vigente.'
+                : `${formatMoney(loan.currency, projection.projectedFutureInterest)} de interés futuro estimado, sin nuevos ingresos ni retiros.`}
             </p>
           </section>
         </div>
@@ -263,7 +275,7 @@ export default function LoanDetail({
                 <button
                   type="button"
                   className="loan-link-button"
-                  onClick={() => setShowTermsDialog(true)}
+                  onClick={() => openTerms('correction')}
                 >
                   <EditIcon />
                   Editar
@@ -346,19 +358,29 @@ export default function LoanDetail({
                 <button
                   type="button"
                   className="loan-button loan-button--secondary loan-button--compact loan-action--desktop"
-                  onClick={() => setShowTermsDialog(true)}
+                  onClick={() => openTerms('correction')}
                 >
                   <EditIcon />
                   Editar condiciones
                 </button>
-                <button
-                  type="button"
-                  className="loan-button loan-button--primary loan-button--compact loan-action--desktop"
-                  onClick={() => setMovementDialog({ movement: null })}
-                >
-                  <PlusIcon />
-                  Movimiento
-                </button>
+                {primaryAction === 'movement' ? (
+                  <button
+                    type="button"
+                    className="loan-button loan-button--primary loan-button--compact loan-action--desktop"
+                    onClick={() => setMovementDialog({ movement: null })}
+                  >
+                    <PlusIcon />
+                    Movimiento
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="loan-button loan-button--primary loan-button--compact loan-action--desktop"
+                    onClick={() => openTerms('maturity_extension')}
+                  >
+                    Ampliar vencimiento
+                  </button>
+                )}
               </>
             )}
             <LogoutButton />
@@ -367,20 +389,30 @@ export default function LoanDetail({
         {content}
       </main>
 
-      {canManage && !movementDialog && !deleteDialog && !showTermsDialog && (
+      {canManage && !movementDialog && !deleteDialog && !termsDialog && (
         <div className="loan-action-bar loan-action--mobile">
-          <button
-            type="button"
-            className="loan-button loan-button--primary loan-button--block"
-            onClick={() => setMovementDialog({ movement: null })}
-          >
-            <PlusIcon />
-            Movimiento
-          </button>
+          {primaryAction === 'movement' ? (
+            <button
+              type="button"
+              className="loan-button loan-button--primary loan-button--block"
+              onClick={() => setMovementDialog({ movement: null })}
+            >
+              <PlusIcon />
+              Movimiento
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="loan-button loan-button--primary loan-button--block"
+              onClick={() => openTerms('maturity_extension')}
+            >
+              Ampliar vencimiento
+            </button>
+          )}
           <button
             type="button"
             className="loan-button loan-button--secondary loan-button--icon"
-            onClick={() => setShowTermsDialog(true)}
+            onClick={() => openTerms('correction')}
             aria-label="Editar condiciones del préstamo"
           >
             <EditIcon />
@@ -420,14 +452,15 @@ export default function LoanDetail({
           onDeleted={changesSaved}
         />
       )}
-      {showTermsDialog && presentation && (
+      {termsDialog && presentation && (
         <LoanTermsForm
           uid={uid}
           loanId={loanId}
           loan={presentation.loan}
           asOfDate={asOfDate}
           repository={repository}
-          onCancel={() => setShowTermsDialog(false)}
+          initialMode={termsDialog.mode}
+          onCancel={() => setTermsDialog(null)}
           onSaved={changesSaved}
         />
       )}

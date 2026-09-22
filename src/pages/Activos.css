@@ -553,6 +553,8 @@
 .loan-term__now--active { color: var(--loan-today); }
 .loan-term__now--matured { color: var(--loan-ink-3); }
 
+.loan-note--matured { color: var(--loan-today); }
+
 /* ── Detail blocks: conditions and movements ─────────────────────── */
 
 .loan-detail-layout {
