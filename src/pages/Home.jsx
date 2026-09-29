@@ -426,6 +426,10 @@ export default function Home() {
               <div className="h-summary-sub-amount font-bold text-red-400">
                 - US$ {totalDeuda.toLocaleString('en-US', { maximumFractionDigits: 0 })}
               </div>
+              <div className="font-mono text-[11px] text-[#5B8A8A] mt-0.5 leading-tight">
+                <div>{totalActivos > 0 ? ((totalDeuda / totalActivos) * 100).toFixed(1) : '0.0'}% s/ Activo</div>
+                <div>{totalNeto > 0 ? ((totalDeuda / totalNeto) * 100).toFixed(1) : '—'}% s/ PN</div>
+              </div>
             </div>
           </div>
 
