@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { fetchAllPrices, getMepRate } from '../utils/priceService';
-import { esMercadoAbierto } from '../utils/marketHours';
 import { formatDecimals, formatInput, formatPrice, normalizeTypedInput, parseNum } from '../utils/numberFormat';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
@@ -42,7 +41,7 @@ export default function EventDetail() {
           const data = docSnap.data();
           let priceMap = {};
           let mepRate = null;
-          if (!data.isClosed && esMercadoAbierto()) {
+          if (!data.isClosed) {
             try {
               priceMap = await fetchAllPrices();
               mepRate = getMepRate();

@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
 import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
-import { esMercadoAbierto } from '../utils/marketHours';
 import { getBrokerName, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import { parseNum } from '../utils/numberFormat';
@@ -20,9 +19,8 @@ export default function Dashboard() {
 
   const fetchEvents = async () => {
     try {
-      const mercadoEstaAbierto = esMercadoAbierto();
-      const priceMap = mercadoEstaAbierto ? await fetchAllPrices() : {};
-      const mepRate = mercadoEstaAbierto ? getMepRate() : null;
+      const priceMap = await fetchAllPrices();
+      const mepRate = getMepRate();
       const querySnapshot = await getDocs(collection(db, "rotations"));
       let data = querySnapshot.docs.map(doc => {
         const rotation = { id: doc.id, ...doc.data() };

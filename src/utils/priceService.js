@@ -1,6 +1,7 @@
 // src/utils/priceService.js
 
 import { bymaGet } from './bymaService';
+import { esMercadoAbierto } from './marketHours';
 
 // ─── Cache de módulo ──────────────────────────────────────────────────────────
 let _precios = {};
@@ -27,36 +28,36 @@ const USD_TICKER_ALIASES = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function closePrice(item) {
-  if (item.trade          > 0) return item.trade;
-  if (item.closing_price  > 0) return item.closing_price;
-  if (item.previous_close > 0) return item.previous_close;
-  if (item.best_purchase_price > 0) return item.best_purchase_price;
-  return 0;
+function positivePrice(value) {
+  const price = Number(value);
+  return Number.isFinite(price) && price > 0 ? price : 0;
 }
 
-function changePrice(item) {
-  if (item.closing_price  > 0) return item.closing_price;
-  if (item.trade          > 0) return item.trade;
-  if (item.previous_close > 0) return item.previous_close;
-  if (item.best_purchase_price > 0) return item.best_purchase_price;
-  return 0;
+function referencePrice(item, marketOpen) {
+  const trade = positivePrice(item.trade);
+  const closing = positivePrice(item.closing_price);
+  const previousClose = positivePrice(item.previous_close);
+  const bestPurchase = positivePrice(item.best_purchase_price);
+
+  // BYMA's `trade` can differ from the official close after the session ends.
+  if (marketOpen && trade) return trade;
+  return closing || previousClose || trade || bestPurchase;
 }
 
-function toMap(items = []) {
+function toMap(items = [], marketOpen) {
   const map = {};
   for (const item of items) {
-    const price = closePrice(item);
+    const price = referencePrice(item, marketOpen);
     if (item.symbol && price > 0) map[item.symbol] = price;
   }
   return map;
 }
 
-function toMetaMap(items = []) {
+function toMetaMap(items = [], marketOpen) {
   const map = {};
   for (const item of items) {
-    const price = changePrice(item);
-    const previousClose = item.previous_close > 0 ? item.previous_close : 0;
+    const price = referencePrice(item, marketOpen);
+    const previousClose = positivePrice(item.previous_close);
     if (!item.symbol || price <= 0) continue;
 
     map[item.symbol] = {
@@ -106,11 +107,11 @@ function toPriceRows(meta = {}, type, market = 'USD') {
     .filter((row) => row.ticker && row.priceUsd > 0);
 }
 
-async function fetchMap(endpoint) {
+async function fetchMap(endpoint, marketOpen) {
   try {
     const data = await bymaGet(endpoint);
     const items = data?.result ?? [];
-    return { prices: toMap(items), meta: toMetaMap(items) };
+    return { prices: toMap(items, marketOpen), meta: toMetaMap(items, marketOpen) };
   } catch (err) {
     console.error(`[priceService] Error en ${endpoint}:`, err.message);
     return { prices: {}, meta: {} };
@@ -120,12 +121,13 @@ async function fetchMap(endpoint) {
 // ─── API pública ──────────────────────────────────────────────────────────────
 
 export async function fetchAllPrices() {
+  const marketOpen = esMercadoAbierto();
   const [acciones, cedears, bonosARS, bonosUSD, bonosEXT] = await Promise.allSettled([
-    fetchMap(EP.acciones),
-    fetchMap(EP.cedears),
-    fetchMap(EP.bonosARS),
-    fetchMap(EP.bonosUSD),   // AL30D → precio en USD para MEP
-    fetchMap(EP.bonosEXT),   // AL30C → precio en USD exterior para Cable/CCL
+    fetchMap(EP.acciones, marketOpen),
+    fetchMap(EP.cedears, marketOpen),
+    fetchMap(EP.bonosARS, marketOpen),
+    fetchMap(EP.bonosUSD, marketOpen),   // AL30D → precio en USD para MEP
+    fetchMap(EP.bonosEXT, marketOpen),   // AL30C → precio en USD exterior para Cable/CCL
   ]);
 
   const accionesData = acciones.status === 'fulfilled' ? acciones.value : { prices: {}, meta: {} };
