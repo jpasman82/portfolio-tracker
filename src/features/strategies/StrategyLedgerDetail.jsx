@@ -136,6 +136,9 @@ export default function StrategyLedgerDetail({ strategyId }) {
   const { strategy, balances, records } = ledger;
   const convert = (value, currency) => currency === viewCurrency ? value
     : viewCurrency === 'USD' ? new D(value).div(canonicalRate).toFixed() : new D(value).times(canonicalRate).toFixed();
+  const convertCost = (value, currency) => currency === viewCurrency ? value
+    : viewCurrency === 'USD' ? new D(value).div(strategy.initialUsdRate ?? canonicalRate).toFixed()
+      : new D(value).times(strategy.initialUsdRate ?? canonicalRate).toFixed();
 
   return (
     <main className="px-4 pt-6 max-w-[500px] mx-auto pb-32 font-[Space_Grotesk,system-ui,sans-serif] bg-[#080F12] min-h-screen text-[#A8C8C8]">
@@ -153,19 +156,19 @@ export default function StrategyLedgerDetail({ strategyId }) {
         <h2 className="text-lg font-bold text-[#F0FAFA]">Posiciones activas</h2>
         <p className="text-xs mt-2">La venta reduce proporcionalmente el costo remanente de los títulos que siguen abiertos. Este cálculo excluye efectivo y resultados realizados; ambos se conservan en el patrimonio y resultado total de la estrategia.</p>
         <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
-          <div><p>Base inicial activa</p><strong>{money(viewCurrency === 'USD' ? metrics?.activePositionCostUSD : metrics?.activePositionCostARS, viewCurrency)}</strong></div>
+          <div><p>Valor inicial ajustado por ventas</p><strong>{money(viewCurrency === 'USD' ? metrics?.activePositionCostUSD : metrics?.activePositionCostARS, viewCurrency)}</strong></div>
           <div><p>Valor de mercado</p><strong className="text-teal-300">{money(viewCurrency === 'USD' ? metrics?.activePositionValueUSD : metrics?.activePositionValueARS, viewCurrency)}</strong></div>
-          <div><p>Resultado abierto</p><strong className={metrics?.activePositionResultUSD != null && new D(metrics.activePositionResultUSD).isNegative() ? 'text-red-300' : 'text-teal-300'}>{money(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS, viewCurrency)}</strong></div>
-          <div><p>Rendimiento abierto</p><strong>{percent(metrics?.activePositionReturnPct)}</strong></div>
+          <div><p>Resultado abierto</p><strong className={metrics != null && new D(viewCurrency === 'USD' ? metrics.activePositionResultUSD : metrics.activePositionResultARS).isNegative() ? 'text-red-300' : 'text-teal-300'}>{money(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS, viewCurrency)}</strong></div>
+          <div><p>Rendimiento abierto</p><strong>{percent(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)}</strong></div>
         </div>
       </section>
       <section className={CARD}>
-        <div className="grid grid-cols-3 gap-3 text-sm">
-          <div><p>Capital inicial original</p><strong className="block mt-2 text-[#F0FAFA] break-words">{money(viewCurrency === 'USD' ? metrics?.initialUSD : metrics?.initialARS, viewCurrency)}</strong></div>
+        <div className="grid grid-cols-2 gap-3 text-sm">
           <div><p>Patrimonio actual</p><strong className="block mt-2 text-teal-300 break-words">{money(viewCurrency === 'USD' ? metrics?.totalUSD : metrics?.totalARS, viewCurrency)}</strong></div>
           <div><p>Resultado total</p><strong className="block mt-2 text-[#F0FAFA] break-words">{money(viewCurrency === 'USD' ? metrics?.resultUSD : metrics?.resultARS, viewCurrency)}</strong></div>
         </div>
         <div className="grid grid-cols-3 gap-2 mt-5 text-center text-xs">{[['REND. USD', metrics?.pUSD], ['REND. ARS', metrics?.pARS], ['ALFA', metrics?.pALFA]].map(([label, value]) => <div key={label} className="bg-[#0C1518] rounded-xl py-3"><p>{label}</p><strong className={`block text-lg mt-1 ${value == null ? '' : value < 0 ? 'text-red-300' : 'text-teal-300'}`}>{percent(value, label === 'ALFA' ? ' p.p.' : '%')}</strong></div>)}</div>
+        <details className="mt-4 text-xs"><summary className="cursor-pointer">Ver capital original antes de ventas</summary><p className="mt-2">{money(viewCurrency === 'USD' ? metrics?.initialUSD : metrics?.initialARS, viewCurrency)}</p></details>
         {metrics?.hasFlows && <p className="text-xs mt-3">Rendimiento simple: incluye lo retirado y descuenta lo aportado al dólar de cada movimiento. La referencia recibe los mismos movimientos de capital.</p>}
         {metrics?.flows.benchmarkIssue && <p className="text-xs text-amber-300 mt-3">{metrics.flows.benchmarkIssue}</p>}
       </section>
@@ -216,7 +219,7 @@ export default function StrategyLedgerDetail({ strategyId }) {
             <h3 className="text-[#F0FAFA] font-bold">{position.ticker} <span className="text-xs text-[#A8C8C8]">{position.currency}</span></h3>
             <p className="text-sm mt-1">Cantidad: {formatStrategyAmount(position.quantity, 4)}</p>
             <label className="block text-sm mt-3">Precio actual ({position.currency}{position.priceDivisor === '100' ? ' por 100 nominales' : ''})<input type="text" inputMode="decimal" value={prices[key] ?? ''} disabled={strategy.isClosed || saving} onChange={event => { setPrices(current => ({ ...current, [key]: event.target.value })); setEstimated(current => current.filter(item => item !== key)); }} className={INPUT} /></label>
-            <div className="grid grid-cols-2 gap-3 text-sm mt-3"><div><p>Costo remanente</p><strong>{metrics ? money(convert(position.costBasis, position.currency), viewCurrency) : '—'}</strong></div><div><p>Valor actual</p><strong className="text-teal-300">{metrics ? money(convert(value, position.currency), viewCurrency) : '—'}</strong></div></div>
+            <div className="grid grid-cols-2 gap-3 text-sm mt-3"><div><p>Costo remanente</p><strong>{metrics ? money(convertCost(position.costBasis, position.currency), viewCurrency) : '—'}</strong></div><div><p>Valor actual</p><strong className="text-teal-300">{metrics ? money(convert(value, position.currency), viewCurrency) : '—'}</strong></div></div>
           </article>;
         })}
         {estimated.length > 0 && <p className="text-sm text-amber-300 mt-4">Falta cotización para {estimated.join(', ')}. Se muestra el costo como referencia; ingresá el precio actual antes de guardar una valuación.</p>}

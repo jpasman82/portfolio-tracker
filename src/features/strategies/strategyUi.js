@@ -34,6 +34,7 @@ export function strategyQuote(position, prices) {
 
 export function strategyMetrics(strategy, { balances = strategy.ledgerBalances, prices = {}, usdRate, soldPrices = {}, initialPrices = {}, asOfDate = benchmarkValuationDate(strategy) } = {}) {
   const rate = decimal(usdRate ?? strategy.currentUsdRateFromDb ?? strategy.initialUsdRate ?? '1', 'Dólar', { positive: true });
+  const initialRate = decimal(strategy.initialUsdRate ?? rate.toFixed(), 'Dólar inicial', { positive: true });
   const quotes = {};
   const estimatedTickers = [];
   balances.positions.forEach(position => {
@@ -45,12 +46,19 @@ export function strategyMetrics(strategy, { balances = strategy.ledgerBalances, 
   const totalARS = new D(valuation.ARS.equity).plus(new D(valuation.USD.equity).times(rate));
   const totalUSD = totalARS.div(rate);
   const activePositionCostARS = balances.positions.reduce((sum, position) => sum.plus(
-    position.currency === 'USD' ? new D(position.costBasis).times(rate) : position.costBasis,
+    position.currency === 'USD' ? new D(position.costBasis).times(initialRate) : position.costBasis,
+  ), new D(0));
+  const activePositionCostUSD = balances.positions.reduce((sum, position) => sum.plus(
+    position.currency === 'ARS' ? new D(position.costBasis).div(initialRate) : position.costBasis,
   ), new D(0));
   const activePositionValueARS = new D(valuation.ARS.marketValue).plus(new D(valuation.USD.marketValue).times(rate));
+  const activePositionValueUSD = new D(valuation.ARS.marketValue).div(rate).plus(valuation.USD.marketValue);
   const activePositionResultARS = activePositionValueARS.minus(activePositionCostARS);
-  const activePositionReturnPct = activePositionCostARS.isZero()
+  const activePositionResultUSD = activePositionValueUSD.minus(activePositionCostUSD);
+  const activePositionReturnPctARS = activePositionCostARS.isZero()
     ? null : activePositionResultARS.div(activePositionCostARS).times(100).toNumber();
+  const activePositionReturnPctUSD = activePositionCostUSD.isZero()
+    ? null : activePositionResultUSD.div(activePositionCostUSD).times(100).toNumber();
   let initialARS = new D(0);
   let benchmarkARS = new D(0);
   const benchmarkPositions = [];
@@ -71,10 +79,10 @@ export function strategyMetrics(strategy, { balances = strategy.ledgerBalances, 
   benchmarkARS = benchmarkARS.plus(benchmarkCashARS).plus(benchmarkCashUSD.times(rate));
   if (strategy.initialCapitalARS != null) initialARS = decimal(strategy.initialCapitalARS, 'Capital inicial');
   if (initialARS.isZero()) {
-    initialARS = strategy.ledgerOpening.positions.reduce((sum, position) => sum.plus(position.currency === 'USD' ? new D(position.costBasis).times(rate) : position.costBasis), new D(0))
-      .plus(strategy.ledgerOpening.cash.ARS).plus(new D(strategy.ledgerOpening.cash.USD).times(rate));
+    initialARS = strategy.ledgerOpening.positions.reduce((sum, position) => sum.plus(position.currency === 'USD' ? new D(position.costBasis).times(initialRate) : position.costBasis), new D(0))
+      .plus(strategy.ledgerOpening.cash.ARS).plus(new D(strategy.ledgerOpening.cash.USD).times(initialRate));
   }
-  const initialUSD = initialARS.div(decimal(strategy.initialUsdRate ?? rate.toFixed(), 'Dólar inicial', { positive: true }));
+  const initialUSD = initialARS.div(initialRate);
   const flows = cashFlowMetrics(strategy, balances, asOfDate);
   const { hasFlows } = flows;
   const adjustedARS = totalARS.minus(flows.netARS);
@@ -90,10 +98,10 @@ export function strategyMetrics(strategy, { balances = strategy.ledgerBalances, 
   const initialPortfolio = initialPortfolioMetrics(strategy, { prices: initialPrices, usdRate: rate.toFixed(), asOfDate });
   return {
     valuation, quotes, estimatedTickers, totalARS: totalARS.toFixed(), totalUSD: totalUSD.toFixed(),
-    activePositionCostARS: activePositionCostARS.toFixed(), activePositionCostUSD: activePositionCostARS.div(rate).toFixed(),
-    activePositionValueARS: activePositionValueARS.toFixed(), activePositionValueUSD: activePositionValueARS.div(rate).toFixed(),
-    activePositionResultARS: activePositionResultARS.toFixed(), activePositionResultUSD: activePositionResultARS.div(rate).toFixed(),
-    activePositionReturnPct,
+    activePositionCostARS: activePositionCostARS.toFixed(), activePositionCostUSD: activePositionCostUSD.toFixed(),
+    activePositionValueARS: activePositionValueARS.toFixed(), activePositionValueUSD: activePositionValueUSD.toFixed(),
+    activePositionResultARS: activePositionResultARS.toFixed(), activePositionResultUSD: activePositionResultUSD.toFixed(),
+    activePositionReturnPctARS, activePositionReturnPctUSD,
     initialARS: initialARS.toFixed(), initialUSD: initialUSD.toFixed(),
     resultARS: flows.flowIssue ? null : adjustedARS.minus(initialARS).toFixed(), resultUSD: flows.flowIssue ? null : adjustedUSD.minus(initialUSD).toFixed(),
     benchmarkARS: benchmarkARS?.toFixed() ?? null, benchmarkUSD: benchmarkUSD?.toFixed() ?? null,
