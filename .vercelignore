@@ -1,0 +1,10 @@
+local-data/
+scripts/
+.env*
+*.log
+node_modules/
+dist/
+.git/
+.vercel/
+.agents/
+.codex/

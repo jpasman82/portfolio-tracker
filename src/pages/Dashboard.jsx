@@ -1,6 +1,8 @@
 ﻿import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import StrategyLedgerCard from '../features/strategies/StrategyLedgerCard';
+import { deleteLegacyStrategy } from '../features/strategies/strategyRepository';
 import { Link } from 'react-router-dom';
 import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
@@ -12,56 +14,64 @@ import * as XLSX from 'xlsx';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 
+async function loadStrategyEvents() {
+  const [priceMap, querySnapshot] = await Promise.all([
+    fetchAllPrices().catch(() => ({})), getDocs(collection(db, 'rotations')),
+  ]);
+  const mepRate = getMepRate();
+  const data = querySnapshot.docs.map(document => {
+    const rotation = { id: document.id, ...document.data() };
+    if (rotation.isClosed) return rotation;
+    const currentPricesFromByma = { ...(rotation.currentPricesFromDb || {}) };
+    const soldCurrentPricesFromByma = { ...(rotation.soldCurrentPricesFromDb || {}) };
+    const initialPortfolioPricesFromByma = { ...(rotation.initialPortfolioPricesFromDb || {}) };
+    (rotation.ledgerBalances?.positions || rotation.boughtAssetsFromDb || rotation.boughtAssets || []).forEach(asset => {
+      const ticker = asset.ticker?.toUpperCase().trim();
+      if (ticker && priceMap[ticker] !== undefined && (!asset.currency || asset.currency === 'ARS')) {
+        currentPricesFromByma[asset.currency ? `${ticker}:${asset.currency}` : ticker] = priceMap[ticker];
+      }
+    });
+    (rotation.initialPortfolio?.positions || []).forEach(position => {
+      if (position.currency === 'ARS' && priceMap[position.ticker] !== undefined) {
+        initialPortfolioPricesFromByma[`${position.ticker}:${position.currency}`] = priceMap[position.ticker];
+      }
+    });
+    (rotation.soldAssets || []).forEach(asset => {
+      const ticker = asset.ticker?.toUpperCase().trim();
+      if (ticker && priceMap[ticker] !== undefined) soldCurrentPricesFromByma[ticker] = priceMap[ticker];
+    });
+    return {
+      ...rotation, currentPricesFromByma, soldCurrentPricesFromByma, initialPortfolioPricesFromByma,
+      currentUsdRateFromByma: mepRate || rotation.currentUsdRateFromDb || rotation.initialUsdRate || 1,
+    };
+  });
+  return data.sort((a, b) => a.isClosed === b.isClosed
+    ? new Date(b.tradeDate) - new Date(a.tradeDate) : a.isClosed ? 1 : -1);
+}
+
 export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const bottomNavHidden = useHideBottomNavOnScroll();
 
-  const fetchEvents = async () => {
-    try {
-      const priceMap = await fetchAllPrices();
-      const mepRate = getMepRate();
-      const querySnapshot = await getDocs(collection(db, "rotations"));
-      let data = querySnapshot.docs.map(doc => {
-        const rotation = { id: doc.id, ...doc.data() };
-        if (rotation.isClosed) return rotation;
-
-        const currentPricesFromByma = { ...(rotation.currentPricesFromDb || {}) };
-        const soldCurrentPricesFromByma = { ...(rotation.soldCurrentPricesFromDb || {}) };
-
-        (rotation.boughtAssetsFromDb || rotation.boughtAssets || []).forEach(a => {
-          const t = a.ticker?.toUpperCase().trim();
-          if (t && priceMap[t] !== undefined) currentPricesFromByma[t] = priceMap[t];
-        });
-        (rotation.soldAssets || []).forEach(a => {
-          const t = a.ticker?.toUpperCase().trim();
-          if (t && priceMap[t] !== undefined) soldCurrentPricesFromByma[t] = priceMap[t];
-        });
-
-        return {
-          ...rotation,
-          currentPricesFromByma,
-          soldCurrentPricesFromByma,
-          currentUsdRateFromByma: mepRate || rotation.currentUsdRateFromDb || rotation.initialUsdRate || 1,
-        };
-      });
-      data.sort((a, b) => {
-        if (a.isClosed === b.isClosed) return new Date(b.tradeDate) - new Date(a.tradeDate);
-        return a.isClosed ? 1 : -1;
-      });
-      setEvents(data);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchEvents(); }, []);
+  useEffect(() => {
+    let active = true;
+    loadStrategyEvents().then(data => {
+      if (active) { setEvents(data); setLoading(false); }
+    }).catch(cause => {
+      if (active) { setLoadError(cause.message); setLoading(false); }
+    });
+    return () => { active = false; };
+  }, []);
 
   const handleDelete = async (e, id) => {
     e.preventDefault(); e.stopPropagation();
     if (window.confirm("¿Estás seguro de eliminar esta operación?")) {
       try {
-        await deleteDoc(doc(db, "rotations", id));
+        await deleteLegacyStrategy(db, id);
         setEvents(events.filter(ev => ev.id !== id));
-      } catch (err) { alert("Error al borrar."); }
+      } catch (err) { alert(err.message || "Error al borrar."); }
     }
   };
 
@@ -142,9 +152,12 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {loadError && <p role="alert" className="text-red-300 text-sm mb-4">No se pudieron cargar las estrategias: {loadError}</p>}
+
       {/* Events list */}
       <div className="flex flex-col gap-4 relative z-10">
         {events.map(event => {
+          if (event.ledgerOpening) return <StrategyLedgerCard key={event.id} strategy={event} />;
           const soldAssets = event.soldAssets || [];
           const boughtAssets = event.boughtAssetsFromDb || event.boughtAssets || [];
           const currentPrices = event.currentPricesFromByma || event.currentPricesFromDb || {};

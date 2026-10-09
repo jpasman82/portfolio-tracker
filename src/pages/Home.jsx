@@ -1,15 +1,13 @@
-﻿import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
-import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker, getBrokerLivePrice } from '../utils/priceService';
+import { fetchAllPrices, getMepRate, getCclRate, getPriceMeta, isBondTicker } from '../utils/priceService';
 import { fetchRiskCountry } from '../utils/riskCountryService';
-import { BROKERS, createEmptyBrokerData, isUsdBroker } from '../utils/brokers';
+import { BROKERS, createEmptyBrokerData } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import { fetchPortfolioSnapshots } from '../utils/portfolioSnapshots';
-import { parseNum } from '../utils/numberFormat';
+import { fetchPortfolioValuation, refreshBrokerPrices } from '../utils/portfolioValuation';
 import {
   actualizacionCercaDelCierre,
   actualizacionPosteriorAlCierre,
@@ -74,7 +72,6 @@ export default function Home() {
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const bottomNavHidden = useHideBottomNavOnScroll();
 
-  const fetchBalancesRef = useRef(null);
 
   const refreshSnapshotHistory = async () => {
     try {
@@ -96,34 +93,21 @@ export default function Home() {
           console.warn('[Home] Cotizaciones MEP/Cable:', err.message);
         }
       }
-      const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
+      const valuation = await fetchPortfolioValuation({ refreshPrices: false });
       const newBrokerData = createEmptyBrokerData();
       let latestTimestamp = 0;
       const heldTickers = new Set();
-
-      querySnapshot.forEach((document) => {
-        const data = document.data();
-        const rate = isUsdBroker(document.id) ? 1 : (parseNum(data.usdRate) || 1);
-        const assetsTotal = (data.assets || []).reduce((sum, a) => {
-          const bond = a.isBond || isBondTicker(a.ticker);
-          const divisor = bond ? 100 : 1;
-          return sum + (parseNum(a.quantity) * parseNum(a.price)) / divisor / rate;
-        }, 0);
-        (data.assets || []).forEach((asset) => {
-          const ticker = asset.ticker?.toUpperCase().trim();
-          if (ticker && !isBondTicker(ticker)) heldTickers.add(ticker);
-        });
-        const debt = parseNum(data.debt) || 0;
-        newBrokerData[document.id] = {
-          balance: assetsTotal - debt,
-          assetsTotal,
-          debt,
-          updated: data.lastUpdated ? new Date(data.lastUpdated) : null,
+      valuation.brokers.forEach(broker => {
+        newBrokerData[broker.brokerId] = {
+          balance: broker.netUsd,
+          assetsTotal: broker.assetsUsd,
+          debt: broker.debtUsd,
+          updated: broker.lastUpdated ? new Date(broker.lastUpdated) : null,
         };
-        if (data.lastUpdated) {
-          const ts = new Date(data.lastUpdated).getTime();
-          if (ts > latestTimestamp) latestTimestamp = ts;
-        }
+        broker.assets.forEach(asset => {
+          if (!asset.isBond && isBondTicker(asset.ticker) === false) heldTickers.add(asset.ticker);
+        });
+        if (broker.lastUpdated) latestTimestamp = Math.max(latestTimestamp, new Date(broker.lastUpdated).getTime());
       });
 
       setBrokerData(newBrokerData);
@@ -158,15 +142,12 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    fetchBalancesRef.current = fetchBalances;
-  });
 
   const handleUpdatePrices = async (silencioso = false, options = {}) => {
     const ahora = new Date();
     if (!esMercadoAbierto(ahora)) {
       setMercadoAbierto(false);
-      const latestTimestamp = await fetchBalancesRef.current();
+      const latestTimestamp = await fetchBalances();
       const yaActualizoPostCierre = actualizacionPosteriorAlCierre(latestTimestamp, ahora);
       const puedeTomarFotoCierre = options.allowClosedRefresh && !yaActualizoPostCierre;
 
@@ -183,47 +164,8 @@ export default function Home() {
 
     if (!silencioso) setUpdatingPrices(true);
     try {
-      const priceMap = await fetchAllPrices();
-      const mepRate = getMepRate();
-      const refreshHasMarketData = Object.keys(priceMap).length > 0 || mepRate !== null;
-      const querySnapshot = await getDocs(collection(db, 'brokerPositions'));
-      const nowIso = new Date().toISOString();
-
-      for (const document of querySnapshot.docs) {
-        const data = document.data();
-        const isJPM = isUsdBroker(document.id);
-        const payload = {};
-
-        const updatedAssets = (data.assets || []).map(a => {
-          if (!a.ticker) return a;
-          const t = a.ticker.toUpperCase().trim();
-          const newPrice = getBrokerLivePrice(t, priceMap, { isUSD: isJPM, mepRate });
-          let bond = isBondTicker(t);
-          if (!bond && a.isBond) bond = true;
-
-          if (newPrice !== undefined) {
-            if (Math.abs(parseNum(a.price) - newPrice) > 0.001 || a.isBond !== bond) {
-              payload.assets = true;
-              return { ...a, price: newPrice, isBond: bond };
-            }
-          } else if (bond !== a.isBond) {
-            payload.assets = true;
-            return { ...a, isBond: bond };
-          }
-          return a;
-        });
-
-        if (payload.assets) payload.assets = updatedAssets;
-        else delete payload.assets;
-
-        if (!isJPM && mepRate !== null) payload.usdRate = mepRate;
-
-        if (Object.keys(payload).length > 0 || refreshHasMarketData) {
-          payload.lastUpdated = nowIso;
-          await updateDoc(doc(db, 'brokerPositions', document.id), payload);
-        }
-      }
-      await fetchBalancesRef.current();
+      await refreshBrokerPrices({ force: !silencioso });
+      await fetchBalances();
       return true;
     } catch (error) {
       if (!silencioso) alert(`Error al actualizar: ${error.message}`);
@@ -241,7 +183,7 @@ export default function Home() {
       if (abierto) {
         await handleUpdatePrices(true);
       } else {
-        const latestTimestamp = await fetchBalancesRef.current();
+        const latestTimestamp = await fetchBalances();
         const ahora = new Date();
         const closeRefreshKey = `close-refresh:${fechaMercadoKey(ahora)}`;
         const necesitaFotoCierre =
@@ -288,7 +230,7 @@ export default function Home() {
       clearInterval(estadoMercado);
       clearTimeout(refreshTimer);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- market timers start once
 
   const brokers = BROKERS.map((broker) => ({ ...broker, ...brokerData[broker.id] }));
 

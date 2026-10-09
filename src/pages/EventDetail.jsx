@@ -1,7 +1,10 @@
 ﻿import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import StrategyLedgerDetail from '../features/strategies/StrategyLedgerDetail';
+import StrategyLedgerActivation from '../features/strategies/StrategyLedgerActivation';
+import { saveLegacyStrategySnapshot } from '../features/strategies/strategyRepository';
 import { fetchAllPrices, getMepRate } from '../utils/priceService';
 import { formatDecimals, formatInput, formatPrice, normalizeTypedInput, parseNum } from '../utils/numberFormat';
 
@@ -17,6 +20,8 @@ export default function EventDetail() {
   const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadedId, setLoadedId] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [isEditingStructure, setIsEditingStructure] = useState(false);
   const [advancedEditIndex, setAdvancedEditIndex] = useState(null);
   const [currentAssets, setCurrentAssets] = useState([]);
@@ -34,11 +39,14 @@ export default function EventDetail() {
   const fmtSignedUSD = (v) => `${parseNum(v) >= 0 ? '+' : '-'} ${fmtUSD(Math.abs(parseNum(v)))}`;
 
   useEffect(() => {
+    let active = true;
     const fetchData = async () => {
       try {
         const docSnap = await getDoc(doc(db, "rotations", id));
+        if (!active) return;
         if (docSnap.exists()) {
           const data = docSnap.data();
+          if (data.ledgerOpening) { setEvent(data); return; }
           let priceMap = {};
           let mepRate = null;
           if (!data.isClosed) {
@@ -49,6 +57,7 @@ export default function EventDetail() {
               console.error('[EventDetail] BYMA prices:', e.message);
             }
           }
+          if (!active) return;
           setEvent(data);
           setEventName(data.eventName);
           const initUsd = mepRate || data.currentUsdRateFromDb || data.initialUsdRate || 1;
@@ -73,11 +82,12 @@ export default function EventDetail() {
             pS[a.ticker] = formatPrice(priceMap[t] ?? data.soldCurrentPricesFromDb?.[a.ticker] ?? a.priceAtTrade ?? 0);
           });
           setSoldCurrentPrices(pS);
-        }
-      } catch (e) {}
-      finally { setLoading(false); }
+        } else { setEvent(null); setLoadError('La estrategia no existe.'); }
+      } catch (cause) { if (active) { setLoadError(cause.message); setEvent(null); } }
+      finally { if (active) { setLoading(false); setLoadedId(id); } }
     };
     fetchData();
+    return () => { active = false; };
   }, [id]);
 
   const handleAddAsset = () => {
@@ -109,19 +119,23 @@ export default function EventDetail() {
     const historyEntry = { date: timestamp, timestampIso: now.toISOString(), prices: cleanCurrentPrices, soldPrices: cleanSoldCurrentPrices, usdRate: finalUsdRate, assetsSnapshot: cleanAssets };
     const updatedHistory = [...(event.priceHistory || []), historyEntry];
     try {
-      await updateDoc(doc(db, "rotations", id), { eventName, boughtAssetsFromDb: cleanAssets, currentPricesFromDb: cleanCurrentPrices, soldCurrentPricesFromDb: cleanSoldCurrentPrices, currentUsdRateFromDb: finalUsdRate, isClosed: closeValue, lastUpdated: timestamp, priceHistory: updatedHistory });
+      await saveLegacyStrategySnapshot(db, id, { eventName, boughtAssetsFromDb: cleanAssets, currentPricesFromDb: cleanCurrentPrices, soldCurrentPricesFromDb: cleanSoldCurrentPrices, currentUsdRateFromDb: finalUsdRate, isClosed: closeValue, lastUpdated: timestamp, priceHistory: updatedHistory });
       setIsEditingStructure(false);
       setAdvancedEditIndex(null);
       window.location.reload();
-    } catch (e) {}
+    } catch (e) { window.alert(e.message || 'No se pudo guardar la estrategia.'); }
     finally { setSaving(false); }
   };
 
-  if (loading || !event) return (
+  if (loading || loadedId !== id) return (
     <div className="flex justify-center items-center min-h-screen bg-[#080F12]">
       <div className="w-10 h-10 border-2 border-[#1e3040] border-t-teal-400 rounded-full animate-spin" />
     </div>
   );
+
+  if (!event) return <div className="p-6 max-w-[500px] mx-auto text-[#A8C8C8]"><p role="alert">{loadError || 'La estrategia no existe.'}</p><button type="button" onClick={() => navigate('/rotaciones')} className="text-teal-300 mt-4">Volver a estrategias</button></div>;
+
+  if (event.ledgerOpening) return <StrategyLedgerDetail key={id} strategyId={id} />;
 
   const totalARS_Init = (event.soldAssets || []).reduce((sum, a) => sum + (parseNum(a.quantity) * parseNum(a.priceAtTrade)), 0);
   const totalUSD_Init = totalARS_Init / parseNum(event.initialUsdRate || 1);
@@ -231,6 +245,8 @@ export default function EventDetail() {
           </div>
         ))}
       </div>
+
+      {!event.isClosed && <StrategyLedgerActivation strategyId={id} strategy={event} disabled={isEditingStructure || saving} onActivated={() => window.location.reload()} />}
 
       {/* Bought position */}
       <div className="bg-[#122329] border border-teal-400/15 rounded-2xl p-5 mb-4 relative z-10">

@@ -33,7 +33,7 @@ export default function Precios() {
         await fetchAllPrices();
         setPortfolioTickers(tickers);
         setRows(getPriceRows());
-      } catch (e) {
+      } catch {
         setError('No se pudieron cargar los precios.');
       } finally {
         setLoading(false);

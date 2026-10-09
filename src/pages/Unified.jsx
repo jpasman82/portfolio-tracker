@@ -14,6 +14,7 @@ export default function Unified() {
   const [totalUsd, setTotalUsd] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const [pieMode, setPieMode] = useState('cat');
   const [hoverData, setHoverData] = useState(null);
@@ -44,6 +45,8 @@ export default function Unified() {
         const valuation = await fetchPortfolioValuation({ refreshPrices: esMercadoAbierto() });
         setGroupedData(valuation.grouped);
         setTotalUsd(valuation.totals.netUsd);
+        const timestamps = valuation.brokers.map(broker => Date.parse(broker.lastUpdated)).filter(Number.isFinite);
+        setLastUpdated(timestamps.length ? Math.max(...timestamps) : null);
       } catch (e) {
         console.error('[Unified] BYMA refresh:', e.message);
       }
@@ -54,8 +57,9 @@ export default function Unified() {
   };
 
   useEffect(() => {
-    fetchAndGroup({ showLoading: true });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const initialLoad = window.setTimeout(() => fetchAndGroup({ showLoading: true }), 0);
+    return () => window.clearTimeout(initialLoad);
+  }, []);
 
   useEffect(() => {
     const updateMarketState = () => {
@@ -72,7 +76,7 @@ export default function Unified() {
       window.clearInterval(refreshId);
       window.clearInterval(statusId);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (loading || animatedRef.current) return;
@@ -322,6 +326,11 @@ export default function Unified() {
           <div className="bg-[#122329] border border-teal-400/20 p-5 rounded-2xl mb-4 shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
             <div className="u-total-label font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-2">Valor Total Neto</div>
             <div className="u-total-amount font-black tracking-tight text-teal-400">{fmtUSD(totalUsd)}</div>
+            {lastUpdated && (
+              <div className="font-mono text-[11px] text-[#5B8A8A] mt-2">
+                Act: {new Date(lastUpdated).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} hs
+              </div>
+            )}
             {(totalAssetsUsd > 0 || totalDebtUsd > 0) && (
               <div className="u-balance-breakdown mt-3">
                 <div className="u-balance-row">

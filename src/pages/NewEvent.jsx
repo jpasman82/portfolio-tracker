@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
-import { collection, addDoc, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
+import { deleteLegacyStrategy, saveLegacyStrategySnapshot } from '../features/strategies/strategyRepository';
 
 export default function NewEvent() {
   const { id } = useParams();
@@ -22,6 +23,7 @@ export default function NewEvent() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
+          if (data.ledgerOpening) { navigate(`/evento/${id}`, { replace: true }); return; }
           setEventName(data.eventName);
           setTradeDate(data.tradeDate);
           setInitialUsdRate(data.initialUsdRate);
@@ -32,7 +34,7 @@ export default function NewEvent() {
       };
       fetchEvent();
     }
-  }, [id, isEditing]);
+  }, [id, isEditing, navigate]);
 
   const handleAssetChange = (index, field, value, type) => {
     const isSold = type === 'sold';
@@ -64,7 +66,7 @@ export default function NewEvent() {
 
     try {
       if (isEditing) {
-        await updateDoc(doc(db, "rotations", id), eventData);
+        await saveLegacyStrategySnapshot(db, id, eventData);
       } else {
         await addDoc(collection(db, "rotations"), eventData);
       }
@@ -77,8 +79,10 @@ export default function NewEvent() {
 
   const handleDelete = async () => {
     if (window.confirm("¿Confirmás la eliminación definitiva?")) {
-      await deleteDoc(doc(db, "rotations", id));
-      navigate('/rotaciones');
+      try {
+        await deleteLegacyStrategy(db, id);
+        navigate('/rotaciones');
+      } catch (cause) { alert(cause.message || 'No se pudo borrar la estrategia.'); }
     }
   };
 

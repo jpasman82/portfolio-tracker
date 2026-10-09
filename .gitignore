@@ -31,3 +31,6 @@ dist-ssr
 
 .vercel
 .env*
+
+# Respaldos y propuestas privadas de operaciones
+local-data/

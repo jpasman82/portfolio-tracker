@@ -17,7 +17,7 @@ export default function NewRotation() {
         soldAssets: [], boughtAssets: [], isClosed: false
       });
       navigate('/rotaciones');
-    } catch (e) { alert("Error al crear"); }
+    } catch { alert("Error al crear"); }
   };
 
   return (

@@ -47,13 +47,13 @@ export default function BrokerDetail() {
           if (!isUSD) setUsdRate(formatDecimals(liveMepRate || data.usdRate || 0));
           if (data.debt) setDebt(formatDecimals(data.debt));
         }
-      } catch (e) {}
+      } catch (error) { console.error('[BrokerDetail] No se pudo cargar la posición:', error); }
       finally { setLoading(false); }
     };
     const init = async () => {
       let livePrices = {};
       if (esMercadoAbierto()) {
-        try { livePrices = await fetchAllPrices(); } catch (e) {}
+        try { livePrices = await fetchAllPrices(); } catch (error) { console.warn('[BrokerDetail] Cotizaciones no disponibles:', error); }
       }
       fetchData(livePrices, getMepRate());
     };
@@ -79,7 +79,7 @@ export default function BrokerDetail() {
         lastUpdated: new Date().toISOString()
       });
       setIsEditing(false);
-    } catch (e) {}
+    } catch (error) { window.alert(error.message || 'No se pudo guardar la posición.'); }
     finally { setSaving(false); }
   };
 
