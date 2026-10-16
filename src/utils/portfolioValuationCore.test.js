@@ -38,6 +38,30 @@ describe('shared broker and unified portfolio valuation', () => {
       { brokerId: 'one', quantity: 4, valueUsd: 20 },
     ]);
   });
+  it('keeps held species visible when a saved quote is temporarily zero', () => {
+    const valuation = buildPortfolioValuation([
+      position('balanz', [asset('AAPL', 10, 0)]),
+    ]);
+
+    expect(valuation.assets.find(item => item.ticker === 'AAPL')).toMatchObject({
+      ticker: 'AAPL',
+      quantity: 10,
+      valueUsd: 0,
+    });
+    expect(valuation.grouped.CEDEARs.subs.Tecnología.assets[0].ticker).toBe('AAPL');
+    expect(valuation.marketPrices.some(item => item.ticker === 'AAPL')).toBe(false);
+  });
+  it('keeps the broker breakdown for consolidated debt', () => {
+    const valuation = buildPortfolioValuation([
+      position('balanz', [], 1000, 25),
+      position('one', [], 1200, 20),
+    ]);
+
+    expect(valuation.grouped.Pasivos.subs.Deuda.assets[0].brokerPositions).toEqual([
+      { brokerId: 'balanz', valueUsd: -25 },
+      { brokerId: 'one', valueUsd: -20 },
+    ]);
+  });
   it('uses saved broker FX with saved quotes despite a newer cached MEP', () => {
     expect(buildPortfolioValuation([position('balanz',[asset('GGAL',10,5000)],1000)],{mepRate:2000}).totals.netUsd).toBe(50);
   });

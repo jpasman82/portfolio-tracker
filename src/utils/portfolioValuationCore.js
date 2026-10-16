@@ -17,6 +17,7 @@ export function buildPortfolioValuation(positions, {
   const assetsByTicker = {};
   const marketPriceByTicker = {};
   const brokers = [];
+  const debtPositions = [];
   let totalAssetsUsd = 0;
   let totalDebtUsd = 0;
 
@@ -28,7 +29,8 @@ export function buildPortfolioValuation(positions, {
 
     (data.assets || []).forEach((asset) => {
       if (!asset) return;
-      const ticker = asset?.ticker?.toUpperCase().trim() || 'SIN TICKER';
+      const rawTicker = asset?.ticker?.toUpperCase().trim() || '';
+      const ticker = rawTicker || 'SIN TICKER';
 
       const quantity = parsePortfolioNumber(asset.quantity);
       const isBond = asset.isBond || isBondTicker(ticker);
@@ -39,7 +41,10 @@ export function buildPortfolioValuation(positions, {
       const valueArs = valueUsd * effectiveMep;
       const changePercent = priceMeta[ticker]?.changePercent ?? null;
 
-      if (valueUsd === 0) return;
+      // Keep a held, identified species visible even when its saved quote is
+      // temporarily zero (for example, a CEDEAR missing from the live feed).
+      // Empty rows and zero-quantity placeholders remain hidden.
+      if (valueUsd === 0 && (!rawTicker || quantity === 0)) return;
 
       const row = {
         brokerId,
@@ -80,6 +85,10 @@ export function buildPortfolioValuation(positions, {
         assetsByTicker[ticker].brokerPositions.push({ brokerId, quantity, valueUsd });
       }
 
+      // A zero-valued holding belongs in the consolidated asset list, but it
+      // does not belong in the market-price list because it has no quote.
+      if (valueUsd === 0) return;
+
       if (!marketPriceByTicker[ticker]) {
         marketPriceByTicker[ticker] = {
           ticker,
@@ -105,6 +114,7 @@ export function buildPortfolioValuation(positions, {
 
     const debtUsd = parsePortfolioNumber(data.debt);
     totalDebtUsd += debtUsd;
+    if (debtUsd > 0) debtPositions.push({ brokerId, valueUsd: -debtUsd });
 
     brokers.push({
       brokerId,
@@ -134,7 +144,7 @@ export function buildPortfolioValuation(positions, {
   const marketPrices = Object.values(marketPriceByTicker)
     .map((item) => ({ ...item, brokers: [...new Set(item.brokers)] }))
     .sort((a, b) => a.ticker.localeCompare(b.ticker));
-  const grouped = groupPortfolioAssets(assets, totalDebtUsd);
+  const grouped = groupPortfolioAssets(assets, totalDebtUsd, debtPositions);
 
   return {
     valuationVersion: PORTFOLIO_VALUATION_VERSION,
@@ -158,7 +168,7 @@ export function buildPortfolioValuation(positions, {
   };
 }
 
-export function groupPortfolioAssets(assets, totalDebtUsd = 0) {
+export function groupPortfolioAssets(assets, totalDebtUsd = 0, debtPositions = []) {
   const grouped = {};
 
   assets.forEach((item) => {
@@ -178,6 +188,7 @@ export function groupPortfolioAssets(assets, totalDebtUsd = 0) {
       valueUsd: -totalDebtUsd,
       valueArs: 0,
       changePercent: null,
+      brokerPositions: [...debtPositions].sort((a, b) => a.brokerId.localeCompare(b.brokerId)),
     };
     if (!grouped.Pasivos) grouped.Pasivos = { total: 0, subs: {} };
     grouped.Pasivos.subs.Deuda = { icon: '-', total: -totalDebtUsd, assets: [debtAsset] };

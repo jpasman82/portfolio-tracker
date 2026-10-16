@@ -264,20 +264,24 @@ export default function Unified() {
                           const isDebt = asset.valueUsd < 0;
                           const brokerPositions = asset.brokerPositions || [];
                           const isLocationExpanded = expandedTicker === asset.ticker;
+                          const canExpandLocation = brokerPositions.length > 0 && !asset.isWatchlist;
+                          const isUnpriced = !isDebt && !asset.isWatchlist && asset.valueUsd === 0;
 
                           return (
                             <div key={asset.ticker} className="u-asset-entry border-t border-teal-400/5">
                               <div className="u-asset-row pt-2.5 mt-0">
                                 <div>
-                                  {!isDebt && brokerPositions.length > 0 ? (
+                                  {canExpandLocation ? (
                                     <button
                                       type="button"
                                       className="u-asset-ticker-trigger"
                                       aria-expanded={isLocationExpanded}
-                                      aria-label={`${isLocationExpanded ? 'Ocultar' : 'Ver'} ubicación de ${asset.ticker}`}
+                                      aria-label={`${isLocationExpanded ? 'Ocultar' : 'Ver'} ${isDebt ? 'origen de la deuda' : `ubicación de ${asset.ticker}`}`}
                                       onClick={() => toggleAssetLocation(asset.ticker)}
                                     >
-                                      <span className="u-asset-ticker-text font-black font-mono">{asset.ticker}</span>
+                                      <span className="u-asset-ticker-text font-black font-mono" style={{ color: isDebt ? '#F87171' : '#F0FAFA' }}>
+                                        {asset.ticker}
+                                      </span>
                                       <span className={`u-asset-location-chevron ${isLocationExpanded ? 'is-open' : ''}`} aria-hidden="true">⌄</span>
                                     </button>
                                   ) : (
@@ -294,9 +298,11 @@ export default function Unified() {
                                     : `${fmtQty(asset.quantity)} nom.`}
                               </div>
                               <div className="u-asset-value-cell">
-                                <div className="u-asset-val font-bold" style={{ color: isDebt ? '#F87171' : asset.isWatchlist ? '#A8C8C8' : '#2DD4BF' }}>
+                                <div className="u-asset-val font-bold" style={{ color: isDebt ? '#F87171' : asset.isWatchlist ? '#A8C8C8' : isUnpriced ? '#FBBF24' : '#2DD4BF' }}>
                                   {asset.isWatchlist
                                     ? asset.unitPriceArs > 0 ? fmtARS(asset.unitPriceArs) : 'Sin precio'
+                                    : isUnpriced
+                                      ? 'Sin cotización'
                                     : fmtUSD(asset.valueUsd)}
                                 </div>
                                 {!isDebt && !asset.isWatchlist && asset.quotedPriceUsd > 0 && (
@@ -304,8 +310,8 @@ export default function Unified() {
                                     {fmtPrice(asset.quotedPriceUsd)}{asset.isBond ? ' / 100 nom.' : ' c/u'}
                                   </div>
                                 )}
-                                <div className="u-mobile-pct font-mono text-[12px]" style={{ color: asset.isWatchlist ? '#5B8A8A' : catColor }}>
-                                  {asset.isWatchlist ? 'Sin posicion' : `${pct.toFixed(1)}% Cartera`}
+                                <div className="u-mobile-pct font-mono text-[12px]" style={{ color: asset.isWatchlist || isUnpriced ? '#5B8A8A' : catColor }}>
+                                  {asset.isWatchlist ? 'Sin posicion' : isUnpriced ? 'Sin cotización' : `${pct.toFixed(1)}% Cartera`}
                                 </div>
                               </div>
                               <div className="u-asset-change-cell">
@@ -321,11 +327,11 @@ export default function Unified() {
                               <div className="u-asset-pct-bar">
                                 <div className="flex justify-between items-baseline">
                                   <span className="font-mono text-[12px] font-bold" style={{ color: asset.isWatchlist ? '#5B8A8A' : catColor }}>
-                                    {asset.isWatchlist ? 'Watch' : `${pct.toFixed(1)}%`}
+                                    {asset.isWatchlist ? 'Watch' : isUnpriced ? '—' : `${pct.toFixed(1)}%`}
                                   </span>
                                 </div>
                                 <div className="u-asset-pct-bar-track">
-                                  <div className="u-asset-pct-bar-fill" style={{ width: asset.isWatchlist ? '0%' : `${Math.min(100, pct * 4)}%`, backgroundColor: catColor }} />
+                                  <div className="u-asset-pct-bar-fill" style={{ width: asset.isWatchlist || isUnpriced ? '0%' : `${Math.min(100, pct * 4)}%`, backgroundColor: catColor }} />
                                 </div>
                               </div>
                               </div>
@@ -334,14 +340,19 @@ export default function Unified() {
                                   <div className="u-asset-broker-detail-title">Distribución por broker</div>
                                   <div className="u-asset-broker-grid">
                                     {brokerPositions.map((position) => {
-                                      const brokerPct = asset.valueUsd > 0 ? (position.valueUsd / asset.valueUsd) * 100 : 0;
+                                      const brokerPct = Math.abs(asset.valueUsd) > 0
+                                        ? (Math.abs(position.valueUsd) / Math.abs(asset.valueUsd)) * 100
+                                        : 0;
+                                      const brokerMeta = isDebt
+                                        ? `Tomada: ${fmtUSD(Math.abs(position.valueUsd))}`
+                                        : `${fmtQty(position.quantity)} nom. · ${fmtUSD(position.valueUsd)}`;
                                       return (
                                         <div key={position.brokerId} className="u-asset-broker-row">
                                           <div className="flex items-center justify-between gap-2">
                                             <span className="u-asset-broker-name">{getBrokerName(position.brokerId)}</span>
                                             <span className="u-asset-broker-pct">{brokerPct.toFixed(1)}%</span>
                                           </div>
-                                          <span className="u-asset-broker-meta">{fmtQty(position.quantity)} nom. · {fmtUSD(position.valueUsd)}</span>
+                                          <span className="u-asset-broker-meta">{brokerMeta}</span>
                                         </div>
                                       );
                                     })}
