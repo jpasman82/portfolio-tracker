@@ -11,6 +11,15 @@ const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 
 const INPUT = "w-full px-3 py-2.5 bg-[#0C1518] border border-teal-400/15 hover:border-teal-400/30 focus:border-teal-400/60 text-[#F0FAFA] placeholder-[#3d5a5a] rounded-xl text-sm outline-none transition-colors box-border";
 const LABEL = "block font-mono text-[11px] tracking-[0.22em] uppercase text-[#5B8A8A] mb-1.5";
 
+const compareAssetsByTicker = (a, b) => {
+  const tickerA = (a.ticker || '').trim();
+  const tickerB = (b.ticker || '').trim();
+  if (!tickerA && !tickerB) return 0;
+  if (!tickerA) return 1;
+  if (!tickerB) return -1;
+  return tickerA.localeCompare(tickerB, 'es', { sensitivity: 'base' });
+};
+
 export default function BrokerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -42,7 +51,7 @@ export default function BrokerDetail() {
               return livePrice ?? a.price;
             })()),
             isBond: a.isBond || isBondTicker(a.ticker) || false
-          }));
+          })).sort(compareAssetsByTicker);
           setAssets(formattedAssets);
           if (!isUSD) setUsdRate(formatDecimals(liveMepRate || data.usdRate || 0));
           if (data.debt) setDebt(formatDecimals(data.debt));
@@ -66,7 +75,7 @@ export default function BrokerDetail() {
   const save = async () => {
     setSaving(true);
     try {
-      const cleanAssets = assets.map(a => ({
+      const cleanAssets = [...assets].sort(compareAssetsByTicker).map(a => ({
         ticker: a.ticker,
         quantity: parseNum(a.quantity),
         price: parseNum(a.price),
@@ -78,6 +87,7 @@ export default function BrokerDetail() {
         debt: parseNum(debt),
         lastUpdated: new Date().toISOString()
       });
+      setAssets([...assets].sort(compareAssetsByTicker));
       setIsEditing(false);
     } catch (error) { window.alert(error.message || 'No se pudo guardar la posición.'); }
     finally { setSaving(false); }
@@ -96,6 +106,9 @@ export default function BrokerDetail() {
   const totalUSD_CCL = isUSD && mepRate > 0 && cclRate > 0
     ? totalUSD * mepRate / cclRate
     : null;
+  const displayAssets = assets
+    .map((asset, index) => ({ asset, index }))
+    .sort(({ asset: assetA }, { asset: assetB }) => compareAssetsByTicker(assetA, assetB));
 
   if (loading) return (
     <div className="flex justify-center items-center min-h-screen bg-[#080F12]">
@@ -152,7 +165,7 @@ export default function BrokerDetail() {
       {/* Assets list */}
       <div className="flex flex-col gap-3 relative z-10">
         {!isEditing ? (
-          assets.map((asset, index) => {
+          displayAssets.map(({ asset }, index) => {
             const assetValueUSD = (parseNum(asset.quantity) * parseNum(asset.price)) / ((asset.isBond || isBondTicker(asset.ticker)) ? 100 : 1) / rate;
             const pct = totalAssetsUSD > 0 ? (assetValueUSD / totalAssetsUSD) * 100 : 0;
             return (
@@ -171,7 +184,7 @@ export default function BrokerDetail() {
             );
           })
         ) : (
-          assets.map((asset, index) => (
+          displayAssets.map(({ asset, index }) => (
             <div key={index} className="bg-[#122329] border border-teal-400/30 rounded-xl p-4">
               <div className="flex justify-between items-center mb-4">
                 <input

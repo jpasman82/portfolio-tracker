@@ -27,6 +27,17 @@ describe('shared broker and unified portfolio valuation', () => {
     expect(groupedTotal).toBeCloseTo(valuation.totals.netUsd,10);
     expect(valuation.brokers.reduce((sum,broker)=>sum+broker.netUsd,0)).toBeCloseTo(valuation.totals.netUsd,10);
   });
+  it('keeps the broker breakdown for each consolidated ticker', () => {
+    const valuation = buildPortfolioValuation([
+      position('balanz', [asset('GGAL', 10, 5000)], 1000),
+      position('one', [asset('GGAL', 4, 6000)], 1200),
+    ]);
+
+    expect(valuation.assets.find(item => item.ticker === 'GGAL').brokerPositions).toEqual([
+      { brokerId: 'balanz', quantity: 10, valueUsd: 50 },
+      { brokerId: 'one', quantity: 4, valueUsd: 20 },
+    ]);
+  });
   it('uses saved broker FX with saved quotes despite a newer cached MEP', () => {
     expect(buildPortfolioValuation([position('balanz',[asset('GGAL',10,5000)],1000)],{mepRate:2000}).totals.netUsd).toBe(50);
   });

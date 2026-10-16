@@ -111,6 +111,71 @@
   min-width: 0;
 }
 
+.u-asset-location-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5B8A8A;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.u-asset-location-trigger:hover,
+.u-asset-location-trigger:focus-visible {
+  color: #2DD4BF;
+  outline: none;
+}
+
+.u-asset-location-icon {
+  color: #2DD4BF;
+  font-size: 13px;
+}
+
+.u-asset-location-chevron {
+  font-size: 14px;
+  line-height: 0.8;
+  transition: transform 0.2s ease;
+}
+
+.u-asset-location-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.u-asset-broker-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+  padding: 5px 7px;
+  border-left: 2px solid rgba(45, 212, 191, 0.22);
+  background: rgba(12, 21, 24, 0.55);
+  border-radius: 0 6px 6px 0;
+  color: #A8C8C8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.u-asset-broker-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.u-asset-broker-row span:last-child {
+  color: #5B8A8A;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .u-asset-row > div:nth-child(2) {
   grid-column: 1;
   grid-row: 2;
@@ -375,6 +440,14 @@
 
   .u-asset-ticker-text {
     font-size: 22px !important;
+  }
+
+  .u-asset-location-trigger {
+    font-size: 12px;
+  }
+
+  .u-asset-broker-detail {
+    font-size: 11px;
   }
 
   .u-asset-val {

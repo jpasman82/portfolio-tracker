@@ -64,12 +64,21 @@ export function buildPortfolioValuation(positions, {
           valueUsd: 0,
           valueArs: 0,
           changePercent,
+          brokerPositions: [],
         };
       }
       assetsByTicker[ticker].quantity += quantity;
       assetsByTicker[ticker].valueUsd += valueUsd;
       assetsByTicker[ticker].valueArs += valueArs;
       if (changePercent !== null) assetsByTicker[ticker].changePercent = changePercent;
+
+      const brokerPosition = assetsByTicker[ticker].brokerPositions.find((item) => item.brokerId === brokerId);
+      if (brokerPosition) {
+        brokerPosition.quantity += quantity;
+        brokerPosition.valueUsd += valueUsd;
+      } else {
+        assetsByTicker[ticker].brokerPositions.push({ brokerId, quantity, valueUsd });
+      }
 
       if (!marketPriceByTicker[ticker]) {
         marketPriceByTicker[ticker] = {
@@ -115,6 +124,7 @@ export function buildPortfolioValuation(positions, {
       const unitPriceUsd = item.quantity > 0 ? item.valueUsd / item.quantity : 0;
       return {
         ...item,
+        brokerPositions: [...item.brokerPositions].sort((a, b) => a.brokerId.localeCompare(b.brokerId)),
         unitPriceUsd,
         // Precio como lo cotiza el mercado: los bonos, por lámina de 100 nominales.
         quotedPriceUsd: item.isBond ? unitPriceUsd * 100 : unitPriceUsd,

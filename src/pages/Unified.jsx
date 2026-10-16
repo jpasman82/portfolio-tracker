@@ -3,6 +3,7 @@ import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
 import { fetchPortfolioValuation, parsePortfolioNumber } from '../utils/portfolioValuation';
 import { esMercadoAbierto } from '../utils/marketHours';
+import { getBrokerName } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import './Unified.css';
 
@@ -18,6 +19,7 @@ export default function Unified() {
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const [pieMode, setPieMode] = useState('cat');
   const [hoverData, setHoverData] = useState(null);
+  const [expandedAssets, setExpandedAssets] = useState(() => new Set());
   const animatedRef = useRef(false);
   const bottomNavHidden = useHideBottomNavOnScroll();
 
@@ -37,6 +39,14 @@ export default function Unified() {
   const fmtChangePct = (v) => {
     const n = parseNum(v);
     return `${n > 0 ? '+' : ''}${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  };
+  const toggleAssetLocation = (ticker) => {
+    setExpandedAssets((current) => {
+      const next = new Set(current);
+      if (next.has(ticker)) next.delete(ticker);
+      else next.add(ticker);
+      return next;
+    });
   };
   const fetchAndGroup = async ({ showLoading = false } = {}) => {
     if (showLoading) setLoading(true);
@@ -257,6 +267,8 @@ export default function Unified() {
                           const denominator = totalAssetsUsd;
                           const pct = denominator > 0 ? (Math.abs(asset.valueUsd) / denominator) * 100 : 0;
                           const isDebt = asset.valueUsd < 0;
+                          const brokerPositions = asset.brokerPositions || [];
+                          const isLocationExpanded = expandedAssets.has(asset.ticker);
 
                           return (
                             <div key={asset.ticker} className="u-asset-row border-t border-teal-400/5 pt-2.5 mt-0">
@@ -264,6 +276,32 @@ export default function Unified() {
                                 <div className="u-asset-ticker-text font-black font-mono" style={{ color: isDebt ? '#F87171' : '#F0FAFA' }}>
                                   {asset.ticker}
                                 </div>
+                                {!isDebt && brokerPositions.length > 0 && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="u-asset-location-trigger"
+                                      aria-expanded={isLocationExpanded}
+                                      onClick={() => toggleAssetLocation(asset.ticker)}
+                                    >
+                                      <span className="u-asset-location-icon" aria-hidden="true">⌖</span>
+                                      {brokerPositions.length === 1
+                                        ? getBrokerName(brokerPositions[0].brokerId)
+                                        : `En ${brokerPositions.length} brokers`}
+                                      <span className={`u-asset-location-chevron ${isLocationExpanded ? 'is-open' : ''}`} aria-hidden="true">⌄</span>
+                                    </button>
+                                    {isLocationExpanded && (
+                                      <div className="u-asset-broker-detail">
+                                        {brokerPositions.map((position) => (
+                                          <div key={position.brokerId} className="u-asset-broker-row">
+                                            <span>{getBrokerName(position.brokerId)}</span>
+                                            <span>{fmtQty(position.quantity)} nom. · {fmtUSD(position.valueUsd)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
                               </div>
                               <div className="font-mono text-[12px] text-[#5B8A8A]">
                                 {asset.ticker === 'DEUDA CAUCIÓN'
