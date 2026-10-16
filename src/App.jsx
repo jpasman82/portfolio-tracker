@@ -1,20 +1,8 @@
 ﻿import { useState, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase/config';
-import Home from './pages/Home';
-import Dashboard from './pages/Dashboard';
-import BrokerDetail from './pages/BrokerDetail';
-import EventDetail from './pages/EventDetail';
-import NewEvent from './pages/NewEvent';
-import Login from './pages/Login';
-import Unified from './pages/Unified';
-import PortfolioHistory from './pages/PortfolioHistory';
-import Maximos from './pages/Maximos';
-import Precios from './pages/Precios';
-import YahooChart from './pages/YahooChart';
-import Activos from './pages/Activos';
-import LoanDetail from './pages/LoanDetail';
 import {
   isPlatformAuthenticatorAvailable,
   isBiometricEnabled,
@@ -26,6 +14,29 @@ import {
 } from './utils/biometricAuth';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5 mb-1";
+
+const Home = lazy(() => import('./pages/Home'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const BrokerDetail = lazy(() => import('./pages/BrokerDetail'));
+const EventDetail = lazy(() => import('./pages/EventDetail'));
+const NewEvent = lazy(() => import('./pages/NewEvent'));
+const Login = lazy(() => import('./pages/Login'));
+const Unified = lazy(() => import('./pages/Unified'));
+const PortfolioHistory = lazy(() => import('./pages/PortfolioHistory'));
+const Maximos = lazy(() => import('./pages/Maximos'));
+const Precios = lazy(() => import('./pages/Precios'));
+const YahooChart = lazy(() => import('./pages/YahooChart'));
+const Activos = lazy(() => import('./pages/Activos'));
+const LoanDetail = lazy(() => import('./pages/LoanDetail'));
+
+function RouteLoading() {
+  return (
+    <div className="flex flex-col justify-center items-center gap-4 min-h-screen bg-[#080F12]">
+      <div className="w-10 h-10 border-2 border-[#1e3040] border-t-teal-400 rounded-full animate-spin" />
+      <p className="font-mono text-[13px] tracking-[0.22em] uppercase text-[#5B8A8A] animate-pulse">Cargando sección...</p>
+    </div>
+  );
+}
 
 function RequireAuth({ user, children }) {
   return user ? children : <Navigate to="/login" replace />;
@@ -260,21 +271,23 @@ export default function App() {
       {user && showSetup && (
         <BiometricSetupModal user={user} onDone={() => setShowSetup(false)} />
       )}
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-        <Route path="/" element={<RequireAuth user={user}><Home /></RequireAuth>} />
-        <Route path="/broker/:id" element={<RequireAuth user={user}><BrokerDetail /></RequireAuth>} />
-        <Route path="/rotaciones" element={<RequireAuth user={user}><Dashboard /></RequireAuth>} />
-        <Route path="/rotaciones/nueva" element={<RequireAuth user={user}><NewEvent /></RequireAuth>} />
-        <Route path="/evento/:id" element={<RequireAuth user={user}><EventDetail /></RequireAuth>} />
-        <Route path="/unificada" element={<RequireAuth user={user}><Unified /></RequireAuth>} />
-        <Route path="/evolucion" element={<RequireAuth user={user}><PortfolioHistory /></RequireAuth>} />
-        <Route path="/precios" element={<RequireAuth user={user}><Precios /></RequireAuth>} />
-        <Route path="/maximos" element={<RequireAuth user={user}><Maximos /></RequireAuth>} />
-        <Route path="/yahoo/:symbol" element={<RequireAuth user={user}><YahooChart /></RequireAuth>} />
-        <Route path="/activos" element={<RequireAuth user={user}><Activos currentUser={user} /></RequireAuth>} />
-        <Route path="/activos/prestamos/:loanId" element={<RequireAuth user={user}><LoanDetail currentUser={user} /></RequireAuth>} />
-      </Routes>
+      <Suspense fallback={<RouteLoading />}>
+        <Routes>
+          <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+          <Route path="/" element={<RequireAuth user={user}><Home /></RequireAuth>} />
+          <Route path="/broker/:id" element={<RequireAuth user={user}><BrokerDetail /></RequireAuth>} />
+          <Route path="/rotaciones" element={<RequireAuth user={user}><Dashboard /></RequireAuth>} />
+          <Route path="/rotaciones/nueva" element={<RequireAuth user={user}><NewEvent /></RequireAuth>} />
+          <Route path="/evento/:id" element={<RequireAuth user={user}><EventDetail /></RequireAuth>} />
+          <Route path="/unificada" element={<RequireAuth user={user}><Unified /></RequireAuth>} />
+          <Route path="/evolucion" element={<RequireAuth user={user}><PortfolioHistory /></RequireAuth>} />
+          <Route path="/precios" element={<RequireAuth user={user}><Precios /></RequireAuth>} />
+          <Route path="/maximos" element={<RequireAuth user={user}><Maximos /></RequireAuth>} />
+          <Route path="/yahoo/:symbol" element={<RequireAuth user={user}><YahooChart /></RequireAuth>} />
+          <Route path="/activos" element={<RequireAuth user={user}><Activos currentUser={user} /></RequireAuth>} />
+          <Route path="/activos/prestamos/:loanId" element={<RequireAuth user={user}><LoanDetail currentUser={user} /></RequireAuth>} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

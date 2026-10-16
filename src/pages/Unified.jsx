@@ -19,7 +19,7 @@ export default function Unified() {
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const [pieMode, setPieMode] = useState('cat');
   const [hoverData, setHoverData] = useState(null);
-  const [expandedAssets, setExpandedAssets] = useState(() => new Set());
+  const [expandedTicker, setExpandedTicker] = useState(null);
   const animatedRef = useRef(false);
   const bottomNavHidden = useHideBottomNavOnScroll();
 
@@ -41,12 +41,7 @@ export default function Unified() {
     return `${n > 0 ? '+' : ''}${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
   };
   const toggleAssetLocation = (ticker) => {
-    setExpandedAssets((current) => {
-      const next = new Set(current);
-      if (next.has(ticker)) next.delete(ticker);
-      else next.add(ticker);
-      return next;
-    });
+    setExpandedTicker((current) => current === ticker ? null : ticker);
   };
   const fetchAndGroup = async ({ showLoading = false } = {}) => {
     if (showLoading) setLoading(true);
@@ -268,41 +263,29 @@ export default function Unified() {
                           const pct = denominator > 0 ? (Math.abs(asset.valueUsd) / denominator) * 100 : 0;
                           const isDebt = asset.valueUsd < 0;
                           const brokerPositions = asset.brokerPositions || [];
-                          const isLocationExpanded = expandedAssets.has(asset.ticker);
+                          const isLocationExpanded = expandedTicker === asset.ticker;
 
                           return (
-                            <div key={asset.ticker} className="u-asset-row border-t border-teal-400/5 pt-2.5 mt-0">
-                              <div>
-                                <div className="u-asset-ticker-text font-black font-mono" style={{ color: isDebt ? '#F87171' : '#F0FAFA' }}>
-                                  {asset.ticker}
-                                </div>
-                                {!isDebt && brokerPositions.length > 0 && (
-                                  <>
+                            <div key={asset.ticker} className="u-asset-entry border-t border-teal-400/5">
+                              <div className="u-asset-row pt-2.5 mt-0">
+                                <div>
+                                  {!isDebt && brokerPositions.length > 0 ? (
                                     <button
                                       type="button"
-                                      className="u-asset-location-trigger"
+                                      className="u-asset-ticker-trigger"
                                       aria-expanded={isLocationExpanded}
+                                      aria-label={`${isLocationExpanded ? 'Ocultar' : 'Ver'} ubicación de ${asset.ticker}`}
                                       onClick={() => toggleAssetLocation(asset.ticker)}
                                     >
-                                      <span className="u-asset-location-icon" aria-hidden="true">⌖</span>
-                                      {brokerPositions.length === 1
-                                        ? getBrokerName(brokerPositions[0].brokerId)
-                                        : `En ${brokerPositions.length} brokers`}
+                                      <span className="u-asset-ticker-text font-black font-mono">{asset.ticker}</span>
                                       <span className={`u-asset-location-chevron ${isLocationExpanded ? 'is-open' : ''}`} aria-hidden="true">⌄</span>
                                     </button>
-                                    {isLocationExpanded && (
-                                      <div className="u-asset-broker-detail">
-                                        {brokerPositions.map((position) => (
-                                          <div key={position.brokerId} className="u-asset-broker-row">
-                                            <span>{getBrokerName(position.brokerId)}</span>
-                                            <span>{fmtQty(position.quantity)} nom. · {fmtUSD(position.valueUsd)}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </div>
+                                  ) : (
+                                    <div className="u-asset-ticker-text font-black font-mono" style={{ color: isDebt ? '#F87171' : '#F0FAFA' }}>
+                                      {asset.ticker}
+                                    </div>
+                                  )}
+                                </div>
                               <div className="font-mono text-[12px] text-[#5B8A8A]">
                                 {asset.ticker === 'DEUDA CAUCIÓN'
                                   ? 'Pasivo'
@@ -345,6 +328,26 @@ export default function Unified() {
                                   <div className="u-asset-pct-bar-fill" style={{ width: asset.isWatchlist ? '0%' : `${Math.min(100, pct * 4)}%`, backgroundColor: catColor }} />
                                 </div>
                               </div>
+                              </div>
+                              {isLocationExpanded && (
+                                <div className="u-asset-broker-detail" role="region" aria-label={`Distribución de ${asset.ticker} por broker`}>
+                                  <div className="u-asset-broker-detail-title">Distribución por broker</div>
+                                  <div className="u-asset-broker-grid">
+                                    {brokerPositions.map((position) => {
+                                      const brokerPct = asset.valueUsd > 0 ? (position.valueUsd / asset.valueUsd) * 100 : 0;
+                                      return (
+                                        <div key={position.brokerId} className="u-asset-broker-row">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="u-asset-broker-name">{getBrokerName(position.brokerId)}</span>
+                                            <span className="u-asset-broker-pct">{brokerPct.toFixed(1)}%</span>
+                                          </div>
+                                          <span className="u-asset-broker-meta">{fmtQty(position.quantity)} nom. · {fmtUSD(position.valueUsd)}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}

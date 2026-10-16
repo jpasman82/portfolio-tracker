@@ -111,35 +111,35 @@
   min-width: 0;
 }
 
-.u-asset-location-trigger {
+.u-asset-entry {
+  min-width: 0;
+}
+
+.u-asset-ticker-trigger {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 4px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: #5B8A8A;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  line-height: 1.25;
   text-align: left;
   cursor: pointer;
   transition: color 0.2s ease;
 }
 
-.u-asset-location-trigger:hover,
-.u-asset-location-trigger:focus-visible {
+.u-asset-ticker-trigger:hover .u-asset-ticker-text,
+.u-asset-ticker-trigger:focus-visible .u-asset-ticker-text {
   color: #2DD4BF;
-  outline: none;
 }
 
-.u-asset-location-icon {
-  color: #2DD4BF;
-  font-size: 13px;
+.u-asset-ticker-trigger:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.5);
+  outline-offset: 3px;
+  border-radius: 3px;
 }
 
 .u-asset-location-chevron {
+  color: #2DD4BF;
   font-size: 14px;
   line-height: 0.8;
   transition: transform 0.2s ease;
@@ -150,29 +150,54 @@
 }
 
 .u-asset-broker-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: 5px;
-  padding: 5px 7px;
+  margin: 0 0 8px;
+  padding: 9px 11px 10px;
   border-left: 2px solid rgba(45, 212, 191, 0.22);
   background: rgba(12, 21, 24, 0.55);
   border-radius: 0 6px 6px 0;
+}
+
+.u-asset-broker-detail-title {
+  margin-bottom: 7px;
+  color: #5B8A8A;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.u-asset-broker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 7px;
+}
+
+.u-asset-broker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 8px;
+  border: 1px solid rgba(45, 212, 191, 0.1);
+  background: rgba(18, 35, 41, 0.72);
+  border-radius: 7px;
   color: #A8C8C8;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
   line-height: 1.35;
 }
 
-.u-asset-broker-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+.u-asset-broker-name {
+  color: #F0FAFA;
+  font-weight: 700;
 }
 
-.u-asset-broker-row span:last-child {
+.u-asset-broker-pct {
+  color: #2DD4BF;
+  font-weight: 700;
+}
+
+.u-asset-broker-meta {
   color: #5B8A8A;
-  text-align: right;
   white-space: nowrap;
 }
 
@@ -440,14 +465,6 @@
 
   .u-asset-ticker-text {
     font-size: 22px !important;
-  }
-
-  .u-asset-location-trigger {
-    font-size: 12px;
-  }
-
-  .u-asset-broker-detail {
-    font-size: 11px;
   }
 
   .u-asset-val {

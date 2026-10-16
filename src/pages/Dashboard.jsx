@@ -10,7 +10,6 @@ import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService'
 import { getBrokerName, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import { parseNum } from '../utils/numberFormat';
-import * as XLSX from 'xlsx';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
 
@@ -77,6 +76,8 @@ export default function Dashboard() {
 
   const exportarCartera = async () => {
     try {
+      const xlsxModule = await import('xlsx');
+      const XLSX = xlsxModule.default || xlsxModule;
       const querySnapshot = await getDocs(collection(db, "brokerPositions"));
       const filas = [];
       querySnapshot.forEach((document) => {
