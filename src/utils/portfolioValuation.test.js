@@ -28,6 +28,19 @@ describe('common portfolio data flow',()=>{
   expect(mocks.updates.find(row=>row.id==='balanz').payload).toMatchObject({usdRate:2000,assets:[{ticker:'NU',quantity:10,price:6000,note:'manual'}]});
   expect(mocks.updates.every(row=>!('debt' in row.payload))).toBe(true);
   expect(mocks.data.find(row=>row.id==='jpm').data.assets[0]).toMatchObject({price:0.48,quantity:20});
+  expect(mocks.updates.find(row=>row.id==='balanz').payload).toMatchObject({missingPrices:[],priceRefreshStatus:'COMPLETE'});
+  expect(mocks.updates.find(row=>row.id==='jpm').payload).toMatchObject({missingPrices:['BIOX'],priceRefreshStatus:'PARTIAL'});
+  expect(valuation.missingPrices).toEqual(['BIOX']);
+ });
+ it('saves available quotes while preserving and reporting every missing ticker',async()=>{
+  mocks.data[0].data.assets.push({ticker:'CO26',quantity:100,price:5089});
+  await refreshBrokerPrices();
+  const balanz=mocks.updates.find(row=>row.id==='balanz').payload;
+  expect(balanz.assets).toEqual([
+   expect.objectContaining({ticker:'NU',price:6000}),
+   expect.objectContaining({ticker:'CO26',price:5089}),
+  ]);
+  expect(balanz).toMatchObject({missingPrices:['CO26'],priceRefreshStatus:'PARTIAL'});
  });
  it('deduplicates overlapping refreshes into one quote request and one transaction',async()=>{
   await Promise.all([refreshBrokerPrices(),refreshBrokerPrices()]);

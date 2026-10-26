@@ -46,11 +46,13 @@ export async function refreshBrokerPrices({ force = false } = {}) {
         const data = document.data();
         const isUSD = isUsdBroker(document.id);
         let changed = false;
+        const missingPrices = [];
         const updatedAssets = (data.assets || []).map(asset => {
           if (!asset?.ticker) return asset;
           const ticker = asset.ticker.toUpperCase().trim();
           const price = getBrokerLivePrice(ticker, priceMap, { isUSD, mepRate });
           const isBond = Boolean(asset.isBond || isBondTicker(ticker));
+          if (price === undefined) missingPrices.push(ticker);
           if (price !== undefined && (Math.abs(parseNum(asset.price) - price) > 0.001 || asset.isBond !== isBond)) {
             changed = true;
             return { ...asset, price, isBond };
@@ -61,7 +63,12 @@ export async function refreshBrokerPrices({ force = false } = {}) {
           }
           return asset;
         });
-        const payload = { lastUpdated: nowIso };
+        const uniqueMissingPrices = [...new Set(missingPrices)].sort();
+        const payload = {
+          lastUpdated: nowIso,
+          missingPrices: uniqueMissingPrices,
+          priceRefreshStatus: uniqueMissingPrices.length > 0 ? 'PARTIAL' : 'COMPLETE',
+        };
         if (changed) payload.assets = updatedAssets;
         if (!isUSD && mepRate > 0) payload.usdRate = mepRate;
         transaction.update(document.ref, payload);

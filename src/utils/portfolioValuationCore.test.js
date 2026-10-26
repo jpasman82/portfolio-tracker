@@ -89,4 +89,11 @@ describe('shared broker and unified portfolio valuation', () => {
     expect(valuation.rates.mep).toBe(1000);
     expect(valuation.assets.reduce((sum,row)=>sum+row.valueArs,0)).toBe(valuation.totals.assetsArs);
   });
+  it('exposes missing live quotes without dropping their saved valuation', () => {
+    const input=[{id:'balanz',data:{assets:[asset('CO26',100,5089)],usdRate:1000,debt:0,missingPrices:['CO26'],priceRefreshStatus:'PARTIAL'}}];
+    const valuation=buildPortfolioValuation(input);
+    expect(valuation.totals.netUsd).toBeCloseTo(5.089,8);
+    expect(valuation.missingPrices).toEqual(['CO26']);
+    expect(valuation.brokers[0]).toMatchObject({missingPrices:['CO26'],priceRefreshStatus:'PARTIAL'});
+  });
 });

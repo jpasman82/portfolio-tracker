@@ -96,6 +96,7 @@ export default function Home() {
       const valuation = await fetchPortfolioValuation({ refreshPrices: false });
       const newBrokerData = createEmptyBrokerData();
       let latestTimestamp = 0;
+      const missingPrices = new Set();
       const heldTickers = new Set();
       valuation.brokers.forEach(broker => {
         newBrokerData[broker.brokerId] = {
@@ -107,6 +108,7 @@ export default function Home() {
         broker.assets.forEach(asset => {
           if (!asset.isBond && isBondTicker(asset.ticker) === false) heldTickers.add(asset.ticker);
         });
+        broker.missingPrices.forEach(ticker => missingPrices.add(ticker));
         if (broker.lastUpdated) latestTimestamp = Math.max(latestTimestamp, new Date(broker.lastUpdated).getTime());
       });
 
@@ -128,7 +130,7 @@ export default function Home() {
       if (latestTimestamp > 0) {
         const d = new Date(latestTimestamp);
         setLatestGlobalUpdate(
-          `Act: ${d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} hs`
+          `Act: ${d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} hs${missingPrices.size > 0 ? ` · Cotización anterior: ${[...missingPrices].sort().join(', ')}` : ''}`
         );
       } else {
         setLatestGlobalUpdate('Sin registros');

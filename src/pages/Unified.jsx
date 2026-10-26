@@ -16,6 +16,7 @@ export default function Unified() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [missingPrices, setMissingPrices] = useState([]);
   const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
   const [pieMode, setPieMode] = useState('cat');
   const [hoverData, setHoverData] = useState(null);
@@ -50,6 +51,7 @@ export default function Unified() {
         const valuation = await fetchPortfolioValuation({ refreshPrices: esMercadoAbierto() });
         setGroupedData(valuation.grouped);
         setTotalUsd(valuation.totals.netUsd);
+        setMissingPrices(valuation.missingPrices);
         const timestamps = valuation.brokers.map(broker => Date.parse(broker.lastUpdated)).filter(Number.isFinite);
         setLastUpdated(timestamps.length ? Math.max(...timestamps) : null);
       } catch (e) {
@@ -381,6 +383,11 @@ export default function Unified() {
             {lastUpdated && (
               <div className="font-mono text-[11px] text-[#5B8A8A] mt-2">
                 Act: {new Date(lastUpdated).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} hs
+              </div>
+            )}
+            {missingPrices.length > 0 && (
+              <div className="font-mono text-[11px] text-amber-400 mt-1">
+                Cotización anterior: {missingPrices.join(', ')}
               </div>
             )}
             {(totalAssetsUsd > 0 || totalDebtUsd > 0) && (

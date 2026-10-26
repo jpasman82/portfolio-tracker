@@ -124,6 +124,8 @@ export function buildPortfolioValuation(positions, {
       netUsd: brokerAssetsUsd - debtUsd,
       netArs: (brokerAssetsUsd - debtUsd) * effectiveMep,
       lastUpdated: data.lastUpdated || null,
+      missingPrices: Array.isArray(data.missingPrices) ? data.missingPrices : [],
+      priceRefreshStatus: data.priceRefreshStatus || null,
       assets: brokerAssets,
     });
   });
@@ -162,6 +164,7 @@ export function buildPortfolioValuation(positions, {
       netArs: netUsd * effectiveMep,
     },
     brokers,
+    missingPrices: [...new Set(brokers.flatMap(broker => broker.missingPrices))].sort(),
     assets,
     marketPrices,
     grouped,
