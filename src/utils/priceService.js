@@ -20,9 +20,13 @@ const EP = {
   bonosARS:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=ARS&settlPeriod=0002`,
   bonosUSD:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=USD&settlPeriod=0002`,
   bonosEXT:  `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=EXT&settlPeriod=0002`,
+  bonosARS0001: `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=ARS&settlPeriod=0001`,
+  bonosUSD0001: `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=USD&settlPeriod=0001`,
+  bonosEXT0001: `${BASE}/fixed_income?group=TITULOSPUBLICOS&market=PPT&operativeForm=CONTADO&currency=EXT&settlPeriod=0001`,
 };
 
 const USD_TICKER_ALIASES = {
+  CO26: 'CO26D',
   TFU27: 'TU27D',
 };
 
@@ -118,23 +122,43 @@ async function fetchMap(endpoint, marketOpen) {
   }
 }
 
+function mergeQuoteData(primary, fallback) {
+  return {
+    prices: { ...fallback.prices, ...primary.prices },
+    meta: { ...fallback.meta, ...primary.meta },
+  };
+}
+
 // ─── API pública ──────────────────────────────────────────────────────────────
 
 export async function fetchAllPrices() {
   const marketOpen = esMercadoAbierto();
-  const [acciones, cedears, bonosARS, bonosUSD, bonosEXT] = await Promise.allSettled([
+  const [acciones, cedears, bonosARS, bonosUSD, bonosEXT, bonosARS0001, bonosUSD0001, bonosEXT0001] = await Promise.allSettled([
     fetchMap(EP.acciones, marketOpen),
     fetchMap(EP.cedears, marketOpen),
     fetchMap(EP.bonosARS, marketOpen),
     fetchMap(EP.bonosUSD, marketOpen),   // AL30D → precio en USD para MEP
     fetchMap(EP.bonosEXT, marketOpen),   // AL30C → precio en USD exterior para Cable/CCL
+    fetchMap(EP.bonosARS0001, marketOpen),
+    fetchMap(EP.bonosUSD0001, marketOpen),
+    fetchMap(EP.bonosEXT0001, marketOpen),
   ]);
 
   const accionesData = acciones.status === 'fulfilled' ? acciones.value : { prices: {}, meta: {} };
   const cedearsData  = cedears.status  === 'fulfilled' ? cedears.value  : { prices: {}, meta: {} };
-  const bonosARSData = bonosARS.status === 'fulfilled' ? bonosARS.value : { prices: {}, meta: {} };
-  const bonosUSDData = bonosUSD.status === 'fulfilled' ? bonosUSD.value : { prices: {}, meta: {} };
-  const bonosEXTData = bonosEXT.status === 'fulfilled' ? bonosEXT.value : { prices: {}, meta: {} };
+  const emptyQuoteData = { prices: {}, meta: {} };
+  const bonosARSData = mergeQuoteData(
+    bonosARS.status === 'fulfilled' ? bonosARS.value : emptyQuoteData,
+    bonosARS0001.status === 'fulfilled' ? bonosARS0001.value : emptyQuoteData,
+  );
+  const bonosUSDData = mergeQuoteData(
+    bonosUSD.status === 'fulfilled' ? bonosUSD.value : emptyQuoteData,
+    bonosUSD0001.status === 'fulfilled' ? bonosUSD0001.value : emptyQuoteData,
+  );
+  const bonosEXTData = mergeQuoteData(
+    bonosEXT.status === 'fulfilled' ? bonosEXT.value : emptyQuoteData,
+    bonosEXT0001.status === 'fulfilled' ? bonosEXT0001.value : emptyQuoteData,
+  );
 
   const arsMap = bonosARSData.prices;
   const usdMap = bonosUSDData.prices;
