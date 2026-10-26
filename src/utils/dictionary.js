@@ -40,6 +40,7 @@ export const assetDictionary = {
   "VALE": { cat: "CEDEARs", sub: "Brasil", icon: "BR" },
   "ITUB": { cat: "CEDEARs", sub: "Brasil", icon: "BR" },
   "EWZ": { cat: "CEDEARs", sub: "Brasil", icon: "BR" },
+  "BPA11": { cat: "CEDEARs", sub: "Brasil", icon: "BR" },
   "AAPL": { cat: "CEDEARs", sub: "Tecnología", icon: "💻" },
   "MSFT": { cat: "CEDEARs", sub: "Tecnología", icon: "💻" },
   "GOOGL": { cat: "CEDEARs", sub: "Tecnología", icon: "💻" },

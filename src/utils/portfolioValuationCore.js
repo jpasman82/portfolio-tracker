@@ -4,7 +4,12 @@ import { isUsdBroker } from './brokers.js';
 
 export const PORTFOLIO_VALUATION_VERSION = 'all-broker-positions-v2';
 
-const isBondTicker = ticker => /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(ticker.trim());
+const isBondTicker = ticker => {
+  const normalized = ticker.trim().toUpperCase();
+  // BPA11 is a CEDEAR (BTG Pactual), despite matching the bond ticker shape.
+  if (normalized === 'BPA11') return false;
+  return /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(normalized);
+};
 
 // Both screens and the daily close value every position from the same saved broker data.
 export function buildPortfolioValuation(positions, {

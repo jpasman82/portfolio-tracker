@@ -263,7 +263,10 @@ export function getBrokerLivePrice(ticker, priceMap, { isUSD = false, mepRate = 
 
 export function isBondTicker(ticker) {
   if (!ticker) return false;
-  return /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(ticker.trim());
+  const normalized = ticker.trim().toUpperCase();
+  // BPA11 is a CEDEAR (BTG Pactual), despite matching the bond ticker shape.
+  if (normalized === 'BPA11') return false;
+  return /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(normalized);
 }
 
 export async function fetchPreciosYDolares() {
