@@ -149,6 +149,55 @@ describe('morning previous-close valuation', () => {
       .toEqual([['AL30', 1200], ['AL30D', 1.2]]);
   });
 
+  it('uses a 0001 public-bond row only when the symbol is absent from 0002', async () => {
+    const source = responses();
+    source.bonosARS.result.push(quote('bonosARS', 'CO26', 5089, {
+      security_id: 'CO26-0001-C-CT-ARS', settlPeriod: '0001',
+    }));
+    const { snapshot } = await execute({ held: [{ id: 'balanz', data: { debt: 0,
+      assets: [{ ticker: 'CO26', quantity: 100000, isBond: true }] } }], source });
+    expect(snapshot.priceObservations).toContainEqual(expect.objectContaining({
+      key: 'bonosARS:CO26', providerSymbol: 'CO26', previousClose: 5089, settlement: '0001',
+    }));
+  });
+
+  it('uses the approved last-known CO26 price when the exact BYMA row is absent and marks the snapshot partial', async () => {
+    const { result, snapshot } = await execute({ held: [{ id: 'balanz', data: { debt: 0,
+      assets: [{ ticker: 'CO26', quantity: 100000, price: 5089, isBond: true }] } }] });
+    expect(result.status).toBe('PARTIAL');
+    expect(snapshot).toMatchObject({
+      isComplete: false,
+      economicStatus: 'PARTIAL',
+      priceSource: 'BYMA_SNAPSHOT_WITH_APPROVED_LAST_KNOWN_FALLBACK',
+    });
+    expect(snapshot.fallbackPrices).toEqual([expect.objectContaining({
+      key: 'bonosARS:CO26',
+      providerSymbol: 'CO26',
+      previousClose: 5089,
+      providerDate: '2026-10-26',
+      priceType: 'LAST_KNOWN_PREVIOUS_CLOSE',
+      source: 'BROKER_POSITION_LAST_KNOWN_BYMA',
+      status: 'VALID_FALLBACK',
+      stale: true,
+    })]);
+  });
+
+  it('does not generalize the CO26 last-known fallback to another missing ticker', async () => {
+    await expect(execute({ held: positions('MISS', 1, { price: 5089 }) }))
+      .rejects.toMatchObject({ code: 'MISSING_REQUIRED_PREVIOUS_CLOSE' });
+  });
+
+  it('treats BPA11 as a CEDEAR even when the persisted legacy flag says bond', async () => {
+    const source = responses();
+    source.cedears.result.push(quote('cedears', 'BPA11', 18460));
+    const { snapshot } = await execute({ held: [{ id: 'balanz', data: { debt: 0,
+      assets: [{ ticker: 'BPA11', quantity: 50000, isBond: true }] } }], source });
+    expect(snapshot.priceObservations).toContainEqual(expect.objectContaining({
+      key: 'acciones+cedears:BPA11', providerSymbol: 'BPA11', group: 'cedears',
+    }));
+    expect(snapshot.brokers[0].assets[0]).toMatchObject({ ticker: 'BPA11', isBond: false });
+  });
+
   it('values PESOS and CABLE as explicit broker cash balances without cached prices', async () => {
     const held = [{ id: 'balanz', data: { debt: 0, assets: [
       { ticker: 'PESOS', quantity: 1000, price: 999999 },

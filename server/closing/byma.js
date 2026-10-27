@@ -21,14 +21,25 @@ export function createBymaClient({ env = process.env, fetchImpl = fetch } = {}) 
     return tokenPromise;
   };
   return {
-    async fetchGroup(group) {
+    async fetchGroup(group, { fallbackSettlement = null } = {}) {
       const accessToken = await token();
-      const response = await fetchImpl(`${BASE}${endpoint(group)}`, { signal: AbortSignal.timeout(10_000),
-        headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` } });
-      if (!response.ok) throw error('BYMA_GROUP_FAILED', response.status);
-      const body = await response.json();
-      if (!Array.isArray(body.result)) throw error('BYMA_INVALID_RESPONSE');
-      return body;
+      const fetchSettlement = async (settlement) => {
+        const response = await fetchImpl(`${BASE}${endpoint(group, settlement)}`, { signal: AbortSignal.timeout(10_000),
+          headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` } });
+        if (!response.ok) throw error('BYMA_GROUP_FAILED', response.status);
+        const body = await response.json();
+        if (!Array.isArray(body.result)) throw error('BYMA_INVALID_RESPONSE');
+        return body;
+      };
+      const primary = await fetchSettlement('0002');
+      if (!fallbackSettlement) return primary;
+      const fallback = await fetchSettlement(fallbackSettlement);
+      const primarySymbols = new Set(primary.result.map((row) => String(row?.symbol || '').trim().toUpperCase()));
+      return {
+        ...primary,
+        result: [...primary.result, ...fallback.result.filter((row) =>
+          !primarySymbols.has(String(row?.symbol || '').trim().toUpperCase()))],
+      };
     },
   };
 }

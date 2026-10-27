@@ -51,7 +51,7 @@ export async function refreshBrokerPrices({ force = false } = {}) {
           if (!asset?.ticker) return asset;
           const ticker = asset.ticker.toUpperCase().trim();
           const price = getBrokerLivePrice(ticker, priceMap, { isUSD, mepRate });
-          const isBond = Boolean(asset.isBond || isBondTicker(ticker));
+          const isBond = ticker === 'BPA11' ? false : Boolean(asset.isBond || isBondTicker(ticker));
           if (price === undefined) missingPrices.push(ticker);
           if (price !== undefined && (Math.abs(parseNum(asset.price) - price) > 0.001 || asset.isBond !== isBond)) {
             changed = true;

@@ -39,9 +39,9 @@ export const GROUPS = Object.freeze({
   bonosUSD: { type: 'fixed_income', group: 'TITULOSPUBLICOS', currency: 'USD', market: 'PPT' },
   bonosEXT: { type: 'fixed_income', group: 'TITULOSPUBLICOS', currency: 'EXT', market: 'PPT' },
 });
-export function endpoint(group) {
+export function endpoint(group, settlPeriod = '0002') {
   const { type, ...query } = GROUPS[group];
-  return `/snapshot/v1/${type}?${new URLSearchParams({ ...query, operativeForm: 'CONTADO', settlPeriod: '0002' })}`;
+  return `/snapshot/v1/${type}?${new URLSearchParams({ ...query, operativeForm: 'CONTADO', settlPeriod })}`;
 }
 
 export function number(value, label) {

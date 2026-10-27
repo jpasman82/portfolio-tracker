@@ -96,4 +96,9 @@ describe('shared broker and unified portfolio valuation', () => {
     expect(valuation.missingPrices).toEqual(['CO26']);
     expect(valuation.brokers[0]).toMatchObject({missingPrices:['CO26'],priceRefreshStatus:'PARTIAL'});
   });
+  it('overrides the stale BPA11 bond flag and values it per CEDEAR unit', () => {
+    const valuation=buildPortfolioValuation([position('balanz',[asset('BPA11',10,18460,{isBond:true})],1000)]);
+    expect(valuation.totals.netUsd).toBeCloseTo(184.6,8);
+    expect(valuation.assets[0]).toMatchObject({ticker:'BPA11',isBond:false});
+  });
 });

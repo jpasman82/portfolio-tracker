@@ -177,7 +177,13 @@ async function fetchBymaPrices() {
 
 function isBondTicker(ticker) {
   if (!ticker) return false;
-  return /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(ticker.trim());
+  const normalized = ticker.trim().toUpperCase();
+  if (normalized === 'BPA11') return false;
+  return /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(normalized);
+}
+
+function resolveIsBond(ticker, persistedValue) {
+  return ticker === 'BPA11' ? false : Boolean(persistedValue || isBondTicker(ticker));
 }
 
 function getLivePrice(ticker, priceMap, { isUSD, mep, usdBondSymbols }) {
@@ -359,7 +365,7 @@ export async function updatePositionsAndBuildSnapshot(input) {
       const livePrice = input?.priceForAsset
         ? input.priceForAsset(brokerId, ticker)
         : getLivePrice(ticker, prices, { isUSD, mep, usdBondSymbols });
-      const isBond = asset.isBond || isBondTicker(ticker);
+      const isBond = resolveIsBond(ticker, asset.isBond);
       if (!BRAZIL_CEDEARS.has(ticker) && livePrice === undefined
         && (!input || parseNum(asset.quantity) !== 0)) missingPrices.add(ticker);
       return livePrice !== undefined ? { ...asset, ticker, price: livePrice, isBond } : { ...asset, ticker, isBond };
@@ -368,7 +374,7 @@ export async function updatePositionsAndBuildSnapshot(input) {
     for (const asset of updatedAssets) {
       if (!asset?.ticker || BRAZIL_CEDEARS.has(asset.ticker)) continue;
       const quantity = parseNum(asset.quantity);
-      const isBond = asset.isBond || isBondTicker(asset.ticker);
+      const isBond = resolveIsBond(asset.ticker, asset.isBond);
       const divisor = isBond ? 100 : 1;
       const unitPrice = parseNum(asset.price);
       const unitPriceUsd = unitPrice / rate / divisor;

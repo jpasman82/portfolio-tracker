@@ -38,7 +38,7 @@ export function buildPortfolioValuation(positions, {
       const ticker = rawTicker || 'SIN TICKER';
 
       const quantity = parsePortfolioNumber(asset.quantity);
-      const isBond = asset.isBond || isBondTicker(ticker);
+      const isBond = ticker === 'BPA11' ? false : Boolean(asset.isBond || isBondTicker(ticker));
       const divisor = isBond ? 100 : 1;
       const unitPrice = parsePortfolioNumber(asset.price);
       const unitPriceUsd = unitPrice / rate / divisor;

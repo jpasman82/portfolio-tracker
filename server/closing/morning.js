@@ -2,7 +2,7 @@ import { calendarTrace, CALENDAR_STATES, classifyBymaDate, previousTradingSessio
 import { updatePositionsAndBuildSnapshot } from './legacy.js';
 import { GROUPS, hash, number } from './model.js';
 
-export const MORNING_POLICY_VERSION = 'morning-previous-close-v1';
+export const MORNING_POLICY_VERSION = 'morning-previous-close-v3';
 export const MORNING_PRICE_POLICY = 'BYMA_SNAPSHOT_PREVIOUS_CLOSE';
 export const MORNING_SOURCE = 'vercel-cron-morning-previous-close';
 export const VALUATION_SCOPE = Object.freeze({ name: 'BROKERS_ONLY', collection: 'brokerPositions' });
@@ -12,6 +12,20 @@ const EXCLUDED_BY_EXISTING_VALUATION = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB
 const JPM_USD_BOND_ALIASES = Object.freeze({
   AE38: 'AE38D', AL30: 'AL30D', AL35: 'AL35D', AL41: 'AL41D',
   CO26: 'CO26D', GD35: 'GD35D', TFU27: 'TU27D',
+});
+const APPROVED_LAST_KNOWN_FALLBACKS = Object.freeze({
+  'bonosARS:CO26': Object.freeze({
+    group: 'bonosARS',
+    providerSymbol: 'CO26',
+    observedInformationDate: '2026-10-26',
+    securityId: 'CO26-0001-C-CT-ARS',
+    currency: 'ARS',
+    market: 'CT',
+    settlement: '0001',
+    operativeForm: 'C',
+    category: 3,
+    quoteUnit: 'PER_100_NOMINAL',
+  }),
 });
 const fail = (code, details = null) => Object.assign(new Error(code), { code, details });
 const bond = (ticker) => /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(ticker);
@@ -37,7 +51,9 @@ export function freezeMorningInputs(positions) {
           const quantity = number(asset?.quantity, `${id}:quantity`);
           const ticker = String(asset?.ticker || '').trim().toUpperCase();
           if (quantity !== 0 && !ticker) throw fail('INVALID_INPUT');
-          const isBond = Boolean(asset?.isBond || bond(ticker));
+          // BPA11 is the BTG Pactual CEDEAR. Override the stale persisted
+          // isBond=true value left by the former ticker-shape heuristic.
+          const isBond = ticker === 'BPA11' ? false : Boolean(asset?.isBond || bond(ticker));
           if (quantity !== 0 && !EXCLUDED_BY_EXISTING_VALUATION.has(ticker)) {
             if (ticker === 'PESOS') {
               bindings.push({ brokerId: String(id), ticker, quantity, key: null,
@@ -51,8 +67,11 @@ export function freezeMorningInputs(positions) {
               const providerSymbol = usdBondAlias || ticker;
               const groups = usdBondAlias ? ['bonosUSD'] : isBond ? ['bonosARS'] : ['acciones', 'cedears'];
               const key = add(`${groups.join('+')}:${providerSymbol}`, groups, [providerSymbol]);
+              const cachedPrice = Number(asset?.price);
               bindings.push({ brokerId: String(id), ticker, quantity, key,
-                providerSymbol, valuationKind: 'MARKET', convertToUSD: id === 'jpm' && !usdBondAlias });
+                providerSymbol, valuationKind: 'MARKET', convertToUSD: id === 'jpm' && !usdBondAlias,
+                lastKnownPrice: APPROVED_LAST_KNOWN_FALLBACKS[key] && cachedPrice > 0
+                  && Number.isFinite(cachedPrice) ? cachedPrice : null });
             }
           }
           // Cached client price/rate is deliberately excluded from historical inputs.
@@ -118,10 +137,11 @@ export function normalizePreviousClose(row, group, informationDate) {
     category,
     quoteUnit: spec.type === 'fixed_income' ? 'PER_100_NOMINAL' : 'PER_UNIT',
   };
+  const validSettlements = spec.type === 'fixed_income' ? ['0002', '0001'] : ['0002'];
   const identityMismatch = !providerSymbol || !securityId || currency !== spec.currency
-    || settlement !== '0002' || market !== 'CT' || operativeForm !== 'C'
+    || !validSettlements.includes(settlement) || market !== 'CT' || operativeForm !== 'C'
     || category !== EXPECTED_CATEGORY[group]
-    || securityId !== `${providerSymbol}-0002-C-CT-${currency}`;
+    || securityId !== `${providerSymbol}-${settlement}-C-CT-${currency}`;
   const reason = identityMismatch ? 'INVALID_IDENTITY'
     : providerDate !== informationDate ? 'WRONG_INFORMATION_DATE'
       : !(price > 0) ? 'MISSING_PREVIOUS_CLOSE' : null;
@@ -154,6 +174,43 @@ export function selectPreviousClose(requirement, observations) {
   const prices = new Set(valid.map((observation) => observation.price));
   if (quoteKeys.size !== 1 || prices.size !== 1) throw fail('AMBIGUOUS_PREVIOUS_CLOSE', { key: requirement.key });
   return valid[0];
+}
+
+function selectApprovedLastKnownPrice(requirement, bindings) {
+  const approved = APPROVED_LAST_KNOWN_FALLBACKS[requirement.key];
+  if (!approved) return null;
+  const prices = [...new Set(bindings.filter((binding) => binding.key === requirement.key)
+    .map((binding) => binding.lastKnownPrice).filter((price) => price > 0 && Number.isFinite(price)))];
+  if (prices.length !== 1) return null;
+  const identity = {
+    providerSymbol: approved.providerSymbol,
+    securityId: approved.securityId,
+    segment: GROUPS[approved.group].group,
+    currency: approved.currency,
+    market: approved.market,
+    settlement: approved.settlement,
+    operativeForm: approved.operativeForm,
+    requestedMarket: GROUPS[approved.group].market || null,
+    requestedOperativeForm: 'CONTADO',
+    category: approved.category,
+    quoteUnit: approved.quoteUnit,
+  };
+  return {
+    ...identity,
+    group: approved.group,
+    providerDate: approved.observedInformationDate,
+    informationDate: approved.observedInformationDate,
+    price: prices[0],
+    priceType: 'LAST_KNOWN_PREVIOUS_CLOSE',
+    source: 'BROKER_POSITION_LAST_KNOWN_BYMA',
+    pricePolicy: MORNING_PRICE_POLICY,
+    policyVersion: MORNING_POLICY_VERSION,
+    quoteKey: hash({ ...identity, price: prices[0], source: 'BROKER_POSITION_LAST_KNOWN_BYMA' }),
+    status: 'VALID_FALLBACK',
+    reason: 'CURRENT_BYMA_ROW_NOT_FOUND',
+    broadcastTime: null,
+    stale: true,
+  };
 }
 
 function missingRequirementDetail(requirement, observations, bindings, error) {
@@ -211,7 +268,9 @@ export async function buildMorningSnapshot({ informationDate, capturedAt, positi
       selected.set(requirement.key, selectPreviousClose(requirement, observations));
     } catch (error) {
       if (!['MISSING_REQUIRED_PREVIOUS_CLOSE', 'AMBIGUOUS_PREVIOUS_CLOSE'].includes(error.code)) throw error;
-      missing.push(missingRequirementDetail(requirement, observations, input.bindings, error));
+      const fallback = selectApprovedLastKnownPrice(requirement, input.bindings);
+      if (fallback) selected.set(requirement.key, fallback);
+      else missing.push(missingRequirementDetail(requirement, observations, input.bindings, error));
     }
   }
   if (missing.length) throw fail('MISSING_REQUIRED_PREVIOUS_CLOSE', { missing });
@@ -249,7 +308,12 @@ export async function buildMorningSnapshot({ informationDate, capturedAt, positi
     category: observation.category,
     securityId: observation.securityId,
     quoteUnit: observation.quoteUnit,
+    priceType: observation.priceType,
+    source: observation.source,
+    status: observation.status,
+    stale: observation.stale === true,
   }));
+  const fallbackPrices = priceObservations.filter((observation) => observation.status === 'VALID_FALLBACK');
   const buildId = hash({
     informationDate,
     valuationDate,
@@ -265,19 +329,22 @@ export async function buildMorningSnapshot({ informationDate, capturedAt, positi
     source: MORNING_SOURCE,
     capturedAt,
     updatedAt: capturedAt,
-    isComplete: true,
-    economicStatus: 'COMPLETE',
+    isComplete: fallbackPrices.length === 0,
+    economicStatus: fallbackPrices.length === 0 ? 'COMPLETE' : 'PARTIAL',
     valuationScope: VALUATION_SCOPE.name,
     inputSource: VALUATION_SCOPE.collection,
     inputHash: input.inputHash,
     policyVersion: MORNING_POLICY_VERSION,
     pricePolicy: MORNING_PRICE_POLICY,
-    priceSource: 'BYMA_SNAPSHOT',
-    dailyPriceDefinition: 'previous_close observed on the following BYMA information date',
+    priceSource: fallbackPrices.length === 0 ? 'BYMA_SNAPSHOT' : 'BYMA_SNAPSHOT_WITH_APPROVED_LAST_KNOWN_FALLBACK',
+    dailyPriceDefinition: fallbackPrices.length === 0
+      ? 'previous_close observed on the following BYMA information date'
+      : 'previous_close observed on the following BYMA information date, with explicit CO26 last-known fallback',
     groupDates,
     calendar: calendarTrace(informationDate, valuationDate),
     rates: { ...calculated.rates, mepSource: { ars: 'AL30', usd: 'AL30D', priceType: 'PREVIOUS_CLOSE' } },
     priceObservations,
+    fallbackPrices,
     b1BuildId: buildId,
     morningBuildId: buildId,
   };
@@ -321,7 +388,8 @@ export async function runMorning({ informationDate, store, byma, loadPositions,
   const positions = await loadPositions();
   const entries = await Promise.all(Object.keys(GROUPS).map(async (group) => {
     try {
-      return [group, await byma.fetchGroup(group)];
+      const options = GROUPS[group].type === 'fixed_income' ? { fallbackSettlement: '0001' } : undefined;
+      return [group, await byma.fetchGroup(group, options)];
     } catch (error) {
       throw Object.assign(error, { group });
     }
@@ -332,7 +400,7 @@ export async function runMorning({ informationDate, store, byma, loadPositions,
   log({ event: 'morning_valuation_complete', informationDate, valuationDate,
     publicationStatus: published.publicationStatus, buildId: snapshot.morningBuildId });
   return {
-    status: 'COMPLETE',
+    status: published.snapshot.isComplete ? 'COMPLETE' : 'PARTIAL',
     stage: published.publicationStatus,
     publicationStatus: published.publicationStatus,
     informationDate,

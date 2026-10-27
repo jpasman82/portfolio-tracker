@@ -42,6 +42,14 @@ describe('common portfolio data flow',()=>{
   ]);
   expect(balanz).toMatchObject({missingPrices:['CO26'],priceRefreshStatus:'PARTIAL'});
  });
+ it('clears the stale BPA11 bond flag when its CEDEAR quote is available',async()=>{
+  mocks.data[0].data.assets=[{ticker:'BPA11',quantity:10,price:18460,isBond:true}];
+  mocks.fetchPrices.mockResolvedValue({BPA11:18500});
+  mocks.livePrice.mockImplementation(ticker=>ticker==='BPA11'?18500:undefined);
+  await refreshBrokerPrices();
+  expect(mocks.updates.find(row=>row.id==='balanz').payload.assets[0])
+   .toMatchObject({ticker:'BPA11',price:18500,isBond:false});
+ });
  it('deduplicates overlapping refreshes into one quote request and one transaction',async()=>{
   await Promise.all([refreshBrokerPrices(),refreshBrokerPrices()]);
   expect(mocks.fetchPrices).toHaveBeenCalledTimes(1);
