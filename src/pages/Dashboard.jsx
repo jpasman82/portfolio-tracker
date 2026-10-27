@@ -1,4 +1,5 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useRef } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import StrategyLedgerCard from '../features/strategies/StrategyLedgerCard';
@@ -10,8 +11,14 @@ import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService'
 import { getBrokerName, isUsdBroker } from '../utils/brokers';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import { parseNum } from '../utils/numberFormat';
+import { esDespuesDelCierre, esMercadoAbierto, fechaMercadoKey } from '../utils/marketHours';
 
 const KICKER = "font-mono text-[12px] tracking-[0.22em] uppercase text-teal-400 flex items-center gap-1.5";
+const MS_POR_MINUTO = 60 * 1000;
+const msHastaProximoMinuto = (date = new Date()) => {
+  const transcurrido = date.getSeconds() * 1000 + date.getMilliseconds();
+  return transcurrido === 0 ? MS_POR_MINUTO : MS_POR_MINUTO - transcurrido;
+};
 
 async function loadStrategyEvents() {
   const [priceMap, querySnapshot] = await Promise.all([
@@ -52,16 +59,71 @@ export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [mercadoAbierto, setMercadoAbierto] = useState(() => esMercadoAbierto());
+  const refreshingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const postCloseRefreshDateRef = useRef('');
   const bottomNavHidden = useHideBottomNavOnScroll();
+
+  const refreshStrategies = async ({ initial = false } = {}) => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    if (!initial) {
+      setRefreshing(true);
+      setLoadError('');
+    }
+    try {
+      const data = await loadStrategyEvents();
+      if (mountedRef.current) {
+        setEvents(data);
+        setLoadError('');
+      }
+    } catch (cause) {
+      if (mountedRef.current) setLoadError(cause.message || 'No se pudieron actualizar las estrategias.');
+    } finally {
+      refreshingRef.current = false;
+      if (mountedRef.current) {
+        if (initial) setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  };
 
   useEffect(() => {
     let active = true;
-    loadStrategyEvents().then(data => {
-      if (active) { setEvents(data); setLoading(false); }
-    }).catch(cause => {
-      if (active) { setLoadError(cause.message); setLoading(false); }
-    });
-    return () => { active = false; };
+    let refreshTimer = null;
+    const updateMarketState = () => setMercadoAbierto(esMercadoAbierto());
+    const refreshOnSchedule = async () => {
+      if (!active) return;
+      const now = new Date();
+      const marketOpen = esMercadoAbierto(now);
+      setMercadoAbierto(marketOpen);
+
+      if (marketOpen) {
+        await refreshStrategies();
+      } else if (esDespuesDelCierre(now) && postCloseRefreshDateRef.current !== fechaMercadoKey(now)) {
+        postCloseRefreshDateRef.current = fechaMercadoKey(now);
+        await refreshStrategies();
+      }
+
+      if (active) refreshTimer = window.setTimeout(refreshOnSchedule, msHastaProximoMinuto());
+    };
+
+    mountedRef.current = true;
+    if (esDespuesDelCierre()) postCloseRefreshDateRef.current = fechaMercadoKey();
+    void refreshStrategies({ initial: true });
+    const statusTimer = window.setInterval(updateMarketState, 30 * 1000);
+    refreshTimer = window.setTimeout(refreshOnSchedule, msHastaProximoMinuto());
+
+    return () => {
+      active = false;
+      mountedRef.current = false;
+      window.clearInterval(statusTimer);
+      window.clearTimeout(refreshTimer);
+    };
+    // The scheduler starts once; refreshStrategies only uses setters and refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDelete = async (e, id) => {
@@ -136,6 +198,18 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mt-1">
           <h2 className="text-2xl font-bold tracking-tight text-[#F0FAFA]">Estrategias</h2>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={refreshStrategies}
+              disabled={refreshing}
+              aria-label={refreshing ? 'Actualizando estrategias' : 'Actualizar precios de estrategias'}
+              title={refreshing ? 'Actualizando estrategias' : `Actualizar precios${mercadoAbierto ? ' · automático cada minuto' : ' · mercado cerrado'}`}
+              className="w-10 h-10 rounded-xl bg-[#122329] border border-teal-400/15 hover:border-teal-400/30 flex items-center justify-center text-teal-400 transition-colors disabled:opacity-50"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'animate-spin' : ''} aria-hidden="true">
+                <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>
+              </svg>
+            </button>
             <Link
               to="/rotaciones/nueva"
               className="font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 bg-teal-400 hover:bg-teal-300 text-[#080F12] rounded-lg transition-colors font-bold"
@@ -245,3 +319,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
