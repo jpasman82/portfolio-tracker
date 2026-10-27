@@ -7,8 +7,7 @@ import { deleteLegacyStrategy } from '../features/strategies/strategyRepository'
 import { Link } from 'react-router-dom';
 import AppBottomNav from '../components/AppBottomNav';
 import LogoutButton from '../components/LogoutButton';
-import { fetchAllPrices, getMepRate, isBondTicker } from '../utils/priceService';
-import { getBrokerName, isUsdBroker } from '../utils/brokers';
+import { fetchAllPrices, getMepRate } from '../utils/priceService';
 import { useHideBottomNavOnScroll } from '../utils/useHideBottomNavOnScroll';
 import { parseNum } from '../utils/numberFormat';
 import { esDespuesDelCierre, esMercadoAbierto, fechaMercadoKey } from '../utils/marketHours';
@@ -136,43 +135,9 @@ export default function Dashboard() {
     }
   };
 
-  const exportarCartera = async () => {
-    try {
-      const xlsxModule = await import('xlsx');
-      const XLSX = xlsxModule.default || xlsxModule;
-      const querySnapshot = await getDocs(collection(db, "brokerPositions"));
-      const filas = [];
-      querySnapshot.forEach((document) => {
-        const data = document.data();
-        const brokerId = document.id;
-        const brokerName = getBrokerName(brokerId);
-        const rate = isUsdBroker(brokerId) ? 1 : (parseNum(data.usdRate) || 1);
-        (data.assets || []).forEach(asset => {
-          const isBond = asset.isBond || isBondTicker(asset.ticker);
-          const divisor = isBond ? 100 : 1;
-          const cantidad = parseNum(asset.quantity);
-          const precio = parseNum(asset.price);
-          const subtotalUSD = (cantidad * precio) / divisor / rate;
-          filas.push({ "Origen": brokerName, "Especie / Ticker": asset.ticker, "Clase": isBond ? "Bono" : "Acción/Fondo", "Cantidad Nominal": cantidad, "Precio (Origen)": precio, "T.C. (Dólar)": rate === 1 ? "1 (USD)" : rate, "Valorizado (USD)": parseFloat(subtotalUSD.toFixed(2)) });
-        });
-        const debt = parseNum(data.debt);
-        if (debt > 0) {
-          filas.push({ "Origen": brokerName, "Especie / Ticker": "CAUCIÓN / DEUDA", "Clase": "Obligación", "Cantidad Nominal": 1, "Precio (Origen)": -debt, "T.C. (Dólar)": "1 (USD)", "Valorizado (USD)": -debt });
-        }
-      });
-      const hoja = XLSX.utils.json_to_sheet(filas);
-      const libro = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(libro, hoja, "Posición Consolidada");
-      const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
-      XLSX.writeFile(libro, `Cartera_Marcos_${fecha}.xlsx`);
-    } catch (error) {
-      alert("Error al exportar cartera a Excel: " + error.message);
-    }
-  };
-
   const getBadgeClasses = (val) => {
-    if (val > 0.1) return 'bg-teal-400/10 text-teal-300 border border-teal-400/30';
-    if (val < -0.1) return 'bg-red-400/10 text-red-300 border border-red-400/30';
+    if (val > 0) return 'bg-green-400/10 text-green-300 border border-green-400/30';
+    if (val < 0) return 'bg-red-400/10 text-red-300 border border-red-400/30';
     return 'bg-[#1a2428] text-[#A8C8C8] border border-[#2a3a40]';
   };
 
@@ -216,12 +181,6 @@ export default function Dashboard() {
             >
               Nueva
             </Link>
-            <button
-              onClick={exportarCartera}
-              className="font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-1.5 bg-teal-400/10 border border-teal-400/20 hover:border-teal-400/50 text-teal-400 rounded-lg transition-colors"
-            >
-              Excel
-            </button>
             <LogoutButton />
           </div>
         </div>
@@ -250,6 +209,14 @@ export default function Dashboard() {
           const pUSD = totalUSD_Init > 0 ? ((totalUSD_Now / totalUSD_Init) - 1) * 100 : 0;
           const pARS = totalARS_Init > 0 ? ((totalARS_Now / totalARS_Init) - 1) * 100 : 0;
           const pALFA = totalUSD_Now_Prev > 0 ? ((totalUSD_Now / totalUSD_Now_Prev) - 1) * 100 : 0;
+          const resultUSD = totalUSD_Now - totalUSD_Init;
+          const resultARS = totalARS_Now - totalARS_Init;
+          const resultSymbol = (value) => value > 0 ? '↑' : value < 0 ? '↓' : '→';
+          const resultTone = (value) => value > 0 ? 'text-green-300' : value < 0 ? 'text-red-300' : 'text-[#A8C8C8]';
+          const resultPanelTone = resultUSD > 0 ? 'border-green-400/25 bg-green-400/[0.06]'
+            : resultUSD < 0 ? 'border-red-400/25 bg-red-400/[0.06]'
+              : 'border-teal-400/10 bg-[#0C1518]';
+          const signedAmount = (value, locale, digits = 0) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 
           return (
             <Link key={event.id} to={`/evento/${event.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -289,6 +256,15 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                <div className={`mt-4 rounded-xl border p-3 ${resultPanelTone}`}>
+                  <p className={`font-mono text-[10px] tracking-[0.18em] uppercase opacity-75 ${resultTone(resultUSD)}`}>Resultado vs. invertido</p>
+                  <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mt-1">
+                    <strong className={`text-lg font-black ${resultTone(resultUSD)}`}>{resultSymbol(resultUSD)} USD {signedAmount(resultUSD, 'es-AR', 0)}</strong>
+                    <span className={`text-sm font-bold ${resultTone(resultARS)}`}>{resultSymbol(resultARS)} $ {signedAmount(resultARS, 'es-AR', 0)}</span>
+                    <span className={`font-mono text-sm font-bold ${resultTone(pUSD)}`}>{resultSymbol(pUSD)} {pUSD >= 0 ? '+' : ''}{pUSD.toFixed(1)}% USD</span>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { label: 'REND. USD', val: pUSD },
@@ -297,7 +273,7 @@ export default function Dashboard() {
                   ].map(({ label, val }) => (
                     <div key={label} className={`text-center py-3 rounded-xl ${getBadgeClasses(val)}`}>
                       <div className="font-mono text-[8px] tracking-[0.15em] uppercase mb-1 opacity-80">{label}</div>
-                      <div className="text-base font-black">{val >= 0 ? '+' : ''}{val.toFixed(1)}%</div>
+                      <div className="text-base font-black">{resultSymbol(val)} {val >= 0 ? '+' : ''}{val.toFixed(1)}{label === 'ALFA' ? ' p.p.' : '%'}</div>
                     </div>
                   ))}
                 </div>
@@ -319,4 +295,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
