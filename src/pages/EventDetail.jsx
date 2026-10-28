@@ -358,7 +358,7 @@ export default function EventDetail() {
                   {viewCurrency === 'USD' ? (
                     <div className={BOX_READ_TEAL}>{fmtUSD(pActualUSD)}</div>
                   ) : (
-                    event.isClosed ? (
+                    event.isClosed || !isEditingStructure ? (
                       <div className={BOX_READ_TEAL}>{fmtARS(pActualARS)}</div>
                     ) : (
                       <div className="relative">
@@ -418,11 +418,11 @@ export default function EventDetail() {
       </div>
 
       {/* Sold position (ALFA reference) */}
-      <div className="bg-[#0C1518] border border-teal-400/10 rounded-2xl p-5 mb-4 relative z-10">
-        <p className={`${KICKER} mb-4`}>
+      <details className="bg-[#0C1518] border border-teal-400/10 rounded-2xl p-5 mb-4 relative z-10">
+        <summary className={`${KICKER} mb-4 cursor-pointer`}>
           <span className="w-1.5 h-1.5 rounded-full bg-[#5B8A8A]" />
           Activos Vendidos (Referencia ALFA)
-        </p>
+        </summary>
 
         {(event.soldAssets || []).map((asset) => {
           const pActualARS = parseNum(soldCurrentPrices[asset.ticker]);
@@ -441,7 +441,7 @@ export default function EventDetail() {
                 {viewCurrency === 'USD' ? (
                   <div className={BOX_READ_TEAL}>{fmtUSD(pActualUSD)}</div>
                 ) : (
-                  event.isClosed ? (
+                  event.isClosed || !isEditingStructure ? (
                     <div className={BOX_READ_TEAL}>{fmtARS(pActualARS)}</div>
                   ) : (
                     <div className="relative">
@@ -454,7 +454,7 @@ export default function EventDetail() {
             </div>
           );
         })}
-      </div>
+      </details>
 
       {/* MEP rate */}
       {parseNum(currentUsdRate) > 0 && (
@@ -468,7 +468,8 @@ export default function EventDetail() {
       )}
 
       {/* Action buttons */}
-      <div className="relative z-10 mb-6">
+      <details className="relative z-10 mb-6">
+        <summary className="cursor-pointer text-teal-300 font-bold text-sm mb-3">Guardar o cerrar estrategia</summary>
         {event.isClosed ? (
           <button
             onClick={() => save(false)}
@@ -493,15 +494,15 @@ export default function EventDetail() {
             </button>
           </div>
         )}
-      </div>
+      </details>
 
       {/* Price history */}
       {historyReversed.length > 0 && (
-        <div className="relative z-10 mt-4">
-          <p className={`${KICKER} mb-4`}>
+        <details className="relative z-10 mt-4">
+          <summary className={`${KICKER} mb-4 cursor-pointer`}>
             <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shadow-[0_0_8px_#2DD4BF]" />
             Historial de Precios
-          </p>
+          </summary>
           <div className="flex flex-col gap-3">
             {historyReversed.map((entry, idx) => {
               const historicAssets = entry.assetsSnapshot || currentAssets;
@@ -557,7 +558,7 @@ export default function EventDetail() {
               );
             })}
           </div>
-        </div>
+        </details>
       )}
     </div>
   );

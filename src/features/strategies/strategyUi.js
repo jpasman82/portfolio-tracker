@@ -32,6 +32,21 @@ export function strategyQuote(position, prices) {
   return { price: new D(position.averageCost).times(position.priceDivisor).toFixed(), estimated: true };
 }
 
+// Uses the same initial and current exchange rates as the active-position summary.
+export function positionPerformance(position, price, currency, currentRate, initialRate) {
+  const rate = decimal(currentRate, 'Dólar actual', { positive: true });
+  const openingRate = decimal(initialRate, 'Dólar inicial', { positive: true });
+  const cost = new D(position.costBasis);
+  const market = new D(position.quantity).times(price).div(position.priceDivisor);
+  const toView = (amount, exchangeRate) => position.currency === currency ? amount
+    : currency === 'USD' ? amount.div(exchangeRate) : amount.times(exchangeRate);
+  const initial = toView(cost, openingRate);
+  const current = toView(market, rate);
+  const result = current.minus(initial);
+  return { initial: initial.toFixed(), current: current.toFixed(), result: result.toFixed(),
+    returnPct: initial.isZero() ? null : result.div(initial).times(100).toNumber() };
+}
+
 export function strategyMetrics(strategy, { balances = strategy.ledgerBalances, prices = {}, usdRate, soldPrices = {}, initialPrices = {}, asOfDate = benchmarkValuationDate(strategy) } = {}) {
   const rate = decimal(usdRate ?? strategy.currentUsdRateFromDb ?? strategy.initialUsdRate ?? '1', 'Dólar', { positive: true });
   const initialRate = decimal(strategy.initialUsdRate ?? rate.toFixed(), 'Dólar inicial', { positive: true });

@@ -5,7 +5,7 @@ import { fetchAllPrices, getMepRate } from '../../utils/priceService';
 import { parseNum } from '../../utils/numberFormat';
 import { createStrategyRepository } from './strategyRepository';
 import { StrategyDecimal as D, positionKey } from './strategyModel';
-import { formatStrategyAmount, parseStrategyAmount, strategyMetrics, strategyQuote } from './strategyUi';
+import { formatStrategyAmount, parseStrategyAmount, positionPerformance, strategyMetrics, strategyQuote } from './strategyUi';
 import { benchmarkPosition } from './strategyBenchmark';
 import { initialPortfolioPosition } from './strategyInitialPortfolio';
 import StrategyOperationForm from './StrategyOperationForm';
@@ -58,6 +58,7 @@ export default function StrategyLedgerDetail({ strategyId }) {
   const [usdRate, setUsdRate] = useState('');
   const [name, setName] = useState('');
   const [viewCurrency, setViewCurrency] = useState('USD');
+  const [editPrices, setEditPrices] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -134,11 +135,8 @@ export default function StrategyLedgerDetail({ strategyId }) {
 
   if (!ledger) return <div className="max-w-[500px] mx-auto p-6 text-[#A8C8C8]">{error ? <><p role="alert">{error}</p><button type="button" onClick={refresh} className="mt-3 text-teal-300">Volver a intentar</button></> : 'Cargando estrategia...'}</div>;
   const { strategy, balances, records } = ledger;
-  const convert = (value, currency) => currency === viewCurrency ? value
-    : viewCurrency === 'USD' ? new D(value).div(canonicalRate).toFixed() : new D(value).times(canonicalRate).toFixed();
-  const convertCost = (value, currency) => currency === viewCurrency ? value
-    : viewCurrency === 'USD' ? new D(value).div(strategy.initialUsdRate ?? canonicalRate).toFixed()
-      : new D(value).times(strategy.initialUsdRate ?? canonicalRate).toFixed();
+  const tone = value => value == null ? 'text-[#A8C8C8]' : new D(value).isNegative() ? 'text-red-300' : new D(value).isZero() ? 'text-[#A8C8C8]' : 'text-green-300';
+  const direction = value => value == null ? '' : new D(value).isNegative() ? '↓' : new D(value).isZero() ? '→' : '↑';
 
   return (
     <main className="px-4 pt-6 max-w-[500px] mx-auto pb-32 font-[Space_Grotesk,system-ui,sans-serif] bg-[#080F12] min-h-screen text-[#A8C8C8]">
@@ -146,20 +144,19 @@ export default function StrategyLedgerDetail({ strategyId }) {
         <button type="button" onClick={() => navigate('/rotaciones')} className="text-sm text-teal-300">← Estrategias</button>
         <button type="button" onClick={refresh} disabled={refreshing || saving} className="text-sm text-teal-300 disabled:opacity-50">{refreshing ? 'Actualizando...' : 'Actualizar'}</button>
       </div>
-      <label className="block"><span className="sr-only">Nombre de la estrategia</span><input value={name} maxLength={120} disabled={strategy.isClosed || saving} onChange={event => setName(event.target.value)} className="bg-transparent w-full text-2xl text-[#F0FAFA] font-bold outline-none" /></label>
-      <p className="text-xs mt-2 mb-4">Iniciada: {strategy.tradeDate} · Historial desde: {strategy.ledgerOpening.asOfDate}{strategy.isClosed ? ' · Cerrada' : ''}</p>
+      <h1 className="text-2xl text-[#F0FAFA] font-bold">{strategy.eventName}</h1>
+      <p className="text-xs mt-2 mb-4">Iniciada: {strategy.tradeDate}{strategy.isClosed ? ' · Cerrada' : ' · Activa'}</p>
       <div className="flex gap-2 mb-4">{['ARS', 'USD'].map(currency => <button type="button" key={currency} aria-pressed={currency === viewCurrency} onClick={() => setViewCurrency(currency)} className={`px-4 py-2 rounded-lg ${currency === viewCurrency ? 'bg-teal-400/15 text-teal-300' : 'bg-[#0C1518]'}`}>{currency}</button>)}</div>
       {error && <p role="alert" className="text-red-300 text-sm mb-4">{error}</p>}
       {notice && <p role="status" className="text-teal-300 text-sm mb-4">{notice}</p>}
       {calculationError && <p role="alert" className="text-red-300 text-sm mb-4">{calculationError}</p>}
       <section className={CARD}>
         <h2 className="text-lg font-bold text-[#F0FAFA]">Posiciones activas</h2>
-        <p className="text-xs mt-2">La venta reduce proporcionalmente el costo remanente de los títulos que siguen abiertos. Este cálculo excluye efectivo y resultados realizados; ambos se conservan en el patrimonio y resultado total de la estrategia.</p>
         <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
           <div><p>Valor inicial ajustado por ventas</p><strong>{money(viewCurrency === 'USD' ? metrics?.activePositionCostUSD : metrics?.activePositionCostARS, viewCurrency)}</strong></div>
           <div><p>Valor de mercado</p><strong className="text-teal-300">{money(viewCurrency === 'USD' ? metrics?.activePositionValueUSD : metrics?.activePositionValueARS, viewCurrency)}</strong></div>
-          <div><p>Resultado abierto</p><strong className={metrics != null && new D(viewCurrency === 'USD' ? metrics.activePositionResultUSD : metrics.activePositionResultARS).isNegative() ? 'text-red-300' : 'text-teal-300'}>{money(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS, viewCurrency)}</strong></div>
-          <div><p>Rendimiento abierto</p><strong>{percent(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)}</strong></div>
+          <div><p>Resultado abierto</p><strong className={tone(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS)}>{direction(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS)} {money(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS, viewCurrency)}</strong></div>
+          <div><p>Rendimiento abierto</p><strong className={tone(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)}>{direction(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)} {percent(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)}</strong></div>
         </div>
       </section>
       <section className={CARD}>
@@ -169,10 +166,26 @@ export default function StrategyLedgerDetail({ strategyId }) {
         </div>
         <div className="grid grid-cols-3 gap-2 mt-5 text-center text-xs">{[['REND. USD', metrics?.pUSD], ['REND. ARS', metrics?.pARS], ['ALFA', metrics?.pALFA]].map(([label, value]) => <div key={label} className="bg-[#0C1518] rounded-xl py-3"><p>{label}</p><strong className={`block text-lg mt-1 ${value == null ? '' : value < 0 ? 'text-red-300' : 'text-teal-300'}`}>{percent(value, label === 'ALFA' ? ' p.p.' : '%')}</strong></div>)}</div>
         <details className="mt-4 text-xs"><summary className="cursor-pointer">Ver capital original antes de ventas</summary><p className="mt-2">{money(viewCurrency === 'USD' ? metrics?.initialUSD : metrics?.initialARS, viewCurrency)}</p></details>
-        {metrics?.hasFlows && <p className="text-xs mt-3">Rendimiento simple: incluye lo retirado y descuenta lo aportado al dólar de cada movimiento. La referencia recibe los mismos movimientos de capital.</p>}
         {metrics?.flows.benchmarkIssue && <p className="text-xs text-amber-300 mt-3">{metrics.flows.benchmarkIssue}</p>}
       </section>
 
+      <section className={CARD}>
+        <div className="flex justify-between gap-3 items-center"><h2 className="text-lg font-bold text-[#F0FAFA]">Activos</h2>{!strategy.isClosed && <div className="flex gap-2"><button type="button" disabled={saving || refreshing} onClick={() => setEditPrices(value => !value)} className="text-teal-300 text-sm">{editPrices ? 'Terminar edición' : 'Editar precios'}</button><button type="button" disabled={showForm || saving || refreshing} onClick={() => { setShowForm(true); setNotice(''); }} className="bg-teal-400 text-[#080F12] px-3 py-2 rounded-lg text-sm font-bold disabled:opacity-50">+ Operación</button></div>}</div>
+        {balances.positions.length === 0 && <p className="text-sm mt-4">No quedan títulos en esta estrategia.</p>}
+        {balances.positions.map(position => {
+          const key = positionKey(position);
+          const result = metrics ? positionPerformance(position, canonicalPrices[key], viewCurrency, canonicalRate, strategy.initialUsdRate ?? canonicalRate) : null;
+          const missingQuote = estimated.includes(key);
+          return <article key={key} className="mt-4 pt-4 border-t border-teal-400/10">
+            <div className="flex justify-between gap-3 items-start"><div><h3 className="text-[#F0FAFA] font-bold text-lg">{position.ticker}</h3><p className="text-xs mt-1">Cantidad: {formatStrategyAmount(position.quantity, 4)}</p></div><div className={`text-right font-bold ${missingQuote ? 'text-amber-300' : tone(result?.result)}`}>{missingQuote ? 'Sin cotización' : result ? <><p>{direction(result.result)} {money(result.result, viewCurrency)}</p><p className="text-sm">{percent(result.returnPct)}</p></> : '—'}</div></div>
+            <div className="grid grid-cols-2 gap-3 text-sm mt-3"><div><p>Invertido actual</p><strong>{result ? money(result.initial, viewCurrency) : '—'}</strong></div><div className="text-right"><p>Valor actual</p><strong className="text-[#F0FAFA]">{result ? money(result.current, viewCurrency) : '—'}</strong></div></div>
+            {editPrices && <label className="block text-sm mt-3">Precio actual ({position.currency}{position.priceDivisor === '100' ? ' por 100 nominales' : ''})<input type="text" inputMode="decimal" value={prices[key] ?? ''} disabled={strategy.isClosed || saving} onChange={event => { setPrices(current => ({ ...current, [key]: event.target.value })); setEstimated(current => current.filter(item => item !== key)); }} className={INPUT} /></label>}
+          </article>;
+        })}
+        {estimated.length > 0 && <p className="text-sm text-amber-300 mt-4">Falta cotización para {estimated.join(', ')}. Se muestra el costo como referencia; ingresá el precio actual antes de guardar una valuación.</p>}
+      </section>
+      {showForm && <StrategyOperationForm strategy={strategy} records={records} balances={balances} onSave={addOperation} onCancel={() => setShowForm(false)} />}
+      <details className="mb-4"><summary className="cursor-pointer text-sm font-bold text-teal-300 mb-3">Más información y comparaciones</summary>
       <section className={CARD}>
         <h2 className="text-lg font-bold text-[#F0FAFA]">Comparación Alfa y Delta</h2>
         <p className="text-xs mt-2">Compara el saldo actual con la referencia original, ajustada por los mismos aportes y retiros en sus fechas.</p>
@@ -209,23 +222,8 @@ export default function StrategyLedgerDetail({ strategyId }) {
         <p className="text-xs mt-1">Desde el saldo de apertura</p>
         {['ARS', 'USD'].map(currency => <div key={currency} className="grid grid-cols-2 gap-3 mt-4 text-sm"><div><p>Efectivo {currency}</p><strong className="text-teal-300">{money(balances.cash[currency], currency)}</strong></div><div><p>Resultado realizado</p><strong className="text-[#F0FAFA]">{money(balances.realizedResult[currency], currency)}</strong></div></div>)}
       </section>
-      <section className={CARD}>
-        <div className="flex justify-between gap-3 items-center"><h2 className="text-lg font-bold text-[#F0FAFA]">Posición actual</h2>{!strategy.isClosed && <button type="button" disabled={showForm || saving || refreshing} onClick={() => { setShowForm(true); setNotice(''); }} className="bg-teal-400 text-[#080F12] px-3 py-2 rounded-lg text-sm font-bold disabled:opacity-50">+ Operación</button>}</div>
-        {balances.positions.length === 0 && <p className="text-sm mt-4">No quedan títulos en esta estrategia.</p>}
-        {balances.positions.map(position => {
-          const key = positionKey(position);
-          const value = metrics ? new D(position.quantity).times(canonicalPrices[key]).div(position.priceDivisor).toFixed() : null;
-          return <article key={key} className="mt-4 pt-4 border-t border-teal-400/10">
-            <h3 className="text-[#F0FAFA] font-bold">{position.ticker} <span className="text-xs text-[#A8C8C8]">{position.currency}</span></h3>
-            <p className="text-sm mt-1">Cantidad: {formatStrategyAmount(position.quantity, 4)}</p>
-            <label className="block text-sm mt-3">Precio actual ({position.currency}{position.priceDivisor === '100' ? ' por 100 nominales' : ''})<input type="text" inputMode="decimal" value={prices[key] ?? ''} disabled={strategy.isClosed || saving} onChange={event => { setPrices(current => ({ ...current, [key]: event.target.value })); setEstimated(current => current.filter(item => item !== key)); }} className={INPUT} /></label>
-            <div className="grid grid-cols-2 gap-3 text-sm mt-3"><div><p>Costo remanente</p><strong>{metrics ? money(convertCost(position.costBasis, position.currency), viewCurrency) : '—'}</strong></div><div><p>Valor actual</p><strong className="text-teal-300">{metrics ? money(convert(value, position.currency), viewCurrency) : '—'}</strong></div></div>
-          </article>;
-        })}
-        {estimated.length > 0 && <p className="text-sm text-amber-300 mt-4">Falta cotización para {estimated.join(', ')}. Se muestra el costo como referencia; ingresá el precio actual antes de guardar una valuación.</p>}
-      </section>
-      {showForm && <StrategyOperationForm strategy={strategy} records={records} balances={balances} onSave={addOperation} onCancel={() => setShowForm(false)} />}
-      <StrategyOperationHistory strategy={strategy} records={records} disabled={saving || refreshing || showForm} onCancelOperation={cancelOperation} />
+      </details>
+      <details className="mb-4"><summary className="cursor-pointer text-sm font-bold text-teal-300">Historial de operaciones</summary><StrategyOperationHistory strategy={strategy} records={records} disabled={saving || refreshing || showForm} onCancelOperation={cancelOperation} /></details>
       <details className={`${CARD} mt-4`}><summary className="cursor-pointer text-[#F0FAFA] font-bold">Activos iniciales vendidos · Referencia Delta y Alfa</summary><div className="space-y-3 mt-4">{(strategy.soldAssets ?? []).map((asset, index) => {
         if (!asset.ticker?.trim()) return null;
         const reference = metrics?.benchmarkPositions[index];
@@ -239,10 +237,10 @@ export default function StrategyLedgerDetail({ strategyId }) {
           <label className="block mt-2">Precio actual de referencia (ARS)<input type="text" inputMode="decimal" disabled={strategy.isClosed || saving} value={soldPrices[asset.ticker.trim().toUpperCase()] ?? ''} onChange={event => setSoldPrices(current => ({ ...current, [asset.ticker.trim().toUpperCase()]: event.target.value }))} className={INPUT} /></label>
         </article>;
       })}</div></details>
-      <section className={CARD}><label className="block text-sm">Dólar para la valuación<input type="text" inputMode="decimal" disabled={strategy.isClosed || saving} value={usdRate} onChange={event => setUsdRate(event.target.value)} className={INPUT} /></label>
+      <details className={CARD}><summary className="cursor-pointer text-[#F0FAFA] font-bold">Editar estrategia y guardar</summary><label className="block text-sm mt-4">Nombre<input value={name} maxLength={120} disabled={strategy.isClosed || saving} onChange={event => setName(event.target.value)} className={INPUT} /></label><label className="block text-sm mt-3">Dólar para la valuación<input type="text" inputMode="decimal" disabled={strategy.isClosed || saving} value={usdRate} onChange={event => setUsdRate(event.target.value)} className={INPUT} /></label>
         <button type="button" disabled={saving || refreshing || !metrics || (!strategy.isClosed && (estimated.length > 0 || initialEstimated.length > 0)) || showForm} onClick={() => saveSettings(false)} className="w-full mt-4 bg-teal-400 text-[#080F12] rounded-xl py-3 font-bold disabled:opacity-50">{saving ? 'Guardando...' : strategy.isClosed ? 'Reabrir estrategia' : 'Guardar precios y registrar valuación'}</button>
         {!strategy.isClosed && <button type="button" disabled={saving || refreshing || !metrics || estimated.length > 0 || initialEstimated.length > 0 || showForm} onClick={() => { if (window.confirm('¿Cerrar la estrategia y conservar su historial y saldos?')) saveSettings(true); }} className="block mt-3 mx-auto text-sm text-red-300 disabled:opacity-50">Cerrar estrategia</button>}
-      </section>
+      </details>
       <details className={CARD}><summary className="font-bold text-[#F0FAFA] cursor-pointer">Historial de valuaciones ({strategy.priceHistory?.length ?? 0})</summary>
         {[...(strategy.priceHistory ?? [])].reverse().map((entry, index) => {
           const legacyValue = (entry.assetsSnapshot ?? strategy.boughtAssets ?? []).reduce((sum, asset) => sum + parseNum(asset.quantity) * parseNum(entry.prices?.[asset.ticker] ?? asset.priceAtTrade), 0);

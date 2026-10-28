@@ -12,7 +12,7 @@ const brokerNet = positions => positions.reduce((sum, broker) => {
 }, 0);
 
 describe('shared broker and unified portfolio valuation', () => {
-  it.each(['XP','NU','PAX','VALE','ITUB','EWZ'])('includes held Brazilian CEDEAR %s', ticker => {
+  it.each(['XP','NU','PAX','VALE','ITUB','EWZ','SID'])('includes held Brazilian CEDEAR %s', ticker => {
     const valuation = buildPortfolioValuation([position('balanz',[asset(ticker,10,5000)])]);
     expect(valuation.totals.netUsd).toBe(50);
     expect(valuation.grouped.CEDEARs.subs.Brasil.assets[0].ticker).toBe(ticker);
