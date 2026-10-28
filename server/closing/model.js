@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const VERSION = 'b1-snapshot-last-trade-v3';
+export const VERSION = 'b1-snapshot-last-trade-v4';
 export const TIMEZONE = 'America/Argentina/Buenos_Aires';
 export const PRICE_POLICY = 'BYMA_SNAPSHOT_LAST_TRADE';
 export const TRADE_REFERENCE = 'https://jira-tecval.atlassian.net/wiki/external/NTQ0OTRmYzBlMTUzNGFlOTg1MTFkMzI2OWIzYTM1MTc';
@@ -54,7 +54,6 @@ export function number(value, label) {
   return parsed;
 }
 
-const EXCLUDED = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ']);
 const bond = (ticker) => /^[A-Z]{2,3}\d{2}[A-Z]?$/i.test(ticker);
 export function freezeInputs(positions, capturedAt) {
   if (!positions.length) throw Object.assign(new Error('No broker positions'), { code: 'EMPTY_POSITIONS' });
@@ -75,7 +74,9 @@ export function freezeInputs(positions, capturedAt) {
         const ticker = String(asset?.ticker || '').trim().toUpperCase();
         if (quantity !== 0 && !ticker) throw Object.assign(new Error('Missing ticker'), { code: 'INVALID_INPUT' });
         const isBond = Boolean(asset?.isBond || bond(ticker));
-        if (quantity !== 0 && !EXCLUDED.has(ticker)) {
+        // A non-zero broker holding is never dropped by ticker name. Missing
+        // market data remains an explicit incomplete/error condition.
+        if (quantity !== 0) {
           const nativeUSD = id === 'jpm' && isBond;
           const symbol = nativeUSD && ticker === 'TFU27' ? 'TU27D' : ticker;
           const groups = nativeUSD ? ['bonosUSD'] : isBond ? ['bonosARS'] : ['acciones', 'cedears'];

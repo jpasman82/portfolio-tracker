@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CAPTURE_POLICY, VERSION, PRICE_POLICY, normalize, capturePolicy, captureWindowReason, eligibleObservation, selectRequirement } from './model.js';
+import { CAPTURE_POLICY, VERSION, PRICE_POLICY, normalize, capturePolicy, captureWindowReason, eligibleObservation,
+  freezeInputs, selectRequirement } from './model.js';
 import { createRepository } from './repository.js';
 import { runClose, buildFromDurable } from './pipeline.js';
 import { MemoryStore, fixtureByma, row, position, DATE, NOW } from './testSupport.js';
@@ -17,6 +18,15 @@ function setup(positions = [position()]) {
 }
 
 describe('daily last traded price: production contract', () => {
+  it.each(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ', 'FUTURE'])(
+    'binds every non-zero holding %s without a ticker exclusion list',
+    (ticker) => {
+      const input = freezeInputs([{ id: 'balanz', data: { debt: 0, assets: [{ ticker, quantity: 1 }] } }], NOW);
+      expect(input.bindings).toContainEqual(expect.objectContaining({ brokerId: 'balanz', ticker }));
+      expect(input.requirements).toContainEqual(expect.objectContaining({ symbols: [ticker] }));
+    },
+  );
+
   it('accepts a positive dated/count-backed trade after cutoff and labels its provenance', () => {
     const o = trade();
     expect(o).toMatchObject({ status: 'VALID', price: 100, priceType: 'TRADE', priceDate: DATE,

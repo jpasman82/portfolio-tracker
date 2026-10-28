@@ -4,7 +4,6 @@ const BYMA_BASE = 'https://apigw.byma.com.ar';
 const FIREBASE_PROJECT_ID = 'mi-cartera-tracker';
 const SNAPSHOT_COLLECTION = 'portfolioDailySnapshots';
 const POSITIONS_COLLECTION = 'brokerPositions';
-const BRAZIL_CEDEARS = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ']);
 const USD_BROKER_IDS = new Set(['jpm']);
 const USD_TICKER_ALIASES = {
   TFU27: 'TU27D',
@@ -366,13 +365,12 @@ export async function updatePositionsAndBuildSnapshot(input) {
         ? input.priceForAsset(brokerId, ticker)
         : getLivePrice(ticker, prices, { isUSD, mep, usdBondSymbols });
       const isBond = resolveIsBond(ticker, asset.isBond);
-      if (!BRAZIL_CEDEARS.has(ticker) && livePrice === undefined
-        && (!input || parseNum(asset.quantity) !== 0)) missingPrices.add(ticker);
+      if (livePrice === undefined && (!input || parseNum(asset.quantity) !== 0)) missingPrices.add(ticker);
       return livePrice !== undefined ? { ...asset, ticker, price: livePrice, isBond } : { ...asset, ticker, isBond };
     });
 
     for (const asset of updatedAssets) {
-      if (!asset?.ticker || BRAZIL_CEDEARS.has(asset.ticker)) continue;
+      if (!asset?.ticker) continue;
       const quantity = parseNum(asset.quantity);
       const isBond = resolveIsBond(asset.ticker, asset.isBond);
       const divisor = isBond ? 100 : 1;

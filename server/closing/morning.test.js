@@ -198,6 +198,33 @@ describe('morning previous-close valuation', () => {
     expect(snapshot.brokers[0].assets[0]).toMatchObject({ ticker: 'BPA11', isBond: false });
   });
 
+  it.each(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ'])(
+    'includes held CEDEAR %s instead of applying a ticker exclusion list',
+    async (ticker) => {
+      const source = responses();
+      source.cedears.result.push(quote('cedears', ticker, 5000));
+      const { snapshot } = await execute({ held: positions(ticker, 10), source });
+      expect(snapshot.priceObservations).toContainEqual(expect.objectContaining({
+        key: `acciones+cedears:${ticker}`, providerSymbol: ticker, group: 'cedears',
+      }));
+      expect(snapshot.brokers[0].assets).toContainEqual(expect.objectContaining({
+        ticker, quantity: 10, unitPrice: 5000,
+      }));
+    },
+  );
+
+  it('requires a quote for any future non-zero ticker and never silently drops it', async () => {
+    const input = freezeMorningInputs(positions('FUTURE', 3));
+    expect(input.bindings).toContainEqual(expect.objectContaining({
+      ticker: 'FUTURE', quantity: 3, key: 'acciones+cedears:FUTURE',
+    }));
+    expect(input.requirements).toContainEqual({
+      key: 'acciones+cedears:FUTURE', groups: ['acciones', 'cedears'], symbols: ['FUTURE'],
+    });
+    await expect(execute({ held: positions('FUTURE', 3) }))
+      .rejects.toMatchObject({ code: 'MISSING_REQUIRED_PREVIOUS_CLOSE' });
+  });
+
   it('values PESOS and CABLE as explicit broker cash balances without cached prices', async () => {
     const held = [{ id: 'balanz', data: { debt: 0, assets: [
       { ticker: 'PESOS', quantity: 1000, price: 999999 },

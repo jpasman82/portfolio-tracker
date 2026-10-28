@@ -2,13 +2,12 @@ import { calendarTrace, CALENDAR_STATES, classifyBymaDate, previousTradingSessio
 import { updatePositionsAndBuildSnapshot } from './legacy.js';
 import { GROUPS, hash, number } from './model.js';
 
-export const MORNING_POLICY_VERSION = 'morning-previous-close-v3';
+export const MORNING_POLICY_VERSION = 'morning-previous-close-v4';
 export const MORNING_PRICE_POLICY = 'BYMA_SNAPSHOT_PREVIOUS_CLOSE';
 export const MORNING_SOURCE = 'vercel-cron-morning-previous-close';
 export const VALUATION_SCOPE = Object.freeze({ name: 'BROKERS_ONLY', collection: 'brokerPositions' });
 
 const EXPECTED_CATEGORY = Object.freeze({ acciones: 1, cedears: 23, bonosARS: 3, bonosUSD: 3, bonosEXT: 3 });
-const EXCLUDED_BY_EXISTING_VALUATION = new Set(['XP', 'NU', 'PAX', 'VALE', 'ITUB', 'EWZ']);
 const JPM_USD_BOND_ALIASES = Object.freeze({
   AE38: 'AE38D', AL30: 'AL30D', AL35: 'AL35D', AL41: 'AL41D',
   CO26: 'CO26D', GD35: 'GD35D', TFU27: 'TU27D',
@@ -54,7 +53,9 @@ export function freezeMorningInputs(positions) {
           // BPA11 is the BTG Pactual CEDEAR. Override the stale persisted
           // isBond=true value left by the former ticker-shape heuristic.
           const isBond = ticker === 'BPA11' ? false : Boolean(asset?.isBond || bond(ticker));
-          if (quantity !== 0 && !EXCLUDED_BY_EXISTING_VALUATION.has(ticker)) {
+          // Every non-zero broker holding participates. Unsupported or unpriced
+          // symbols must fail visibly; ticker-name exclusion lists are forbidden.
+          if (quantity !== 0) {
             if (ticker === 'PESOS') {
               bindings.push({ brokerId: String(id), ticker, quantity, key: null,
                 providerSymbol: null, valuationKind: 'ARS_CASH', convertToUSD: id === 'jpm' });
