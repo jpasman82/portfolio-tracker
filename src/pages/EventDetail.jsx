@@ -226,7 +226,7 @@ export default function EventDetail() {
           <div className="text-right">
             <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-[#5B8A8A] mb-2">Resultado</div>
             <div className={`text-base font-black break-words ${selectedResult >= 0 ? 'text-teal-300' : 'text-red-300'}`}>
-              {viewCurrency === 'USD' ? fmtSignedUSD(selectedResult) : fmtSignedARS(selectedResult)}
+              {selectedResult < 0 ? '↓' : selectedResult > 0 ? '↑' : '→'} {viewCurrency === 'USD' ? fmtSignedUSD(selectedResult) : fmtSignedARS(selectedResult)}
             </div>
           </div>
         </div>
@@ -241,12 +241,10 @@ export default function EventDetail() {
         ].map(({ label, val }) => (
           <div key={label} className={`text-center py-3 rounded-xl ${getBadgeClasses(val)}`}>
             <div className="font-mono text-[10px] tracking-[0.12em] uppercase mb-1 opacity-90">{label}</div>
-            <div className="text-xl font-black">{val >= 0 ? '+' : ''}{val.toFixed(1)}%</div>
+            <div className="text-xl font-black">{val < 0 ? '↓' : val > 0 ? '↑' : '→'} {val >= 0 ? '+' : ''}{val.toFixed(1)}%</div>
           </div>
         ))}
       </div>
-
-      {!event.isClosed && <StrategyLedgerActivation strategyId={id} strategy={event} disabled={isEditingStructure || saving} onActivated={() => window.location.reload()} />}
 
       {/* Bought position */}
       <div className="bg-[#122329] border border-teal-400/15 rounded-2xl p-5 mb-4 relative z-10">
@@ -289,6 +287,18 @@ export default function EventDetail() {
           const varPctUSD = pCompraUSD > 0 ? ((pActualUSD / pCompraUSD) - 1) * 100 : 0;
           const varPct = viewCurrency === 'USD' ? varPctUSD : varPctARS;
           const varAmount = viewCurrency === 'USD' ? varAmountUSD : varAmountARS;
+
+          if (!isEditingStructure) return (
+            <div key={`${asset.ticker}-${index}`} className="py-4 border-b border-teal-400/10 last:border-0">
+              <div className="flex items-start justify-between gap-3">
+                <div><h3 className="text-lg font-black text-[#F0FAFA] font-mono">{asset.ticker}</h3><p className="text-xs text-[#A8C8C8] mt-1">Cantidad: {fmtQty(asset.quantity)}</p></div>
+                <div className={`text-right font-bold ${varAmount < 0 ? 'text-red-300' : varAmount > 0 ? 'text-green-300' : 'text-[#A8C8C8]'}`}>
+                  {pCompraARS > 0 && pActualARS > 0 ? <><p className="text-lg">{varAmount < 0 ? '↓' : varAmount > 0 ? '↑' : '→'} {viewCurrency === 'USD' ? fmtSignedUSD(varAmount) : fmtSignedARS(varAmount)}</p><p className="text-sm">{varPct >= 0 ? '+' : ''}{varPct.toFixed(1)}%</p></> : <p className="text-amber-300 text-sm">Sin precio disponible</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm mt-3"><div><p className="text-[#5B8A8A]">Invertido</p><strong>{viewCurrency === 'USD' ? fmtUSD(investedUSD) : fmtARS(investedARS)}</strong></div><div className="text-right"><p className="text-[#5B8A8A]">Valor actual</p><strong className="text-[#F0FAFA]">{viewCurrency === 'USD' ? fmtUSD(currentUSD) : fmtARS(currentARS)}</strong></div></div>
+            </div>
+          );
 
           return (
             <div key={index} className="mb-4 pb-4 border-b border-teal-400/5">
@@ -416,6 +426,8 @@ export default function EventDetail() {
           </button>
         )}
       </div>
+
+      {!event.isClosed && <details className="mb-4"><summary className="cursor-pointer text-sm font-bold text-teal-300">Habilitar historial de operaciones</summary><StrategyLedgerActivation strategyId={id} strategy={event} disabled={isEditingStructure || saving} onActivated={() => window.location.reload()} /></details>}
 
       {/* Sold position (ALFA reference) */}
       <details className="bg-[#0C1518] border border-teal-400/10 rounded-2xl p-5 mb-4 relative z-10">

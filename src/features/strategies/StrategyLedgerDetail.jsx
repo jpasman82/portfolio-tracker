@@ -58,6 +58,7 @@ export default function StrategyLedgerDetail({ strategyId }) {
   const [usdRate, setUsdRate] = useState('');
   const [name, setName] = useState('');
   const [viewCurrency, setViewCurrency] = useState('USD');
+  const [editMode, setEditMode] = useState(false);
   const [editPrices, setEditPrices] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
@@ -151,26 +152,26 @@ export default function StrategyLedgerDetail({ strategyId }) {
       {notice && <p role="status" className="text-teal-300 text-sm mb-4">{notice}</p>}
       {calculationError && <p role="alert" className="text-red-300 text-sm mb-4">{calculationError}</p>}
       <section className={CARD}>
-        <h2 className="text-lg font-bold text-[#F0FAFA]">Posiciones activas</h2>
+        <h2 className="text-lg font-bold text-[#F0FAFA]">Resumen</h2>
         <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
-          <div><p>Valor inicial ajustado por ventas</p><strong>{money(viewCurrency === 'USD' ? metrics?.activePositionCostUSD : metrics?.activePositionCostARS, viewCurrency)}</strong></div>
-          <div><p>Valor de mercado</p><strong className="text-teal-300">{money(viewCurrency === 'USD' ? metrics?.activePositionValueUSD : metrics?.activePositionValueARS, viewCurrency)}</strong></div>
-          <div><p>Resultado abierto</p><strong className={tone(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS)}>{direction(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS)} {money(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS, viewCurrency)}</strong></div>
-          <div><p>Rendimiento abierto</p><strong className={tone(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)}>{direction(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)} {percent(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)}</strong></div>
+          <div><p>Invertido en activos</p><strong>{money(viewCurrency === 'USD' ? metrics?.activePositionCostUSD : metrics?.activePositionCostARS, viewCurrency)}</strong></div>
+          <div><p>Valor actual</p><strong className="text-teal-300">{money(viewCurrency === 'USD' ? metrics?.activePositionValueUSD : metrics?.activePositionValueARS, viewCurrency)}</strong></div>
+          <div><p>Resultado de activos</p><strong className={tone(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS)}>{direction(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS)} {money(viewCurrency === 'USD' ? metrics?.activePositionResultUSD : metrics?.activePositionResultARS, viewCurrency)}</strong></div>
+          <div><p>Rendimiento</p><strong className={tone(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)}>{direction(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)} {percent(viewCurrency === 'USD' ? metrics?.activePositionReturnPctUSD : metrics?.activePositionReturnPctARS)}</strong></div>
         </div>
-      </section>
-      <section className={CARD}>
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-2 gap-3 text-sm mt-4 pt-4 border-t border-teal-400/10">
           <div><p>Patrimonio actual</p><strong className="block mt-2 text-teal-300 break-words">{money(viewCurrency === 'USD' ? metrics?.totalUSD : metrics?.totalARS, viewCurrency)}</strong></div>
-          <div><p>Resultado total</p><strong className="block mt-2 text-[#F0FAFA] break-words">{money(viewCurrency === 'USD' ? metrics?.resultUSD : metrics?.resultARS, viewCurrency)}</strong></div>
+          <div><p>Resultado total</p><strong className={`block mt-2 break-words ${tone(viewCurrency === 'USD' ? metrics?.resultUSD : metrics?.resultARS)}`}>{direction(viewCurrency === 'USD' ? metrics?.resultUSD : metrics?.resultARS)} {money(viewCurrency === 'USD' ? metrics?.resultUSD : metrics?.resultARS, viewCurrency)}</strong></div>
         </div>
-        <div className="grid grid-cols-3 gap-2 mt-5 text-center text-xs">{[['REND. USD', metrics?.pUSD], ['REND. ARS', metrics?.pARS], ['ALFA', metrics?.pALFA]].map(([label, value]) => <div key={label} className="bg-[#0C1518] rounded-xl py-3"><p>{label}</p><strong className={`block text-lg mt-1 ${value == null ? '' : value < 0 ? 'text-red-300' : 'text-teal-300'}`}>{percent(value, label === 'ALFA' ? ' p.p.' : '%')}</strong></div>)}</div>
+        <div className="grid grid-cols-3 gap-2 mt-4 text-center text-xs">{[['REND. USD', metrics?.pUSD], ['REND. ARS', metrics?.pARS], ['ALFA', metrics?.pALFA]].map(([label, value]) => <div key={label} className="bg-[#0C1518] rounded-xl py-3"><p>{label}</p><strong className={`block text-base mt-1 ${tone(value)}`}>{direction(value)} {percent(value, label === 'ALFA' ? ' p.p.' : '%')}</strong></div>)}</div>
+        <p className={`text-sm font-bold mt-3 ${tone(viewCurrency === 'USD' ? metrics?.deltaUSD : metrics?.deltaARS)}`}>Delta vs. referencia: {direction(viewCurrency === 'USD' ? metrics?.deltaUSD : metrics?.deltaARS)} {money(viewCurrency === 'USD' ? metrics?.deltaUSD : metrics?.deltaARS, viewCurrency)}</p>
         <details className="mt-4 text-xs"><summary className="cursor-pointer">Ver capital original antes de ventas</summary><p className="mt-2">{money(viewCurrency === 'USD' ? metrics?.initialUSD : metrics?.initialARS, viewCurrency)}</p></details>
         {metrics?.flows.benchmarkIssue && <p className="text-xs text-amber-300 mt-3">{metrics.flows.benchmarkIssue}</p>}
       </section>
 
       <section className={CARD}>
-        <div className="flex justify-between gap-3 items-center"><h2 className="text-lg font-bold text-[#F0FAFA]">Activos</h2>{!strategy.isClosed && <div className="flex gap-2"><button type="button" disabled={saving || refreshing} onClick={() => setEditPrices(value => !value)} className="text-teal-300 text-sm">{editPrices ? 'Terminar edición' : 'Editar precios'}</button><button type="button" disabled={showForm || saving || refreshing} onClick={() => { setShowForm(true); setNotice(''); }} className="bg-teal-400 text-[#080F12] px-3 py-2 rounded-lg text-sm font-bold disabled:opacity-50">+ Operación</button></div>}</div>
+        <div className="flex justify-between gap-3 items-center"><h2 className="text-lg font-bold text-[#F0FAFA]">Activos</h2>{!strategy.isClosed && <button type="button" disabled={saving || refreshing} onClick={() => { setEditMode(value => !value); setEditPrices(false); }} className="bg-teal-400/10 border border-teal-400/30 text-teal-300 px-3 py-2 rounded-lg text-sm font-bold disabled:opacity-50">{editMode ? 'Cerrar edición' : 'Editar'}</button>}</div>
+        {editMode && !strategy.isClosed && <div className="flex flex-wrap gap-3 mt-4"><button type="button" disabled={showForm || saving || refreshing} onClick={() => { setShowForm(true); setNotice(''); }} className="bg-teal-400 text-[#080F12] px-3 py-2 rounded-lg text-sm font-bold disabled:opacity-50">Cambiar cantidades · operación</button><button type="button" disabled={saving || refreshing} onClick={() => setEditPrices(value => !value)} className="text-teal-300 text-sm font-bold">{editPrices ? 'Ocultar precios' : 'Editar precios'}</button></div>}
         {balances.positions.length === 0 && <p className="text-sm mt-4">No quedan títulos en esta estrategia.</p>}
         {balances.positions.map(position => {
           const key = positionKey(position);
@@ -183,6 +184,7 @@ export default function StrategyLedgerDetail({ strategyId }) {
           </article>;
         })}
         {estimated.length > 0 && <p className="text-sm text-amber-300 mt-4">Falta cotización para {estimated.join(', ')}. Se muestra el costo como referencia; ingresá el precio actual antes de guardar una valuación.</p>}
+        {editMode && editPrices && !strategy.isClosed && <button type="button" disabled={saving || refreshing || !metrics || estimated.length > 0 || initialEstimated.length > 0 || showForm} onClick={() => saveSettings(false)} className="w-full mt-4 bg-teal-400 text-[#080F12] rounded-xl py-3 font-bold disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar precios'}</button>}
       </section>
       {showForm && <StrategyOperationForm strategy={strategy} records={records} balances={balances} onSave={addOperation} onCancel={() => setShowForm(false)} />}
       <details className="mb-4"><summary className="cursor-pointer text-sm font-bold text-teal-300 mb-3">Más información y comparaciones</summary>
