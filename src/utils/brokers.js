@@ -1,9 +1,9 @@
 export const BROKERS = [
   {
     id: 'jpm',
-    name: 'J.P. Morgan',
+    name: 'Balanz Panamá',
     currency: 'USD',
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/J_P_Morgan_Chase_Logo_2008_1.svg/512px-J_P_Morgan_Chase_Logo_2008_1.svg.png',
+    logo: 'https://balanz.com/static/Logo_BalanzINT-008580fdd4aa536c99622a88c7626eb8.png',
   },
   {
     id: 'one',
@@ -44,3 +44,4 @@ export const createEmptyBrokerData = () =>
 export const getBrokerName = (id) => BROKER_MAP[id]?.name || id;
 
 export const isUsdBroker = (id) => BROKER_MAP[id]?.currency === 'USD';
+
