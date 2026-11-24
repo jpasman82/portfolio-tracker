@@ -6,6 +6,12 @@ export const BROKERS = [
     logo: 'https://balanz.com/static/Logo_BalanzINT-008580fdd4aa536c99622a88c7626eb8.png',
   },
   {
+    id: 'balanz',
+    name: 'Balanz Capital',
+    currency: 'ARS',
+    logo: 'https://balanz.com/static/Logo_BalanzINT-008580fdd4aa536c99622a88c7626eb8.png',
+  },
+  {
     id: 'one',
     name: 'One618',
     currency: 'ARS',
@@ -16,12 +22,6 @@ export const BROKERS = [
     name: 'Latin Securities',
     currency: 'ARS',
     logo: 'https://reqlut2.s3.amazonaws.com/uploads/logos/420d0b715847860c019e638a3c54fa61864f5665-5242880.png',
-  },
-  {
-    id: 'balanz',
-    name: 'Balanz Capital',
-    currency: 'ARS',
-    logo: 'https://balanz.com/static/Logo_BalanzINT-008580fdd4aa536c99622a88c7626eb8.png',
   },
   {
     id: 'cocos',
@@ -44,4 +44,3 @@ export const createEmptyBrokerData = () =>
 export const getBrokerName = (id) => BROKER_MAP[id]?.name || id;
 
 export const isUsdBroker = (id) => BROKER_MAP[id]?.currency === 'USD';
-
