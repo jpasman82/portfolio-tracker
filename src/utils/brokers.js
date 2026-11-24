@@ -1,15 +1,17 @@
+const BALANZ_LOGO = '/balanz-logo.png';
+
 export const BROKERS = [
   {
     id: 'jpm',
     name: 'Balanz Panamá',
     currency: 'USD',
-    logo: 'https://balanz.com/static/Logo_BalanzINT-008580fdd4aa536c99622a88c7626eb8.png',
+    logo: BALANZ_LOGO,
   },
   {
     id: 'balanz',
     name: 'Balanz Capital',
     currency: 'ARS',
-    logo: 'https://balanz.com/static/Logo_BalanzINT-008580fdd4aa536c99622a88c7626eb8.png',
+    logo: BALANZ_LOGO,
   },
   {
     id: 'one',
